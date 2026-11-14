@@ -2,7 +2,7 @@
 
 > A high-performance, self-hosted dashboard that automatically discovers every listening port and container on your system, displays live system telemetry with sparklines, and provides unified controls to organize, start, stop, change ports, and inspect logs.
 
-[![Tests](https://img.shields.io/badge/tests-16%20passed-5EEAD4?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-101%20passed-5EEAD4?style=flat-square)](#testing)
 [![Port](https://img.shields.io/badge/port-5533-8C9EFF?style=flat-square)](#quickstart)
 [![Theme](https://img.shields.io/badge/theme-premium%20dark-151821?style=flat-square)](#design-system)
 
@@ -110,6 +110,30 @@ python -m portly run --port 5533 --host 127.0.0.1
 - **Safe Mode ON by default:** Locks all mutating actions (start, stop, recreate, kill) until explicitly unlocked via confirmation.
 - **Server Mode:** Enforces user authentication and password hashing when binding to external interfaces (`0.0.0.0`).
 
+### 8. 1-Click Reverse Proxy Config Generator
+- Instantly generates production-ready reverse proxy blocks for **Caddy**, **Nginx**, **Traefik YAML**, and **Traefik Docker Labels**.
+- Supports custom domains (e.g. `vault.homelab.arpa`) with automatic sanitization and WebSocket upgrade headers.
+
+### 9. SSL / TLS Certificate Inspector
+- Live certificate inspection for HTTPS/TLS ports.
+- Decodes certificate subject, issuer (e.g. Let's Encrypt), SAN alternative names, valid date windows, and days remaining until expiration.
+
+### 10. In-Browser Container Terminal
+- Built-in container command executor (`docker exec`) with Safe Mode whitelisting of diagnostic commands (`ps`, `top`, `df`, `env`, `netstat`, `uname`, `free`, `uptime`, etc.).
+- Execution timing benchmarks and clear terminal output formatting.
+
+### 11. Docker Compose Inspector
+- Automatically parses container compose labels to locate compose files on disk and renders the active service configuration directly in the app detail modal.
+
+### 12. Webhooks & Alerting
+- Real-time event notifications dispatched to **Discord**, **Telegram**, **Slack**, and **Generic / Ntfy / Gotify** webhooks.
+- Background asynchronous dispatcher ensures alerts never block discovery.
+- In-app test alert button in Customize drawer.
+
+### 13. Kiosk / Wall Display Mode & Progressive Web App (PWA)
+- Fullscreen distraction-free monitoring mode toggled via **`Shift + K`** or top bar monitor icon.
+- Full PWA support (`manifest.webmanifest`, service worker, vector icons) for installability on desktop and mobile.
+
 ---
 
 ## 🏗️ Architecture
@@ -123,49 +147,43 @@ portly/
     health.py             HTTP & TCP health checks, latency measurement
     categories.py         Rules engine, priority evaluation, manual overrides
     ports.py              Port availability checks, suggestion, migration planning
-    notifications.py      Real-time change detection, conflict events
+    notifications.py      Real-time change detection, conflict events, webhook alerts
     auth.py               Admin/viewer session management, bcrypt password hashing
+    proxy_gen.py          Reverse proxy generators (Caddy, Nginx, Traefik)
+    favicon.py            SSRF-safe favicon fetcher with magic byte detection & SVG fallback
+    tls_inspector.py      SSL/TLS certificate validator & expiration countdown
     discovery/
       host.py             psutil listening sockets with netstat/lsof fallback
       docker_src.py       Docker Engine container discovery & event listener
       merge.py            Deduplication, conflict detection, stable ID assignment
     actions/
-      docker_actions.py   Container start/stop/restart/recreate/logs with Safe Mode guards
+      docker_actions.py   Container start/stop/restart/recreate/logs/exec with Safe Mode guards
       process_actions.py  Subprocess launcher, log tailing, process termination
   frontend/
     src/
-      App.tsx             Main application controller & SSE listener
+      App.tsx             Main application controller, SSE listener & Kiosk mode
       api.ts              Typed backend API client
       types.ts            Data models & interfaces
       components/
         Sidebar.tsx       Navigation, categories, safe mode switch
-        TopBar.tsx        Search, theme toggle, export, scan, add app
+        TopBar.tsx        Search, theme toggle, export, scan, add app, kiosk toggle
         StatsStrip.tsx    One-line non-wrapping sparkline metrics
         Toolbar.tsx       View switcher, filters, sort, group, density
-        TableView.tsx     Data table with sticky header & row actions
-        GridView.tsx      Homepage-style tiles
+        TableView.tsx     Data table with sticky header, favicons & row actions
+        GridView.tsx      Homepage-style tiles with favicons
         ListView.tsx      Compact density listing
         BoardView.tsx     Kanban board by category with drag & drop
         OverviewView.tsx  Aggregate telemetry & category breakdown
         ConflictsView.tsx Port collision detector & resolution
         HistoryView.tsx   Audit change log & socket event timeline
-        AppDetailModal.tsx Logs, port mapping editor, update card, inspect
+        AppDetailModal.tsx Logs, port editor, proxy generator, TLS inspector, terminal, compose
         AddAppModal.tsx   4-tab custom app & process adoption dialog
-        CustomizeDrawer.tsx Layout, accent color, rules manager
+        CustomizeDrawer.tsx Layout, accent color, rules manager, webhooks & alerting
         SystemDrawer.tsx  Deep hardware and mount point telemetry
         CommandPalette.tsx Ctrl+K keyboard command palette
-        KeyboardShortcutsModal.tsx '?' Cheatsheet modal
+        KeyboardShortcutsModal.tsx '?' Cheatsheet modal with Shift+K shortcut
         BulkActionBar.tsx Floating multi-select actions
-      styles/
-        tokens.css        Design tokens
-        style.css         Reference utility classes
-        app.css           Theme overrides, modal animations, responsive rules
-  tests/
-    test_discovery.py
-    test_categories.py
-    test_ports.py
-    test_actions_safe_mode.py
-    test_api.py
+        AppIcon.tsx       Dynamic favicon and initial vector badge renderer
 ```
 
 ---
@@ -178,10 +196,14 @@ Run the full pytest suite:
 python -m pytest tests/
 ```
 
-All 16 test suites verify:
+All 17 test suites (101 automated tests) verify:
 - Host discovery and stable ID formatting
 - Docker deduplication & port conflict detection
 - Categorization rule priority and manual overrides
 - Port availability checking and free port suggestion
-- Safe mode blocking mutating actions
+- Safe mode blocking mutating actions and command injection
+- Reverse proxy snippet generation (Caddy, Nginx, Traefik)
+- SSL/TLS certificate inspection and expiration calculation
+- SSRF filtering and image MIME detection
+- Webhook alert payload formatting for Discord, Slack, and generic webhooks
 - Complete API endpoints, custom app CRUD, and export formats (JSON, CSV, Markdown)
