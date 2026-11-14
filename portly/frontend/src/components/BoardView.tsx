@@ -1,0 +1,193 @@
+import React, { useState } from 'react';
+import { AppItem, Category } from '../types';
+
+interface BoardViewProps {
+  apps: AppItem[];
+  categories: Category[];
+  onOpenDetail: (app: AppItem) => void;
+  onMoveAppCategory: (appId: string, newCategoryId: string) => void;
+  onNewCategoryClick: () => void;
+}
+
+export const BoardView: React.FC<BoardViewProps> = ({
+  apps,
+  categories,
+  onOpenDetail,
+  onMoveAppCategory,
+  onNewCategoryClick,
+}) => {
+  const [draggedAppId, setDraggedAppId] = useState<string | null>(null);
+  const [activeDropCategory, setActiveDropCategory] = useState<string | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, appId: string) => {
+    e.dataTransfer.setData('text/plain', appId);
+    setDraggedAppId(appId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, categoryId: string) => {
+    e.preventDefault();
+    if (activeDropCategory !== categoryId) {
+      setActiveDropCategory(categoryId);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, categoryId: string) => {
+    e.preventDefault();
+    const appId = e.dataTransfer.getData('text/plain') || draggedAppId;
+    if (appId) {
+      onMoveAppCategory(appId, categoryId);
+    }
+    setDraggedAppId(null);
+    setActiveDropCategory(null);
+  };
+
+  return (
+    <div className="c147" style={{ width: '100%', overflowX: 'auto', paddingBottom: '16px' }}>
+      <div className="c148" style={{ display: 'flex', gap: '16px', minWidth: 'min-content' }}>
+        {categories.map((cat) => {
+          const categoryApps = apps.filter((a) => a.category_id === cat.id);
+          const isTarget = activeDropCategory === cat.id;
+
+          return (
+            <div
+              key={cat.id}
+              className={`c149 ${isTarget ? 'drop-target' : ''}`}
+              style={{
+                width: '280px',
+                flexShrink: 0,
+                background: '#101218',
+                border: isTarget ? '2px dashed #8C9EFF' : '1px solid rgba(255,255,255,0.07)',
+                borderRadius: '14px',
+                padding: '14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                transition: 'border-color 0.15s, background 0.15s',
+              }}
+              onDragOver={(e) => handleDragOver(e, cat.id)}
+              onDrop={(e) => handleDrop(e, cat.id)}
+              onDragLeave={() => setActiveDropCategory(null)}
+            >
+              {/* Category Column Header */}
+              <div className="c150" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '3px',
+                    backgroundColor: cat.color || '#8C9EFF',
+                  }}
+                />
+                <span className="c152" style={{ fontWeight: 600, color: '#ECEEF3', flex: 1 }}>
+                  {cat.name}
+                </span>
+                <span className="c055">{categoryApps.length}</span>
+                <span className="c112" style={{ textTransform: 'capitalize' }}>
+                  {cat.mode || 'auto'}
+                </span>
+              </div>
+
+              {/* Cards */}
+              {categoryApps.map((app) => (
+                <div
+                  key={app.id}
+                  className="c153 draggable-card"
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, app.id)}
+                  onClick={() => onOpenDetail(app)}
+                  style={{
+                    background: '#151821',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    borderRadius: '10px',
+                    padding: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                  }}
+                >
+                  <div className="c110" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="c104" style={{ cursor: 'grab' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <circle cx="9" cy="6" r="1"></circle>
+                          <circle cx="15" cy="6" r="1"></circle>
+                          <circle cx="9" cy="12" r="1"></circle>
+                          <circle cx="15" cy="12" r="1"></circle>
+                          <circle cx="9" cy="18" r="1"></circle>
+                          <circle cx="15" cy="18" r="1"></circle>
+                        </svg>
+                      </span>
+                      <span className="c154" style={{ fontWeight: 600, color: '#ECEEF3' }}>
+                        {app.name}
+                      </span>
+                    </div>
+                    <span
+                      className="c122"
+                      style={{
+                        backgroundColor: app.status === 'up' ? '#5EEAD4' : (app.status === 'down' ? '#FF8A8A' : '#FBBF77'),
+                      }}
+                    />
+                  </div>
+
+                  <div className="c155" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span className="c156" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF', fontWeight: 600, fontSize: '15px' }}>
+                      :{app.port}
+                    </span>
+                    <span className={app.source === 'docker' ? 'c111' : 'c109'} style={{ textTransform: 'capitalize' }}>
+                      {app.source}
+                    </span>
+                  </div>
+
+                  <div className="c065" style={{ fontSize: '12px', color: '#8D95A5' }}>
+                    CPU {app.cpu_percent || 0}% · RAM {app.ram_mb || 0} MB
+                  </div>
+                </div>
+              ))}
+
+              {/* Drop target placeholder */}
+              <div
+                className="c160"
+                style={{
+                  border: '1px dashed rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  textAlign: 'center',
+                  fontSize: '12px',
+                  color: '#8D95A5',
+                  backgroundColor: isTarget ? 'rgba(140, 158, 255, 0.08)' : 'transparent',
+                }}
+              >
+                Drop to move here
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Add category button at the end of the board */}
+        <button
+          type="button"
+          aria-label="Add category"
+          className="c163"
+          onClick={onNewCategoryClick}
+          style={{
+            width: '60px',
+            minHeight: '200px',
+            borderRadius: '14px',
+            border: '1px dashed rgba(255,255,255,0.15)',
+            background: 'transparent',
+            color: '#8D95A5',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          title="Create a new category"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+};

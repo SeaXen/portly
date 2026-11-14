@@ -1,0 +1,12 @@
+data/
+node_modules/
+**/node_modules/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+**/.pytest_cache/
+.git/
+dist/
+**/dist/
+.coverage
+*.egg-info/

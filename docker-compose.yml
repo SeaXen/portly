@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  portly:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: portly:latest
+    container_name: portly
+    # Required to discover host network sockets and processes
+    network_mode: host
+    pid: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data:/app/data
+    environment:
+      - PORTLY_PORT=5533
+      - PORTLY_HOST=0.0.0.0
+      - PORTLY_MODE=desktop
+      - PORTLY_ALLOW_INSECURE_BIND=false
+    restart: unless-stopped
