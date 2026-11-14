@@ -29,6 +29,7 @@ export const App: React.FC = () => {
   const [theme, setTheme] = useState('dark');
   const [accent, setAccent] = useState('#8C9EFF');
   const [safeMode, setSafeMode] = useState(true);
+  const [kioskMode, setKioskMode] = useState(false);
 
   // Data
   const [apps, setApps] = useState<AppItem[]>([]);
@@ -107,6 +108,12 @@ export const App: React.FC = () => {
       }
 
       if (isInput) return;
+
+      if (e.shiftKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setKioskMode((prev) => !prev);
+        return;
+      }
 
       if (e.key === '?') {
         e.preventDefault();
@@ -499,21 +506,23 @@ export const App: React.FC = () => {
 
   return (
     <div className="c042" style={{ display: 'flex', width: '100%', minHeight: '100vh', background: 'var(--bg)' }}>
-      {/* Sidebar */}
-      <Sidebar
-        activeNav={activeNav}
-        onSelectNav={handleSelectNav}
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
-        onNewCategoryClick={() => setShowNewCatModal(true)}
-        conflictCount={conflicts.length}
-        safeMode={safeMode}
-        onToggleSafeMode={handleToggleSafeMode}
-      />
+      {/* Sidebar - hidden in kiosk mode */}
+      {!kioskMode && (
+        <Sidebar
+          activeNav={activeNav}
+          onSelectNav={handleSelectNav}
+          categories={categories}
+          selectedCategory={selectedCategory}
+          onSelectCategory={setSelectedCategory}
+          onNewCategoryClick={() => setShowNewCatModal(true)}
+          conflictCount={conflicts.length}
+          safeMode={safeMode}
+          onToggleSafeMode={handleToggleSafeMode}
+        />
+      )}
 
       {/* Main Content Area */}
-      <main className="c067" style={{ flex: '1 1 700px', minWidth: 0, padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <main className="c067" style={{ flex: '1 1 700px', minWidth: 0, padding: kioskMode ? '16px 24px' : '24px 32px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {/* Top Bar */}
         <TopBar
           title={
@@ -529,6 +538,8 @@ export const App: React.FC = () => {
           theme={theme}
           onToggleTheme={handleToggleTheme}
           lastScanTime={lastScanTime}
+          kioskMode={kioskMode}
+          onToggleKiosk={() => setKioskMode((prev) => !prev)}
         />
 
         {/* Docker unavailable banner if applicable */}
@@ -852,6 +863,42 @@ export const App: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Floating Kiosk Exit Button */}
+      {kioskMode && (
+        <button
+          type="button"
+          onClick={() => setKioskMode(false)}
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'rgba(16, 18, 24, 0.92)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(140, 158, 255, 0.4)',
+            color: '#ECEEF3',
+            padding: '8px 16px',
+            borderRadius: '24px',
+            fontSize: '12px',
+            fontWeight: 500,
+            cursor: 'pointer',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          }}
+          title="Exit Kiosk Mode (Shift + K)"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="4 14 10 14 10 20"></polyline>
+            <polyline points="20 10 14 10 14 4"></polyline>
+            <line x1="14" y1="10" x2="21" y2="3"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
+          </svg>
+          Exit Kiosk (Shift+K)
+        </button>
       )}
     </div>
   );

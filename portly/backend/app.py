@@ -16,13 +16,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
-from portly.backend import auth
+from portly.backend import auth, favicon as favicon_module, proxy_gen, tls_inspector
 from portly.backend.actions import docker_actions, process_actions
 from portly.backend.discovery.docker_src import get_docker_client, is_docker_available, set_on_docker_event
 from portly.backend.discovery.host import discover_host_ports
 from portly.backend.discovery.merge import merge_discovered_apps
 from portly.backend.health import check_app_health
-from portly.backend.notifications import detect_changes
+from portly.backend.notifications import detect_changes, send_webhook_sync
 from portly.backend.ports import check_port_availability, plan_port_change, suggest_free_ports
 from portly.backend.stats import collect_snapshot, get_current_stats, get_detailed_system_stats
 from portly.backend.store import Store
@@ -281,6 +281,17 @@ class SetupModel(BaseModel):
     password: str
 
 
+class ExecModel(BaseModel):
+    command: str
+    timeout: int = 10
+
+
+class WebhookTestModel(BaseModel):
+    url: Optional[str] = None
+    type: Optional[str] = None
+    event: Optional[str] = "test"
+
+
 # 1. Apps unified list & detail
 @app.get("/api/apps")
 async def get_apps(
@@ -370,29 +381,197 @@ async def get_logs_endpoint(
     return {"lines": lines, "count": len(lines)}
 
 
-@app.get("/api/apps/{app_id:path}")
-async def get_app_detail(app_id: str):
+@app.get("/api/apps/{app_id:path}/proxy-config")
+async def get_proxy_config_endpoint(
+    app_id: str,
+    format: Optional[str] = Query(None),
+    domain: Optional[str] = Query(None)
+):
+    target_app = None
     for a in _cached_apps:
         if a["id"] == app_id:
-            # Check live health non-blocking
-            health = await asyncio.to_thread(check_app_health, a)
-            store.record_health(app_id, health["ok"], health["latency_ms"])
-            history = store.get_health_history(app_id, limit=30)
-            
-            # Inspect details if docker non-blocking
-            docker_inspect = None
-            if a.get("source") == "docker":
-                try:
-                    docker_inspect = await asyncio.to_thread(docker_actions.inspect_container, a.get("container_name", ""))
-                except Exception:
-                    pass
+            target_app = a
+            break
+    if not target_app:
+        target_app = store.get_app(app_id)
 
+    if not target_app:
+        target_app = store.get_app(app_id)
+    if not target_app:
+        target_app = store.get_app(app_id)
+
+    if not target_app:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"App '{app_id}' not found"})
+
+    port = target_app.get("port")
+    if not port or port <= 0:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_PORT", "message": "App does not have an active listening port"})
+
+    host = target_app.get("bind") or target_app.get("host") or "127.0.0.1"
+    configs_data = proxy_gen.generate_all_proxy_configs(
+        name=target_app.get("name", "app"),
+        port=port,
+        host=host,
+        domain=domain
+    )
+
+    if format:
+        fmt = format.lower().strip()
+        if fmt in configs_data["configs"]:
             return {
-                "app": a,
-                "health": health,
-                "health_history": history,
-                "docker_inspect": docker_inspect,
+                "format": fmt,
+                "config": configs_data["configs"][fmt],
+                "domain": configs_data["domain"],
+                "port": configs_data["port"],
+                "router_name": configs_data["router_name"],
             }
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_FORMAT", "message": f"Unsupported format '{format}'. Supported formats: caddy, nginx, traefik, traefik_yaml, traefik_labels"}
+        )
+
+    return configs_data
+
+
+@app.get("/api/apps/{app_id:path}/favicon")
+async def get_app_favicon_endpoint(app_id: str):
+    target_app = None
+    for a in _cached_apps:
+        if a["id"] == app_id:
+            target_app = a
+            break
+
+    if not target_app:
+        target_app = store.get_app(app_id)
+
+    if not target_app:
+        svg_data, mime = favicon_module.get_fallback_svg(app_id.split(":")[-1])
+        return Response(content=svg_data, media_type=mime)
+
+    icons_dir = os.path.join(
+        os.getenv("PORTLY_DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")),
+        "icons"
+    )
+    data, mime = await asyncio.to_thread(favicon_module.fetch_or_generate_app_icon, target_app, icons_dir)
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={"Cache-Control": "public, max-age=86400"}
+    )
+
+
+@app.get("/api/apps/{app_id:path}/tls")
+async def get_app_tls_endpoint(app_id: str):
+    target_app = None
+    for a in _cached_apps:
+        if a["id"] == app_id:
+            target_app = a
+            break
+    if not target_app:
+        target_app = store.get_app(app_id)
+
+    if not target_app:
+        target_app = store.get_app(app_id)
+    if not target_app:
+        target_app = store.get_app(app_id)
+
+    if not target_app:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"App '{app_id}' not found"})
+
+    port = target_app.get("port")
+    if not port or port <= 0:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_PORT", "message": "App does not have an active port"})
+
+    host = target_app.get("bind") or target_app.get("host") or "127.0.0.1"
+    res = await asyncio.to_thread(tls_inspector.inspect_tls_certificate, host, port)
+    return res
+
+
+@app.post("/api/apps/{app_id:path}/exec")
+async def exec_command_endpoint(
+    app_id: str,
+    data: ExecModel,
+    user: Dict[str, Any] = Depends(require_admin)
+):
+    if not app_id.startswith("docker:"):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "NOT_DOCKER", "message": "Command execution is only supported for Docker containers."}
+        )
+    container_name = app_id.split(":")[1]
+    try:
+        res = await asyncio.to_thread(
+            docker_actions.exec_in_container,
+            container_name,
+            data.command,
+            store=store,
+            timeout=data.timeout
+        )
+        return res
+    except PermissionError as pe:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "SAFE_MODE_RESTRICTION", "message": str(pe)}
+        )
+    except ValueError as ve:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_COMMAND", "message": str(ve)}
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "EXEC_FAILED", "message": f"Failed to execute command: {str(e)}"}
+        )
+
+
+@app.get("/api/apps/{app_id:path}/compose")
+async def get_app_compose_endpoint(app_id: str):
+    if not app_id.startswith("docker:"):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "NOT_DOCKER", "message": "Docker Compose inspection is only supported for Docker containers."}
+        )
+    container_name = app_id.split(":")[1]
+    try:
+        res = await asyncio.to_thread(docker_actions.get_container_compose_config, container_name)
+        return res
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "COMPOSE_FAILED", "message": f"Failed to inspect compose: {str(e)}"}
+        )
+
+
+@app.get("/api/apps/{app_id:path}")
+async def get_app_detail(app_id: str):
+    target = None
+    for a in _cached_apps:
+        if a["id"] == app_id:
+            target = a
+            break
+    if not target:
+        target = store.get_app(app_id)
+    if target:
+        # Check live health non-blocking
+        health = await asyncio.to_thread(check_app_health, target)
+        store.record_health(app_id, health["ok"], health["latency_ms"])
+        history = store.get_health_history(app_id, limit=30)
+        
+        # Inspect details if docker non-blocking
+        docker_inspect = None
+        if target.get("source") == "docker":
+            try:
+                docker_inspect = await asyncio.to_thread(docker_actions.inspect_container, target.get("container_name", ""))
+            except Exception:
+                pass
+
+        return {
+            "app": target,
+            "health": health,
+            "health_history": history,
+            "docker_inspect": docker_inspect,
+        }
 
     raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"App '{app_id}' not found"})
 
@@ -777,6 +956,35 @@ async def update_settings_endpoint(settings_dict: Dict[str, str], user: Dict[str
     return store.get_settings()
 
 
+@app.post("/api/settings/test-webhook")
+async def test_webhook_endpoint(
+    data: Optional[WebhookTestModel] = None,
+    user: Dict[str, Any] = Depends(require_admin)
+):
+    url = (data.url if data and data.url else store.get_setting("webhook_url", "")).strip()
+    w_type = (data.type if data and data.type else store.get_setting("webhook_type", "generic")).strip()
+    if not url:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "MISSING_URL", "message": "Webhook URL is not configured. Please provide a URL."}
+        )
+    ok, msg = await asyncio.to_thread(
+        send_webhook_sync,
+        url,
+        w_type,
+        "test",
+        "⚓ Portly Webhook Test: Connection and notification delivery successful!",
+        {"test": True, "ts": time.time()}
+    )
+    if not ok:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "WEBHOOK_FAILED", "message": msg}
+        )
+    return {"status": "ok", "message": msg, "url": url, "type": w_type}
+
+
+
 # 10. Scan trigger
 @app.post("/api/scan")
 async def trigger_scan_endpoint():
@@ -930,8 +1138,40 @@ async def sse_stream(request: Request):
     return EventSourceResponse(event_generator())
 
 
-# 14. Static Frontend Mount
+# 14. Static Frontend Mount & PWA Assets
 FRONTEND_DIST = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist")
+
+@app.get("/manifest.webmanifest")
+@app.get("/manifest.json")
+async def get_manifest():
+    manifest_file = os.path.join(FRONTEND_DIST, "manifest.webmanifest")
+    if os.path.isfile(manifest_file):
+        return FileResponse(manifest_file, media_type="application/manifest+json")
+    manifest_data = {
+        "name": "Portly - Port & Container Dashboard",
+        "short_name": "Portly",
+        "description": "Real-time local port, container, and reverse proxy manager",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0b0f19",
+        "theme_color": "#0b0f19",
+        "icons": [
+            {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+            {"src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml"}
+        ]
+    }
+    return Response(content=json.dumps(manifest_data), media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+async def get_service_worker():
+    sw_file = os.path.join(FRONTEND_DIST, "sw.js")
+    if os.path.isfile(sw_file):
+        return FileResponse(sw_file, media_type="application/javascript", headers={"Service-Worker-Allowed": "/"})
+    sw_script = "self.addEventListener('install', e => self.skipWaiting()); self.addEventListener('activate', e => self.clients.claim());"
+    return Response(content=sw_script, media_type="application/javascript", headers={"Service-Worker-Allowed": "/"})
+
 
 if os.path.isdir(FRONTEND_DIST):
     app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")

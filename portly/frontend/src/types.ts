@@ -35,6 +35,8 @@ export interface AppItem {
   stop_cmd?: string;
   workdir?: string;
   log_file?: string;
+  icon?: string;
+  has_tls?: boolean;
 }
 
 export interface Category {
@@ -125,3 +127,51 @@ export interface SystemStats {
     speed: number;
   }>;
 }
+
+export interface ProxyConfigResponse {
+  domain: string;
+  upstream_host: string;
+  port: number;
+  router_name: string;
+  configs: {
+    caddy: string;
+    nginx: string;
+    traefik: string;
+    traefik_yaml: string;
+    traefik_labels: string;
+  };
+}
+
+export interface TlsCertInfo {
+  is_tls: boolean;
+  error?: string | null;
+  subject?: string;
+  issuer?: string;
+  valid_from?: string;
+  valid_until?: string;
+  days_remaining?: number | null;
+  expired: boolean;
+  self_signed: boolean;
+  san: string[];
+  version?: number;
+  serial_number?: string;
+}
+
+export interface CommandExecResponse {
+  exit_code: number;
+  output: string;
+  command: string;
+  duration_ms: number;
+}
+
+export interface ComposeInfo {
+  has_compose: boolean;
+  project?: string;
+  service?: string;
+  working_dir?: string;
+  config_file?: string;
+  content?: string | null;
+  error?: string | null;
+  message?: string;
+}
+

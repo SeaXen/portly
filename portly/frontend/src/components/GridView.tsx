@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppItem, Category } from '../types';
+import { AppIcon } from './AppIcon';
 
 interface GridViewProps {
   apps: AppItem[];
@@ -34,16 +35,7 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
           >
             {/* Top row */}
             <div className="c027">
-              <div
-                className="c028"
-                aria-hidden="true"
-                style={{
-                  background: app.source === 'docker' ? 'rgba(94, 234, 212, 0.15)' : 'rgba(140, 158, 255, 0.15)',
-                  color: app.source === 'docker' ? '#5EEAD4' : '#8C9EFF',
-                }}
-              >
-                {initial}
-              </div>
+              <AppIcon appId={app.id} name={app.name} source={app.source} size={36} className="c028" />
               <div className="c029">
                 <div className="c030" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {app.name}

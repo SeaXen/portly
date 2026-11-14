@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { Category, Rule } from '../types';
 
@@ -44,6 +44,55 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
   const [newRuleOp, setNewRuleOp] = useState('contains');
   const [newRuleVal, setNewRuleVal] = useState('');
   const [newRuleCat, setNewRuleCat] = useState('development');
+
+  // Webhook settings state
+  const [webhookEnabled, setWebhookEnabled] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookType, setWebhookType] = useState('generic');
+  const [webhookEvents, setWebhookEvents] = useState('port_opened,port_closed,container_state,port_conflict');
+  const [testingWebhook, setTestingWebhook] = useState(false);
+  const [webhookFeedback, setWebhookFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.getSettings().then((s) => {
+      if (s.webhook_enabled !== undefined) setWebhookEnabled(s.webhook_enabled.toLowerCase() === 'true');
+      if (s.webhook_url) setWebhookUrl(s.webhook_url);
+      if (s.webhook_type) setWebhookType(s.webhook_type);
+      if (s.webhook_events) setWebhookEvents(s.webhook_events);
+    }).catch(() => {});
+  }, []);
+
+  const handleSaveWebhook = async () => {
+    try {
+      await api.updateSettings({
+        webhook_enabled: String(webhookEnabled),
+        webhook_url: webhookUrl,
+        webhook_type: webhookType,
+        webhook_events: webhookEvents,
+      });
+      setWebhookFeedback('Webhook settings saved successfully!');
+      setTimeout(() => setWebhookFeedback(null), 3500);
+    } catch (e: any) {
+      setWebhookFeedback(`Save error: ${e.message}`);
+    }
+  };
+
+  const handleTestWebhook = async () => {
+    if (!webhookUrl) {
+      setWebhookFeedback('Please enter a Webhook URL first.');
+      return;
+    }
+    setTestingWebhook(true);
+    try {
+      const res = await api.testWebhook({ url: webhookUrl, type: webhookType });
+      setWebhookFeedback(`Test sent successfully: ${res.message}`);
+    } catch (e: any) {
+      setWebhookFeedback(`Test failed: ${e.message}`);
+    } finally {
+      setTestingWebhook(false);
+      setTimeout(() => setWebhookFeedback(null), 4500);
+    }
+  };
 
   const accents = ['#8C9EFF', '#5EEAD4', '#FBBF77', '#F5A3D0', '#B6E36B', '#C4B5FD'];
 
@@ -317,6 +366,78 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
             </div>
           </form>
         )}
+
+        {/* Webhooks & Alerts */}
+        <div className="c168" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <div className="c169" style={{ fontSize: '12px', color: '#8D95A5', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Webhooks & Alerting
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#ECEEF3', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={webhookEnabled}
+                onChange={(e) => setWebhookEnabled(e.target.checked)}
+              />
+              Enabled
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: '#8D95A5', marginBottom: '4px' }}>Webhook Type</label>
+              <select
+                value={webhookType}
+                onChange={(e) => setWebhookType(e.target.value)}
+                className="c215"
+                style={{ width: '100%' }}
+              >
+                <option value="generic">Generic JSON / Ntfy / Gotify</option>
+                <option value="discord">Discord Webhook</option>
+                <option value="slack">Slack Incoming Webhook</option>
+                <option value="telegram">Telegram Bot</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: '#8D95A5', marginBottom: '4px' }}>Endpoint URL</label>
+              <input
+                type="text"
+                placeholder={webhookType === 'discord' ? 'https://discord.com/api/webhooks/...' : 'https://ntfy.sh/my-portly-alerts'}
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                className="c220"
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+              />
+            </div>
+
+            {webhookFeedback && (
+              <div style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', background: 'rgba(140, 158, 255, 0.15)', color: '#8C9EFF' }}>
+                {webhookFeedback}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              <button
+                type="button"
+                className="c078"
+                style={{ flex: 1, fontSize: '12px' }}
+                onClick={handleTestWebhook}
+                disabled={testingWebhook}
+              >
+                {testingWebhook ? 'Sending...' : 'Test Alert'}
+              </button>
+              <button
+                type="button"
+                className="c080"
+                style={{ flex: 1, fontSize: '12px' }}
+                onClick={handleSaveWebhook}
+              >
+                Save Alerts
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

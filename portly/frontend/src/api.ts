@@ -1,4 +1,16 @@
-import { AppItem, Category, ConflictItem, Rule, StatsData, SystemStats, ViewItem } from './types';
+import {
+  AppItem,
+  Category,
+  CommandExecResponse,
+  ComposeInfo,
+  ConflictItem,
+  ProxyConfigResponse,
+  Rule,
+  StatsData,
+  SystemStats,
+  TlsCertInfo,
+  ViewItem,
+} from './types';
 
 const API_BASE = '/api';
 
@@ -250,5 +262,40 @@ export const api = {
 
   async logout(): Promise<any> {
     return request('/auth/logout', { method: 'POST' });
+  },
+
+  // Reverse Proxy Generator
+  async getProxyConfig(appId: string, format?: string, domain?: string): Promise<ProxyConfigResponse> {
+    const q = new URLSearchParams();
+    if (format) q.append('format', format);
+    if (domain) q.append('domain', domain);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return request(`/apps/${encodeURIComponent(appId)}/proxy-config${qs}`);
+  },
+
+  // SSL/TLS Certificate Inspector
+  async getAppTls(appId: string): Promise<TlsCertInfo> {
+    return request(`/apps/${encodeURIComponent(appId)}/tls`);
+  },
+
+  // In-Browser Container Terminal Runner
+  async execContainerCommand(appId: string, command: string, timeout: number = 10): Promise<CommandExecResponse> {
+    return request(`/apps/${encodeURIComponent(appId)}/exec`, {
+      method: 'POST',
+      body: JSON.stringify({ command, timeout }),
+    });
+  },
+
+  // Docker Compose Inspector
+  async getAppCompose(appId: string): Promise<ComposeInfo> {
+    return request(`/apps/${encodeURIComponent(appId)}/compose`);
+  },
+
+  // Webhook Test
+  async testWebhook(data: { url?: string; type?: string; event?: string } = {}): Promise<{ status: string; message: string; url: string; type: string }> {
+    return request('/settings/test-webhook', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   },
 };

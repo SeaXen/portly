@@ -11,6 +11,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ 
   const shortcuts = [
     { key: '/', desc: 'Quick focus search input' },
     { key: 'Ctrl + K / ⌘ + K', desc: 'Open Command Palette' },
+    { key: 'Shift + K', desc: 'Toggle Kiosk / Wall display mode' },
     { key: 'g then t', desc: 'Switch to Table view' },
     { key: 'g then g', desc: 'Switch to Grid (tiles) view' },
     { key: 'g then b', desc: 'Switch to Board (Kanban) view' },

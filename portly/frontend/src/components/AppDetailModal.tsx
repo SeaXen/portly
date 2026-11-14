@@ -1,6 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import { AppItem, Category } from '../types';
+import {
+  AppItem,
+  Category,
+  CommandExecResponse,
+  ComposeInfo,
+  ProxyConfigResponse,
+  TlsCertInfo,
+} from '../types';
 
 interface AppDetailModalProps {
   app: AppItem;
@@ -10,6 +17,18 @@ interface AppDetailModalProps {
   onRefreshApps: () => void;
 }
 
+type DetailTab =
+  | 'logs'
+  | 'ports'
+  | 'proxy'
+  | 'tls'
+  | 'terminal'
+  | 'compose'
+  | 'env'
+  | 'volumes'
+  | 'health'
+  | 'settings';
+
 export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   app,
   onClose,
@@ -17,7 +36,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   safeMode,
   onRefreshApps,
 }) => {
-  const [activeTab, setActiveTab] = useState<'logs' | 'ports' | 'env' | 'volumes' | 'health' | 'settings'>('logs');
+  const [activeTab, setActiveTab] = useState<DetailTab>('logs');
   const [logs, setLogs] = useState<string[]>([]);
   const [logFilter, setLogFilter] = useState('');
   const [logLevel, setLogLevel] = useState<'all' | 'info' | 'warn' | 'error'>('all');
@@ -31,6 +50,25 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   const [portAvail, setPortAvail] = useState<{ free: boolean; used_by: string } | null>(null);
   const [portChecking, setPortChecking] = useState(false);
   const [portChanging, setPortChanging] = useState(false);
+
+  // Reverse Proxy Generator state
+  const [proxyDomain, setProxyDomain] = useState(`${app.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}.local`);
+  const [proxyFormat, setProxyFormat] = useState<'caddy' | 'nginx' | 'traefik_yaml' | 'traefik_labels'>('caddy');
+  const [proxyData, setProxyData] = useState<ProxyConfigResponse | null>(null);
+  const [loadingProxy, setLoadingProxy] = useState(false);
+
+  // SSL/TLS state
+  const [tlsData, setTlsData] = useState<TlsCertInfo | null>(null);
+  const [loadingTls, setLoadingTls] = useState(false);
+
+  // Terminal / Exec state
+  const [execCmd, setExecCmd] = useState('ps aux');
+  const [execRes, setExecRes] = useState<CommandExecResponse | null>(null);
+  const [executing, setExecuting] = useState(false);
+
+  // Compose state
+  const [composeData, setComposeData] = useState<ComposeInfo | null>(null);
+  const [loadingCompose, setLoadingCompose] = useState(false);
 
   // Image update state
   const [updateInfo, setUpdateInfo] = useState<any>(null);
@@ -146,6 +184,79 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
       showNotification(`Rollback failed: ${err.message}`, 'error');
     }
   };
+
+  const loadProxyConfig = async (domain?: string) => {
+    if (!app.port) return;
+    setLoadingProxy(true);
+    try {
+      const data = await api.getProxyConfig(app.id, undefined, domain || proxyDomain);
+      setProxyData(data);
+    } catch (e: any) {
+      showNotification(`Failed to generate proxy config: ${e.message}`, 'error');
+    } finally {
+      setLoadingProxy(false);
+    }
+  };
+
+  const loadTlsInfo = async () => {
+    if (!app.port) return;
+    setLoadingTls(true);
+    try {
+      const data = await api.getAppTls(app.id);
+      setTlsData(data);
+    } catch (e: any) {
+      showNotification(`TLS check failed: ${e.message}`, 'error');
+    } finally {
+      setLoadingTls(false);
+    }
+  };
+
+  const loadComposeInfo = async () => {
+    if (app.source !== 'docker') return;
+    setLoadingCompose(true);
+    try {
+      const data = await api.getAppCompose(app.id);
+      setComposeData(data);
+    } catch (e: any) {
+      showNotification(`Compose inspection failed: ${e.message}`, 'error');
+    } finally {
+      setLoadingCompose(false);
+    }
+  };
+
+  const handleRunExec = async (cmdToRun?: string) => {
+    const cmd = cmdToRun || execCmd;
+    if (!cmd.trim()) return;
+    setExecuting(true);
+    try {
+      const res = await api.execContainerCommand(app.id, cmd);
+      setExecRes(res);
+      if (res.exit_code === 0) {
+        showNotification(`Executed in ${res.duration_ms}ms`, 'success');
+      } else {
+        showNotification(`Command exited with code ${res.exit_code}`, 'warning');
+      }
+    } catch (e: any) {
+      showNotification(`Execution failed: ${e.message}`, 'error');
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    showNotification(`Copied ${label} to clipboard!`, 'success');
+  };
+
+  useEffect(() => {
+    if (activeTab === 'proxy' && !proxyData) {
+      loadProxyConfig();
+    } else if (activeTab === 'tls' && !tlsData) {
+      loadTlsInfo();
+    } else if (activeTab === 'compose' && !composeData) {
+      loadComposeInfo();
+    }
+  }, [activeTab]);
 
   const handleCheckUpdate = async () => {
     setCheckingUpdate(true);
@@ -438,26 +549,37 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
         </div>
 
         {/* Tabs */}
-        <div className="c089" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-          {(['logs', 'ports', 'env', 'volumes', 'health', 'settings'] as const).map((tab) => (
+        <div className="c089" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', overflowX: 'auto', gap: '4px' }}>
+          {([
+            'logs',
+            'ports',
+            'proxy',
+            'tls',
+            ...(app.source === 'docker' ? (['terminal', 'compose'] as const) : []),
+            'env',
+            'volumes',
+            'health',
+            'settings',
+          ] as const).map((tab) => (
             <button
               key={tab}
               type="button"
               className={activeTab === tab ? 'c195' : 'c196'}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => setActiveTab(tab as DetailTab)}
               style={{
                 background: 'transparent',
                 border: 'none',
                 borderBottom: activeTab === tab ? '2px solid #8C9EFF' : '2px solid transparent',
                 cursor: 'pointer',
                 font: 'inherit',
-                fontSize: '14px',
-                padding: '10px 16px',
+                fontSize: '13.5px',
+                padding: '10px 14px',
                 textTransform: 'capitalize',
+                whiteSpace: 'nowrap',
                 color: activeTab === tab ? '#ECEEF3' : '#8D95A5',
               }}
             >
-              {tab}
+              {tab === 'tls' ? 'TLS / SSL' : tab === 'proxy' ? 'Reverse Proxy' : tab}
             </button>
           ))}
         </div>
@@ -677,6 +799,295 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     </button>
                   )}
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'proxy' && (
+              <div style={{ background: '#101218', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>1-Click Reverse Proxy Generator</h3>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {(['caddy', 'nginx', 'traefik_yaml', 'traefik_labels'] as const).map((fmt) => (
+                      <button
+                        key={fmt}
+                        type="button"
+                        className={proxyFormat === fmt ? 'c080' : 'c078'}
+                        style={{ height: '28px', padding: '0 10px', fontSize: '12px', textTransform: 'capitalize' }}
+                        onClick={() => setProxyFormat(fmt)}
+                      >
+                        {fmt === 'traefik_yaml' ? 'Traefik YAML' : fmt === 'traefik_labels' ? 'Traefik Labels' : fmt.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+                  <input
+                    type="text"
+                    value={proxyDomain}
+                    onChange={(e) => setProxyDomain(e.target.value)}
+                    placeholder="e.g. app.example.com"
+                    className="c220"
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="c078"
+                    disabled={loadingProxy}
+                    onClick={() => loadProxyConfig(proxyDomain)}
+                  >
+                    {loadingProxy ? 'Generating...' : 'Regenerate'}
+                  </button>
+                </div>
+
+                {proxyData && (
+                  <div>
+                    <div style={{ position: 'relative' }}>
+                      <pre
+                        style={{
+                          background: '#090B10',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: '8px',
+                          padding: '16px',
+                          fontSize: '12.5px',
+                          fontFamily: 'JetBrains Mono, monospace',
+                          color: '#ECEEF3',
+                          overflowX: 'auto',
+                          margin: 0,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {proxyData.configs[proxyFormat]}
+                      </pre>
+                      <button
+                        type="button"
+                        className="c078"
+                        style={{ position: 'absolute', top: '10px', right: '10px', height: '28px', fontSize: '12px' }}
+                        onClick={() => copyToClipboard(proxyData.configs[proxyFormat], proxyFormat.toUpperCase())}
+                      >
+                        Copy Snippet
+                      </button>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#8D95A5', marginTop: '10px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Target: <code>{proxyData.upstream_host}:{proxyData.port}</code></span>
+                      <span>Domain: <code>{proxyData.domain}</code></span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'tls' && (
+              <div style={{ background: '#101218', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>SSL / TLS Certificate Inspector</h3>
+                  <button
+                    type="button"
+                    className="c078"
+                    disabled={loadingTls}
+                    onClick={loadTlsInfo}
+                  >
+                    {loadingTls ? 'Checking...' : 'Re-check Certificate'}
+                  </button>
+                </div>
+
+                {loadingTls ? (
+                  <p style={{ color: '#8D95A5', fontSize: '13px' }}>Probing TLS handshake on :{app.port}...</p>
+                ) : tlsData?.is_tls ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div style={{ padding: '14px', background: '#151821', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '11px', color: '#8D95A5', textTransform: 'uppercase' }}>Certificate Status</div>
+                        <div style={{ fontSize: '18px', fontWeight: 700, color: tlsData.expired ? '#FF8A8A' : '#5EEAD4', marginTop: '4px' }}>
+                          {tlsData.expired ? 'EXPIRED' : 'VALID & ACTIVE'}
+                        </div>
+                      </div>
+                      <div style={{ padding: '14px', background: '#151821', borderRadius: '8px' }}>
+                        <div style={{ fontSize: '11px', color: '#8D95A5', textTransform: 'uppercase' }}>Days Remaining</div>
+                        <div
+                          style={{
+                            fontSize: '18px',
+                            fontWeight: 700,
+                            color: (tlsData.days_remaining ?? 0) < 14 ? '#FF8A8A' : ((tlsData.days_remaining ?? 0) < 30 ? '#FBBF77' : '#5EEAD4'),
+                            marginTop: '4px',
+                          }}
+                        >
+                          {tlsData.days_remaining !== null && tlsData.days_remaining !== undefined ? `${tlsData.days_remaining} days` : 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: '13px', background: '#151821', borderRadius: '8px', padding: '14px', lineHeight: 1.6 }}>
+                      <div><strong style={{ color: '#8D95A5' }}>Issuer:</strong> <span style={{ color: '#ECEEF3' }}>{tlsData.issuer || 'Unknown'}</span></div>
+                      <div><strong style={{ color: '#8D95A5' }}>Subject:</strong> <span style={{ color: '#ECEEF3' }}>{tlsData.subject || 'Unknown'}</span></div>
+                      <div><strong style={{ color: '#8D95A5' }}>Valid From:</strong> <span style={{ color: '#ECEEF3' }}>{tlsData.valid_from || 'N/A'}</span></div>
+                      <div><strong style={{ color: '#8D95A5' }}>Valid Until:</strong> <span style={{ color: '#ECEEF3' }}>{tlsData.valid_until || 'N/A'}</span></div>
+                      {tlsData.self_signed && <div style={{ color: '#FBBF77', marginTop: '6px' }}>⚠️ Self-signed certificate</div>}
+                    </div>
+
+                    {tlsData.san && tlsData.san.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Subject Alternative Names (SAN)</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {tlsData.san.map((s, idx) => (
+                            <span key={idx} style={{ fontSize: '11px', padding: '2px 8px', background: 'rgba(140, 158, 255, 0.15)', color: '#8C9EFF', borderRadius: '4px', fontFamily: 'JetBrains Mono, monospace' }}>
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ padding: '24px', textAlign: 'center', background: '#151821', borderRadius: '8px', color: '#8D95A5', fontSize: '13px' }}>
+                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>ℹ</div>
+                    Port {app.port} is not responding over TLS/HTTPS (standard HTTP or TCP socket).
+                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#8C9EFF' }}>
+                      Tip: Use the Reverse Proxy tab to put Caddy or Nginx in front of this service to add automatic HTTPS.
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'terminal' && app.source === 'docker' && (
+              <div style={{ background: '#101218', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Container Command Runner (`docker exec`)</h3>
+                  {safeMode && (
+                    <span style={{ fontSize: '11px', background: 'rgba(94, 234, 212, 0.12)', color: '#5EEAD4', padding: '3px 8px', borderRadius: '6px' }}>
+                      Safe Mode: Read-only diagnostics active
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                  {['ps aux', 'df -h', 'env', 'netstat -tuln', 'uname -a', 'cat /etc/hosts'].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      className="c078"
+                      style={{ height: '26px', fontSize: '11px', padding: '0 8px', fontFamily: 'JetBrains Mono, monospace' }}
+                      onClick={() => {
+                        setExecCmd(preset);
+                        handleRunExec(preset);
+                      }}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleRunExec();
+                  }}
+                  style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}
+                >
+                  <input
+                    type="text"
+                    value={execCmd}
+                    onChange={(e) => setExecCmd(e.target.value)}
+                    placeholder="Enter command inside container..."
+                    className="c220"
+                    style={{ flex: 1, fontFamily: 'JetBrains Mono, monospace', fontSize: '13px' }}
+                  />
+                  <button type="submit" className="c080" disabled={executing}>
+                    {executing ? 'Running...' : 'Execute'}
+                  </button>
+                </form>
+
+                {execRes && (
+                  <div style={{ background: '#080A0E', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '11.5px', color: '#8D95A5' }}>
+                      <span>$ {execRes.command}</span>
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <span>{execRes.duration_ms}ms</span>
+                        <span style={{ color: execRes.exit_code === 0 ? '#5EEAD4' : '#FF8A8A', fontWeight: 600 }}>
+                          Exit: {execRes.exit_code}
+                        </span>
+                      </div>
+                    </div>
+                    <pre
+                      style={{
+                        margin: 0,
+                        fontSize: '12px',
+                        fontFamily: 'JetBrains Mono, monospace',
+                        color: '#ECEEF3',
+                        maxHeight: '260px',
+                        overflowY: 'auto',
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      {execRes.output || '(No output)'}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'compose' && app.source === 'docker' && (
+              <div style={{ background: '#101218', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Docker Compose Inspection</h3>
+                  <button
+                    type="button"
+                    className="c078"
+                    disabled={loadingCompose}
+                    onClick={loadComposeInfo}
+                  >
+                    {loadingCompose ? 'Refreshing...' : 'Refresh'}
+                  </button>
+                </div>
+
+                {loadingCompose ? (
+                  <p style={{ color: '#8D95A5', fontSize: '13px' }}>Reading compose metadata...</p>
+                ) : composeData?.has_compose ? (
+                  <div>
+                    <div style={{ display: 'flex', gap: '16px', fontSize: '12.5px', color: '#8D95A5', marginBottom: '14px' }}>
+                      <div>Project: <strong style={{ color: '#ECEEF3' }}>{composeData.project}</strong></div>
+                      <div>Service: <strong style={{ color: '#8C9EFF' }}>{composeData.service}</strong></div>
+                      {composeData.config_file && <div>File: <code style={{ color: '#ECEEF3' }}>{composeData.config_file}</code></div>}
+                    </div>
+
+                    {composeData.content ? (
+                      <div style={{ position: 'relative' }}>
+                        <pre
+                          style={{
+                            background: '#090B10',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: '8px',
+                            padding: '16px',
+                            fontSize: '12px',
+                            fontFamily: 'JetBrains Mono, monospace',
+                            color: '#ECEEF3',
+                            maxHeight: '340px',
+                            overflowY: 'auto',
+                            margin: 0,
+                          }}
+                        >
+                          {composeData.content}
+                        </pre>
+                        <button
+                          type="button"
+                          className="c078"
+                          style={{ position: 'absolute', top: '10px', right: '10px', height: '26px', fontSize: '11px' }}
+                          onClick={() => copyToClipboard(composeData.content || '', 'Compose YAML')}
+                        >
+                          Copy YAML
+                        </button>
+                      </div>
+                    ) : (
+                      <p style={{ color: '#8D95A5', fontSize: '13px' }}>{composeData.message || 'Compose file path not readable on this host.'}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p style={{ color: '#8D95A5', fontSize: '13px' }}>
+                    {composeData?.message || 'This container does not have Docker Compose labels.'}
+                  </p>
+                )}
               </div>
             )}
 

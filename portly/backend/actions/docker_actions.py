@@ -310,3 +310,176 @@ def rollback_port_change_docker(app_id: str, store: Store) -> Dict[str, Any]:
     store.clear_port_snapshot(app_id)
     store.log_event("port_rollback", f"Rolled back container {container_name} port to {original_port}", app_id=app_id)
     return {"status": "rolled_back", "port": original_port}
+
+
+SAFE_COMMAND_BINARIES = {
+    "ps", "top", "df", "du", "free", "uptime", "uname", "whoami", "id",
+    "netstat", "ss", "env", "printenv", "ls", "pwd", "date", "cat",
+    "head", "tail", "ip", "ifconfig", "hostname"
+}
+
+FORBIDDEN_OPERATORS = [">", ">>", "|", ";", "&&", "||", "$(", "`", "<"]
+
+
+def _validate_safe_command(command: str):
+    """Enforces that command is a read-only diagnostic command without redirection or chaining."""
+    import os
+    cmd_str = command.strip()
+    if not cmd_str:
+        raise ValueError("Command cannot be empty")
+
+    for op in FORBIDDEN_OPERATORS:
+        if op in cmd_str:
+            raise PermissionError(
+                f"Safe mode is active. Command contains operator '{op}' which is restricted in safe mode."
+            )
+
+    parts = cmd_str.split()
+    bin_name = os.path.basename(parts[0]).lower()
+    if bin_name not in SAFE_COMMAND_BINARIES:
+        raise PermissionError(
+            f"Safe mode is active. Executable '{bin_name}' is not in the safe inspection whitelist. "
+            f"Unlock safe mode in the top bar to execute custom commands."
+        )
+
+
+def exec_in_container(
+    container_name_or_id: str,
+    command: str,
+    store: Optional[Store] = None,
+    timeout: int = 10
+) -> Dict[str, Any]:
+    """Runs a command inside a Docker container subject to Safe Mode checks."""
+    import time
+    if store and store.get_setting("safe_mode", "true").lower() == "true":
+        _validate_safe_command(command)
+
+    client = get_docker_client()
+    if not client:
+        raise RuntimeError("Docker is not available.")
+
+    container = client.containers.get(container_name_or_id)
+    t0 = time.perf_counter()
+    exec_res = container.exec_run(command, stdout=True, stderr=True, demux=False)
+    duration_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+
+    raw_output = exec_res.output
+    output_str = raw_output.decode("utf-8", errors="replace") if isinstance(raw_output, (bytes, bytearray)) else str(raw_output or "")
+
+    return {
+        "exit_code": exec_res.exit_code,
+        "output": output_str,
+        "command": command,
+        "duration_ms": duration_ms,
+    }
+
+
+def get_container_compose_config(container_name_or_id: str) -> Dict[str, Any]:
+    """Inspects container labels and securely retrieves docker-compose file configuration."""
+    import os
+    client = get_docker_client()
+    if not client:
+        raise RuntimeError("Docker is not available.")
+
+    container = client.containers.get(container_name_or_id)
+    labels = container.attrs.get("Config", {}).get("Labels") or {}
+
+    project = labels.get("com.docker.compose.project")
+    service = labels.get("com.docker.compose.service")
+    working_dir = labels.get("com.docker.compose.project.working_dir")
+    config_files = labels.get("com.docker.compose.project.config_files")
+
+    if not project and not service and not working_dir:
+        return {
+            "has_compose": False,
+            "message": f"Container '{container.name}' does not appear to be managed by Docker Compose (no compose labels found)."
+        }
+
+    # Attempt to locate compose file
+    candidate_path = None
+    if config_files:
+        first_file = config_files.split(",")[0].strip()
+        if os.path.isabs(first_file):
+            candidate_path = first_file
+        elif working_dir:
+            candidate_path = os.path.join(working_dir, first_file)
+
+    if not candidate_path and working_dir:
+        for fname in ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]:
+            p = os.path.join(working_dir, fname)
+            if os.path.isfile(p):
+                candidate_path = p
+                break
+
+    if not candidate_path:
+        return {
+            "has_compose": True,
+            "project": project or "",
+            "service": service or "",
+            "working_dir": working_dir or "",
+            "config_file": config_files or "",
+            "content": None,
+            "error": "Compose file not found on host filesystem or path is not set.",
+        }
+
+    # Security check: canonicalize and verify path
+    real_path = os.path.realpath(candidate_path)
+    if not os.path.isfile(real_path):
+        return {
+            "has_compose": True,
+            "project": project or "",
+            "service": service or "",
+            "working_dir": working_dir or "",
+            "config_file": real_path,
+            "content": None,
+            "error": f"Compose file '{real_path}' does not exist on host filesystem.",
+        }
+
+    # Check extension and size
+    ext = os.path.splitext(real_path)[1].lower()
+    if ext not in (".yml", ".yaml"):
+        return {
+            "has_compose": True,
+            "project": project or "",
+            "service": service or "",
+            "working_dir": working_dir or "",
+            "config_file": real_path,
+            "content": None,
+            "error": "Security check failed: config file is not a YAML file.",
+        }
+
+    if os.path.getsize(real_path) > 1048576:
+        return {
+            "has_compose": True,
+            "project": project or "",
+            "service": service or "",
+            "working_dir": working_dir or "",
+            "config_file": real_path,
+            "content": None,
+            "error": "Compose file exceeds maximum allowed size (1MB).",
+        }
+
+    try:
+        with open(real_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+
+        return {
+            "has_compose": True,
+            "project": project or "",
+            "service": service or "",
+            "working_dir": working_dir or "",
+            "config_file": real_path,
+            "content": content,
+            "error": None,
+        }
+    except Exception as e:
+        return {
+            "has_compose": True,
+            "project": project or "",
+            "service": service or "",
+            "working_dir": working_dir or "",
+            "config_file": real_path,
+            "content": None,
+            "error": f"Failed to read compose file: {str(e)}",
+        }
+

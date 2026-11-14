@@ -11,6 +11,8 @@ interface TopBarProps {
   theme: string;
   onToggleTheme: () => void;
   lastScanTime: number;
+  kioskMode?: boolean;
+  onToggleKiosk?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -23,6 +25,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   theme,
   onToggleTheme,
   lastScanTime,
+  kioskMode,
+  onToggleKiosk,
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -100,6 +104,33 @@ export const TopBar: React.FC<TopBarProps> = ({
             </svg>
           )}
         </button>
+
+        {/* Kiosk Mode Toggle */}
+        {onToggleKiosk && (
+          <button
+            type="button"
+            className="c077"
+            aria-label="Toggle Kiosk mode"
+            onClick={onToggleKiosk}
+            title={kioskMode ? 'Exit Kiosk Mode (Shift+K)' : 'Kiosk / Wall Display Mode (Shift+K)'}
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '9px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: kioskMode ? '#5EEAD4' : 'inherit',
+              borderColor: kioskMode ? 'rgba(94, 234, 212, 0.3)' : undefined,
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+          </button>
+        )}
 
         {/* Export Button with Dropdown */}
         <div style={{ position: 'relative' }}>

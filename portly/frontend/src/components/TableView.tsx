@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppItem, Category } from '../types';
+import { AppIcon } from './AppIcon';
 
 interface TableViewProps {
   apps: AppItem[];
@@ -165,24 +166,7 @@ export const TableView: React.FC<TableViewProps> = ({
 
                     {/* Name & Process */}
                     <div className="table-cell" style={{ gap: '10px' }}>
-                      <div
-                        style={{
-                          width: '30px',
-                          height: '30px',
-                          borderRadius: '8px',
-                          background: app.source === 'docker' ? 'rgba(94, 234, 212, 0.15)' : 'rgba(140, 158, 255, 0.15)',
-                          color: app.source === 'docker' ? '#5EEAD4' : '#8C9EFF',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 700,
-                          fontSize: '13px',
-                          flexShrink: 0,
-                        }}
-                        aria-hidden="true"
-                      >
-                        {initial}
-                      </div>
+                      <AppIcon appId={app.id} name={app.name} source={app.source} size={30} />
                       <div style={{ minWidth: 0, overflow: 'hidden' }}>
                         <div style={{ fontWeight: 600, color: '#ECEEF3', fontSize: '13.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {app.name}

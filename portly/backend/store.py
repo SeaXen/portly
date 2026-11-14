@@ -7,7 +7,8 @@ import sqlite3
 import time
 from typing import Any, Dict, List, Optional
 
-DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "portly.db")
+DEFAULT_DATA_DIR = os.getenv("PORTLY_DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data"))
+DEFAULT_DB_PATH = os.path.join(DEFAULT_DATA_DIR, "portly.db")
 
 
 class Store:
@@ -227,6 +228,10 @@ class Store:
                 "notify_new_ports": "true",
                 "auto_refresh": "true",
                 "public_host": "",
+                "webhook_enabled": "false",
+                "webhook_url": "",
+                "webhook_type": "generic",
+                "webhook_events": "port_opened,port_closed,container_state,port_conflict",
             }
             for k, v in default_settings.items():
                 conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
