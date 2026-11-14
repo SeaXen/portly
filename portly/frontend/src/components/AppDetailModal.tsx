@@ -371,7 +371,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>{toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : toast.type === 'warning' ? '⚠️' : 'ℹ'}</span>
+              <span style={{ fontWeight: 700, fontSize: '13px' }}>{toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : toast.type === 'warning' ? '!' : 'i'}</span>
               <span>{toast.message}</span>
             </div>
             <button
