@@ -62,10 +62,12 @@ export const TopBar: React.FC<TopBarProps> = ({
           </svg>
           <input
             type="text"
-            placeholder="Search ports, apps, containers"
+            placeholder="Search ports, apps, containers…"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             className="c075"
+            autoComplete="off"
+            spellCheck={false}
           />
           <kbd
             className="c076"
@@ -275,7 +277,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <path d="M21 12a9 9 0 1 1-3-6.7"></path>
             <path d="M21 4v5h-5"></path>
           </svg>
-          {scanning ? 'Scanning...' : 'Scan now'}
+          {scanning ? 'Scanning…' : 'Scan now'}
         </button>
 
         {/* Add App Button (Primary Hero Action) */}

@@ -63,6 +63,9 @@ export const AppIcon: React.FC<AppIconProps> = ({
       <img
         src={`/api/apps/${encodeURIComponent(appId)}/favicon`}
         alt=""
+        width={size}
+        height={size}
+        loading="lazy"
         style={{
           width: '100%',
           height: '100%',

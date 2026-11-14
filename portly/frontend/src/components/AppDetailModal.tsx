@@ -786,7 +786,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     disabled={portChanging || !portAvail?.free}
                     onClick={handleApplyPortChange}
                   >
-                    {portChanging ? 'Recreating...' : 'Apply and recreate'}
+                    {portChanging ? 'Recreating…' : 'Apply and recreate'}
                   </button>
                   {app.source === 'docker' && (
                     <button
@@ -836,7 +836,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     disabled={loadingProxy}
                     onClick={() => loadProxyConfig(proxyDomain)}
                   >
-                    {loadingProxy ? 'Generating...' : 'Regenerate'}
+                    {loadingProxy ? 'Generating…' : 'Regenerate'}
                   </button>
                 </div>
 
@@ -887,12 +887,12 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     disabled={loadingTls}
                     onClick={loadTlsInfo}
                   >
-                    {loadingTls ? 'Checking...' : 'Re-check Certificate'}
+                    {loadingTls ? 'Checking…' : 'Re-check Certificate'}
                   </button>
                 </div>
 
                 {loadingTls ? (
-                  <p style={{ color: '#8D95A5', fontSize: '13px' }}>Probing TLS handshake on :{app.port}...</p>
+                  <p style={{ color: '#8D95A5', fontSize: '13px' }}>Probing TLS handshake on :{app.port}…</p>
                 ) : tlsData?.is_tls ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -989,12 +989,14 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     type="text"
                     value={execCmd}
                     onChange={(e) => setExecCmd(e.target.value)}
-                    placeholder="Enter command inside container..."
+                    placeholder="Enter command inside container…"
                     className="c220"
                     style={{ flex: 1, fontFamily: 'JetBrains Mono, monospace', fontSize: '13px' }}
+                    autoComplete="off"
+                    spellCheck={false}
                   />
                   <button type="submit" className="c080" disabled={executing}>
-                    {executing ? 'Running...' : 'Execute'}
+                    {executing ? 'Running…' : 'Execute'}
                   </button>
                 </form>
 
@@ -1038,12 +1040,12 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     disabled={loadingCompose}
                     onClick={loadComposeInfo}
                   >
-                    {loadingCompose ? 'Refreshing...' : 'Refresh'}
+                    {loadingCompose ? 'Refreshing…' : 'Refresh'}
                   </button>
                 </div>
 
                 {loadingCompose ? (
-                  <p style={{ color: '#8D95A5', fontSize: '13px' }}>Reading compose metadata...</p>
+                  <p style={{ color: '#8D95A5', fontSize: '13px' }}>Reading compose metadata…</p>
                 ) : composeData?.has_compose ? (
                   <div>
                     <div style={{ display: 'flex', gap: '16px', fontSize: '12.5px', color: '#8D95A5', marginBottom: '14px' }}>
@@ -1244,7 +1246,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                   onClick={handleCheckUpdate}
                   disabled={checkingUpdate}
                 >
-                  {checkingUpdate ? 'Checking...' : 'Check now'}
+                  {checkingUpdate ? 'Checking…' : 'Check now'}
                 </button>
               </div>
             </div>

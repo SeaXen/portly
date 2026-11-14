@@ -403,11 +403,13 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
               <label style={{ display: 'block', fontSize: '11px', color: '#8D95A5', marginBottom: '4px' }}>Endpoint URL</label>
               <input
                 type="text"
-                placeholder={webhookType === 'discord' ? 'https://discord.com/api/webhooks/...' : 'https://ntfy.sh/my-portly-alerts'}
+                placeholder={webhookType === 'discord' ? 'https://discord.com/api/webhooks/…' : 'https://ntfy.sh/my-portly-alerts'}
                 value={webhookUrl}
                 onChange={(e) => setWebhookUrl(e.target.value)}
                 className="c220"
                 style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
+                autoComplete="off"
+                spellCheck={false}
               />
             </div>
 
@@ -425,7 +427,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                 onClick={handleTestWebhook}
                 disabled={testingWebhook}
               >
-                {testingWebhook ? 'Sending...' : 'Test Alert'}
+                {testingWebhook ? 'Sending…' : 'Test Alert'}
               </button>
               <button
                 type="button"
