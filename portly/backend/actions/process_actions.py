@@ -39,16 +39,19 @@ def _is_safe_log_path(path: str) -> bool:
     if "\0" in path:
         return False
     try:
-        norm = os.path.abspath(os.path.realpath(path))
+        import posixpath
+        # Normalize separators for cross-platform resolution
+        norm = os.path.abspath(os.path.realpath(path.replace("\\", os.sep)))
         lower = norm.lower().replace("\\", "/")
         raw_lower = path.strip().lower().replace("\\", "/")
+        norm_posix = posixpath.normpath("/" + raw_lower.lstrip("/"))
 
         # Strip Windows drive letter (e.g. "c:" or "d:") to get absolute POSIX-like path
         path_without_drive = lower
         if len(lower) >= 2 and lower[1] == ":" and lower[0].isalpha():
             path_without_drive = lower[2:]
 
-        # Forbidden system root directories (checked on canonical and raw paths)
+        # Forbidden system root directories (checked on canonical, posix, and raw paths)
         forbidden_system_dirs = (
             "/etc", "/var", "/proc", "/sys", "/dev", "/root", "/bin", "/sbin", "/boot", "/lib",
             "/windows", "/winnt", "/program files", "/program files (x86)", "/programdata",
@@ -58,13 +61,14 @@ def _is_safe_log_path(path: str) -> bool:
             if (
                 path_without_drive.startswith(fdir + "/") or path_without_drive == fdir
                 or raw_lower.startswith(fdir + "/") or raw_lower == fdir
+                or norm_posix.startswith(fdir + "/") or norm_posix == fdir
                 or lower.startswith(fdir + "/") or lower == fdir
             ):
                 return False
 
         # Windows system paths
         system_root = os.environ.get("SystemRoot", r"C:\Windows").lower().replace("\\", "/")
-        if lower.startswith(system_root + "/") or lower == system_root:
+        if lower.startswith(system_root + "/") or lower == system_root or norm_posix.startswith("/windows/"):
             return False
 
         # Block credential & secret directory patterns anywhere in the path
@@ -73,7 +77,7 @@ def _is_safe_log_path(path: str) -> bool:
             "/credentials", "/shadow", "/passwd", "/sam", "/system32"
         )
         for pat in blocked_path_patterns:
-            if pat in lower or pat in raw_lower:
+            if pat in lower or pat in raw_lower or pat in norm_posix:
                 return False
 
         # Block database files, WAL files, private keys, certificates, secrets, env
@@ -83,7 +87,7 @@ def _is_safe_log_path(path: str) -> bool:
             ".cer", ".token", ".secret"
         )
         for ext in blocked_extensions:
-            if lower.endswith(ext) or raw_lower.endswith(ext):
+            if lower.endswith(ext) or raw_lower.endswith(ext) or norm_posix.endswith(ext):
                 return False
 
         return True
