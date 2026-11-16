@@ -89,13 +89,18 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
             # Check if they are truly different (not duplicate IPv4/IPv6 of same container)
             unique_sources = set(a["id"] for a in app_list)
             if len(unique_sources) > 1:
-                conflicts.append({
-                    "port": port,
-                    "apps": [a["name"] for a in app_list],
-                    "ids": list(unique_sources)
-                })
-                for a in app_list:
-                    conflicted_ids.add(a["id"])
+                # Check if bind addresses actually collide (wildcard 0.0.0.0 or duplicate specific IP)
+                binds = [a.get("bind", "0.0.0.0") for a in app_list]
+                has_wildcard = any(b in ("0.0.0.0", "::") for b in binds)
+                has_duplicate_bind = len(binds) != len(set(binds))
+                if has_wildcard or has_duplicate_bind:
+                    conflicts.append({
+                        "port": port,
+                        "apps": [a["name"] for a in app_list],
+                        "ids": list(unique_sources)
+                    })
+                    for a in app_list:
+                        conflicted_ids.add(a["id"])
 
     # 4. Finalize Unified Apps List
     final_apps: List[Dict[str, Any]] = []

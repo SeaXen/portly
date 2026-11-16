@@ -62,6 +62,8 @@ export const TopBar: React.FC<TopBarProps> = ({
           </svg>
           <input
             type="text"
+            name="search"
+            aria-label="Search ports, apps, containers"
             placeholder="Search ports, apps, containers…"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
@@ -69,14 +71,16 @@ export const TopBar: React.FC<TopBarProps> = ({
             autoComplete="off"
             spellCheck={false}
           />
-          <kbd
+          <button
+            type="button"
             className="c076"
             onClick={onOpenCommandPalette}
-            style={{ cursor: 'pointer' }}
+            style={{ cursor: 'pointer', background: 'transparent', color: '#8D95A5' }}
             title="Press Ctrl+K or Cmd+K"
+            aria-label="Open Command Palette (Ctrl+K)"
           >
-            Ctrl K
-          </kbd>
+            Ctrl&nbsp;K
+          </button>
         </label>
 
         {/* Theme Toggle */}
@@ -185,7 +189,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 onClick={() => setShowExportMenu(false)}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#8C9EFF' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line></svg> CSV Table
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#8C9EFF' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line></svg> CSV Table
               </a>
               <a
                 href={api.exportUrl('markdown')}
@@ -199,13 +203,13 @@ export const TopBar: React.FC<TopBarProps> = ({
                   color: '#ECEEF3',
                   fontSize: '13px',
                   textDecoration: 'none',
-                  transition: 'background 0.1s',
+                  transition: 'background-color 0.1s',
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 onClick={() => setShowExportMenu(false)}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#5EEAD4' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Markdown Sheet
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#5EEAD4' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Markdown Sheet
               </a>
               <a
                 href={api.exportUrl('json')}
@@ -219,13 +223,13 @@ export const TopBar: React.FC<TopBarProps> = ({
                   color: '#ECEEF3',
                   fontSize: '13px',
                   textDecoration: 'none',
-                  transition: 'background 0.1s',
+                  transition: 'background-color 0.1s',
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 onClick={() => setShowExportMenu(false)}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#FBBF77' }}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Full JSON Backup
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#FBBF77' }}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Full JSON Backup
               </a>
             </div>
           )}
@@ -249,7 +253,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             alignItems: 'center',
             gap: '6px',
             cursor: scanning ? 'not-allowed' : 'pointer',
-            transition: 'all 0.15s',
+            transition: 'background-color 0.15s, border-color 0.15s',
           }}
           onMouseEnter={(e) => {
             if (!scanning) e.currentTarget.style.background = 'rgba(255,255,255,0.09)';
@@ -277,7 +281,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <path d="M21 12a9 9 0 1 1-3-6.7"></path>
             <path d="M21 4v5h-5"></path>
           </svg>
-          {scanning ? 'Scanning…' : 'Scan now'}
+          {scanning ? 'Scanning…' : 'Scan Now'}
         </button>
 
         {/* Add App Button (Primary Hero Action) */}

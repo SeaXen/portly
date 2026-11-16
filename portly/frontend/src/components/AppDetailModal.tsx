@@ -20,6 +20,7 @@ interface AppDetailModalProps {
 type DetailTab =
   | 'logs'
   | 'ports'
+  | 'tunnels'
   | 'proxy'
   | 'tls'
   | 'terminal'
@@ -53,9 +54,20 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
 
   // Reverse Proxy Generator state
   const [proxyDomain, setProxyDomain] = useState(`${app.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-')}.local`);
-  const [proxyFormat, setProxyFormat] = useState<'caddy' | 'nginx' | 'traefik_yaml' | 'traefik_labels'>('caddy');
+  const [proxyFormat, setProxyFormat] = useState<'caddy' | 'nginx' | 'traefik_yaml' | 'traefik_labels' | 'cloudflared'>('caddy');
   const [proxyData, setProxyData] = useState<ProxyConfigResponse | null>(null);
   const [loadingProxy, setLoadingProxy] = useState(false);
+
+  // Cloudflare Tunnel & Remote URL state
+  const [tunnelUrl, setTunnelUrl] = useState(app.url_override || (app.open_url && !app.open_url.includes('localhost') ? app.open_url : ''));
+  const [savingTunnel, setSavingTunnel] = useState(false);
+
+  // Multi-Port Remapping state
+  const [multiPorts, setMultiPorts] = useState<Array<{ container_port: string; host_port: number; bind: string }>>([]);
+  const [multiPortsChanging, setMultiPortsChanging] = useState(false);
+
+  // Compose Stack Action state
+  const [executingStackAction, setExecutingStackAction] = useState<string | null>(null);
 
   // SSL/TLS state
   const [tlsData, setTlsData] = useState<TlsCertInfo | null>(null);
@@ -101,7 +113,24 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
     api.getAppDetail(app.id).then((d) => {
       setHealthHistory(d.health_history || []);
       setInspectData(d.docker_inspect || null);
-    }).catch(() => {});
+      if (d.docker_inspect?.ports) {
+        const pList: Array<{ container_port: string; host_port: number; bind: string }> = [];
+        Object.entries(d.docker_inspect.ports).forEach(([cp, maps]: [string, any]) => {
+          const hp = maps && maps.length > 0 ? parseInt(maps[0].HostPort) || 0 : 0;
+          const b = maps && maps.length > 0 ? maps[0].HostIp || '0.0.0.0' : '0.0.0.0';
+          pList.push({ container_port: cp, host_port: hp, bind: b });
+        });
+        if (pList.length > 0) {
+          setMultiPorts(pList);
+        }
+      } else if (app.port) {
+        setMultiPorts([{ container_port: `${app.port}/${app.proto || 'tcp'}`, host_port: app.port, bind: app.bind || '0.0.0.0' }]);
+      }
+    }).catch(() => {
+      if (app.port) {
+        setMultiPorts([{ container_port: `${app.port}/${app.proto || 'tcp'}`, host_port: app.port, bind: app.bind || '0.0.0.0' }]);
+      }
+    });
   }, [app.id]);
 
   // Live Auto-follow interval for logs
@@ -182,6 +211,62 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
       setTimeout(() => onClose(), 1200);
     } catch (err: any) {
       showNotification(`Rollback failed: ${err.message}`, 'error');
+    }
+  };
+
+  const handleSaveTunnelUrl = async () => {
+    setSavingTunnel(true);
+    try {
+      await api.patchApp(app.id, { url_override: tunnelUrl.trim() || undefined });
+      showNotification('Cloudflare / Remote URL updated successfully!', 'success');
+      onRefreshApps();
+    } catch (e: any) {
+      showNotification(`Failed to save URL: ${e.message}`, 'error');
+    } finally {
+      setSavingTunnel(false);
+    }
+  };
+
+  const handleApplyMultiPorts = async () => {
+    if (safeMode) {
+      showNotification('Safe mode is ON. Unlock safe mode to execute port changes.', 'warning');
+      return;
+    }
+    setMultiPortsChanging(true);
+    try {
+      await api.applyMultiPortChange(app.id, multiPorts.map(p => ({
+        container_port: p.container_port,
+        host_port: p.host_port,
+        bind: p.bind || '0.0.0.0'
+      })));
+      showNotification('All port mappings applied successfully!', 'success');
+      onRefreshApps();
+      setTimeout(() => onClose(), 1200);
+    } catch (e: any) {
+      showNotification(`Multi-port change failed: ${e.message}`, 'error');
+    } finally {
+      setMultiPortsChanging(false);
+    }
+  };
+
+  const handleStackAction = async (action: 'restart' | 'stop' | 'start' | 'down') => {
+    if (safeMode) {
+      showNotification('Safe mode is ON. Unlock safe mode to execute compose stack actions.', 'warning');
+      return;
+    }
+    const project = composeData?.project || app.compose_project;
+    if (!project) return;
+    if (action === 'down' && !confirm(`Are you sure you want to run down on compose project '${project}'?`)) return;
+
+    setExecutingStackAction(action);
+    try {
+      const res = await api.executeComposeAction(project, action);
+      showNotification(`Stack '${project}' ${action} executed successfully (${res.affected_containers.length} containers)!`, 'success');
+      onRefreshApps();
+    } catch (e: any) {
+      showNotification(`Stack action failed: ${e.message}`, 'error');
+    } finally {
+      setExecutingStackAction(null);
     }
   };
 
@@ -553,6 +638,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
           {([
             'logs',
             'ports',
+            'tunnels',
             'proxy',
             'tls',
             ...(app.source === 'docker' ? (['terminal', 'compose'] as const) : []),
@@ -579,7 +665,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 color: activeTab === tab ? '#ECEEF3' : '#8D95A5',
               }}
             >
-              {tab === 'tls' ? 'TLS / SSL' : tab === 'proxy' ? 'Reverse Proxy' : tab}
+              {tab === 'tls' ? 'TLS / SSL' : tab === 'proxy' ? 'Reverse Proxy' : tab === 'tunnels' ? 'Cloudflare / Tunnels' : tab}
             </button>
           ))}
         </div>
@@ -599,7 +685,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     </svg>
                     <input
                       type="text"
-                      placeholder="Filter logs"
+                      name="logFilter"
+                      aria-label="Filter logs"
+                      autoComplete="off"
+                      placeholder="Filter logs…"
                       value={logFilter}
                       onChange={(e) => setLogFilter(e.target.value)}
                       className="c198"
@@ -724,8 +813,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>New Host Port</label>
+                    <label htmlFor="edit-host-port" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>New Host Port</label>
                     <input
+                      id="edit-host-port"
+                      name="targetPort"
                       type="number"
                       value={targetPort}
                       onChange={(e) => {
@@ -739,8 +830,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Bind Address</label>
+                    <label htmlFor="edit-bind-addr" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Bind Address</label>
                     <select
+                      id="edit-bind-addr"
+                      name="targetBind"
                       value={targetBind}
                       onChange={(e) => {
                         setTargetBind(e.target.value);
@@ -758,6 +851,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 {/* Availability status */}
                 {portAvail && (
                   <div
+                    aria-live="polite"
                     style={{
                       padding: '12px 14px',
                       borderRadius: '8px',
@@ -799,6 +893,130 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     </button>
                   )}
                 </div>
+
+                {app.source === 'docker' && multiPorts.length > 0 && (
+                  <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#ECEEF3' }}>
+                        All Container Ports ({multiPorts.length} Exposed)
+                      </h4>
+                      <span style={{ fontSize: '11px', color: '#8D95A5' }}>Remap multiple ports in one operation</span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                      {multiPorts.map((mp, idx) => (
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 140px', gap: '12px', alignItems: 'center', background: '#090B10', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div>
+                            <span style={{ fontSize: '11px', color: '#8D95A5', display: 'block' }}>Container Port</span>
+                            <code style={{ color: '#5EEAD4', fontFamily: 'JetBrains Mono, monospace', fontSize: '13px' }}>{mp.container_port}</code>
+                          </div>
+                          <div>
+                            <label htmlFor={`edit-multi-host-port-${idx}`} style={{ display: 'block', fontSize: '11px', color: '#8D95A5' }}>Host Port</label>
+                            <input
+                              id={`edit-multi-host-port-${idx}`}
+                              type="number"
+                              value={mp.host_port}
+                              onChange={(e) => {
+                                const newHp = parseInt(e.target.value) || 0;
+                                setMultiPorts(prev => prev.map((p, i) => i === idx ? { ...p, host_port: newHp } : p));
+                              }}
+                              className="c218"
+                              style={{ width: '100%', height: '32px', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`edit-multi-bind-ip-${idx}`} style={{ display: 'block', fontSize: '11px', color: '#8D95A5' }}>Bind</label>
+                            <select
+                              id={`edit-multi-bind-ip-${idx}`}
+                              value={mp.bind}
+                              onChange={(e) => {
+                                const newB = e.target.value;
+                                setMultiPorts(prev => prev.map((p, i) => i === idx ? { ...p, bind: newB } : p));
+                              }}
+                              className="c215"
+                              style={{ width: '100%', height: '32px', boxSizing: 'border-box' }}
+                            >
+                              <option value="0.0.0.0">0.0.0.0</option>
+                              <option value="127.0.0.1">127.0.0.1</option>
+                            </select>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="c080"
+                      disabled={multiPortsChanging}
+                      onClick={handleApplyMultiPorts}
+                    >
+                      {multiPortsChanging ? 'Recreating Container…' : 'Apply Multi-Port Changes'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'tunnels' && (
+              <div style={{ background: '#101218', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>Cloudflare Tunnel & Remote Access</span>
+                      <span style={{ fontSize: '11px', background: 'rgba(251, 191, 119, 0.15)', color: '#FBBF77', padding: '2px 8px', borderRadius: '6px' }}>
+                        Zero Trust
+                      </span>
+                    </h3>
+                    <p style={{ margin: '6px 0 0 0', fontSize: '13px', color: '#8D95A5' }}>
+                      Assign a manual Cloudflare Tunnel URL, Tailscale Funnel, or custom domain to access this service securely from anywhere.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '18px' }}>
+                  <label htmlFor="tunnel-url-input" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
+                    Public URL / Cloudflare Tunnel URL
+                  </label>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <input
+                      id="tunnel-url-input"
+                      type="url"
+                      placeholder="e.g. https://grafana.mydomain.com or https://name.trycloudflare.com"
+                      value={tunnelUrl}
+                      onChange={(e) => setTunnelUrl(e.target.value)}
+                      className="c220"
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      className="c080"
+                      disabled={savingTunnel}
+                      onClick={handleSaveTunnelUrl}
+                    >
+                      {savingTunnel ? 'Saving…' : 'Save URL'}
+                    </button>
+                    {tunnelUrl && (
+                      <a
+                        href={tunnelUrl.startsWith('http') ? tunnelUrl : `https://${tunnelUrl}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="c078"
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                      >
+                        Open ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ background: '#090B10', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '16px', fontSize: '12.5px', color: '#8D95A5', lineHeight: 1.6 }}>
+                  <strong style={{ color: '#ECEEF3', display: 'block', marginBottom: '6px' }}>⚡ How to configure Cloudflare Tunnel:</strong>
+                  <ol style={{ margin: '0 0 0 18px', padding: 0 }}>
+                    <li>Run Cloudflare Tunnel on your host or in Docker (<code>cloudflared tunnel run &lt;tunnel-name&gt;</code>).</li>
+                    <li>In the <strong>Reverse Proxy</strong> tab above, select <strong>Cloudflare Tunnel</strong> to get your exact copy-paste <code>ingress:</code> rule.</li>
+                    <li>Enter your assigned public tunnel domain above and click <strong>Save URL</strong>. Portly will display direct remote access links on your dashboard.</li>
+                  </ol>
+                </div>
               </div>
             )}
 
@@ -807,7 +1025,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                   <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>1-Click Reverse Proxy Generator</h3>
                   <div style={{ display: 'flex', gap: '6px' }}>
-                    {(['caddy', 'nginx', 'traefik_yaml', 'traefik_labels'] as const).map((fmt) => (
+                    {(['caddy', 'nginx', 'traefik_yaml', 'traefik_labels', 'cloudflared'] as const).map((fmt) => (
                       <button
                         key={fmt}
                         type="button"
@@ -815,7 +1033,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                         style={{ height: '28px', padding: '0 10px', fontSize: '12px', textTransform: 'capitalize' }}
                         onClick={() => setProxyFormat(fmt)}
                       >
-                        {fmt === 'traefik_yaml' ? 'Traefik YAML' : fmt === 'traefik_labels' ? 'Traefik Labels' : fmt.toUpperCase()}
+                        {fmt === 'traefik_yaml' ? 'Traefik YAML' : fmt === 'traefik_labels' ? 'Traefik Labels' : fmt === 'cloudflared' ? 'Cloudflare Tunnel' : fmt.toUpperCase()}
                       </button>
                     ))}
                   </div>
@@ -824,6 +1042,9 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
                   <input
                     type="text"
+                    name="proxyDomain"
+                    aria-label="Proxy domain"
+                    autoComplete="off"
                     value={proxyDomain}
                     onChange={(e) => setProxyDomain(e.target.value)}
                     placeholder="e.g. app.example.com"
@@ -863,7 +1084,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                         type="button"
                         className="c078"
                         style={{ position: 'absolute', top: '10px', right: '10px', height: '28px', fontSize: '12px' }}
-                        onClick={() => copyToClipboard(proxyData.configs[proxyFormat], proxyFormat.toUpperCase())}
+                        onClick={() => copyToClipboard(proxyData.configs[proxyFormat] || '', proxyFormat.toUpperCase())}
                       >
                         Copy Snippet
                       </button>
@@ -987,6 +1208,8 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 >
                   <input
                     type="text"
+                    name="execCmd"
+                    aria-label="Command to execute"
                     value={execCmd}
                     onChange={(e) => setExecCmd(e.target.value)}
                     placeholder="Enter command inside container…"
@@ -1053,6 +1276,48 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                       <div>Service: <strong style={{ color: '#8C9EFF' }}>{composeData.service}</strong></div>
                       {composeData.config_file && <div>File: <code style={{ color: '#ECEEF3' }}>{composeData.config_file}</code></div>}
                     </div>
+
+                    {composeData.project && (
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '12px', color: '#8D95A5', marginRight: '4px' }}>Stack Controls:</span>
+                        <button
+                          type="button"
+                          className="c078"
+                          style={{ height: '28px', fontSize: '11.5px' }}
+                          disabled={executingStackAction !== null}
+                          onClick={() => handleStackAction('restart')}
+                        >
+                          {executingStackAction === 'restart' ? 'Restarting…' : '↻ Restart Stack'}
+                        </button>
+                        <button
+                          type="button"
+                          className="c078"
+                          style={{ height: '28px', fontSize: '11.5px' }}
+                          disabled={executingStackAction !== null}
+                          onClick={() => handleStackAction('stop')}
+                        >
+                          {executingStackAction === 'stop' ? 'Stopping…' : '■ Stop Stack'}
+                        </button>
+                        <button
+                          type="button"
+                          className="c078"
+                          style={{ height: '28px', fontSize: '11.5px' }}
+                          disabled={executingStackAction !== null}
+                          onClick={() => handleStackAction('start')}
+                        >
+                          {executingStackAction === 'start' ? 'Starting…' : '▶ Start Stack'}
+                        </button>
+                        <button
+                          type="button"
+                          className="c078"
+                          style={{ height: '28px', fontSize: '11.5px', color: '#FF8A8A', borderColor: 'rgba(255,138,138,0.3)' }}
+                          disabled={executingStackAction !== null}
+                          onClick={() => handleStackAction('down')}
+                        >
+                          {executingStackAction === 'down' ? 'Downing…' : '▼ Down Stack'}
+                        </button>
+                      </div>
+                    )}
 
                     {composeData.content ? (
                       <div style={{ position: 'relative' }}>
@@ -1173,19 +1438,24 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600 }}>App Customization</h3>
 
                 <div style={{ marginBottom: '14px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Display Name</label>
+                  <label htmlFor="settings-name" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Display Name</label>
                   <input
+                    id="settings-name"
+                    name="customName"
                     type="text"
                     value={customName}
                     onChange={(e) => setCustomName(e.target.value)}
+                    autoComplete="off"
                     className="c220"
                     style={{ width: '100%', boxSizing: 'border-box' }}
                   />
                 </div>
 
                 <div style={{ marginBottom: '14px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Category</label>
+                  <label htmlFor="settings-category" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Category</label>
                   <select
+                    id="settings-category"
+                    name="customCategory"
                     value={customCategory}
                     onChange={(e) => setCustomCategory(e.target.value)}
                     className="c215"
@@ -1198,23 +1468,29 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 </div>
 
                 <div style={{ marginBottom: '14px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Tags (comma-separated)</label>
+                  <label htmlFor="settings-tags" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Tags (comma-separated)</label>
                   <input
+                    id="settings-tags"
+                    name="tagsStr"
                     type="text"
                     value={tagsStr}
                     onChange={(e) => setTagsStr(e.target.value)}
+                    autoComplete="off"
                     className="c220"
                     style={{ width: '100%', boxSizing: 'border-box' }}
                   />
                 </div>
 
                 <div style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>URL Override (Reverse proxy / Domain)</label>
+                  <label htmlFor="settings-url-override" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>URL Override (Reverse proxy / Domain)</label>
                   <input
+                    id="settings-url-override"
+                    name="urlOverride"
                     type="text"
                     placeholder="https://app.example.com"
                     value={urlOverride}
                     onChange={(e) => setUrlOverride(e.target.value)}
+                    autoComplete="off"
                     className="c220"
                     style={{ width: '100%', boxSizing: 'border-box' }}
                   />
@@ -1230,9 +1506,9 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
             {/* Image update card */}
             <div className="c209">
               <div className="c210" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <span className="c211" style={{ fontWeight: 600, color: '#ECEEF3' }}>Image update</span>
+                <span className="c211" style={{ fontWeight: 600, color: '#ECEEF3' }}>Image Update</span>
                 <span className="c130" style={{ fontSize: '11px', background: 'rgba(251, 191, 119, 0.15)', color: '#FBBF77', padding: '2px 8px', borderRadius: '6px' }}>
-                  {updateInfo?.has_update ? 'Update available' : 'Up to date'}
+                  {updateInfo?.has_update ? 'Update Available' : 'Up to Date'}
                 </span>
               </div>
               <div className="c212" style={{ fontSize: '12px', color: '#8D95A5', lineHeight: 1.5, marginBottom: '12px' }}>
@@ -1246,14 +1522,14 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                   onClick={handleCheckUpdate}
                   disabled={checkingUpdate}
                 >
-                  {checkingUpdate ? 'Checking…' : 'Check now'}
+                  {checkingUpdate ? 'Checking…' : 'Check Now'}
                 </button>
               </div>
             </div>
 
             {/* Quick Port Info */}
             <div className="c209">
-              <div className="c210" style={{ fontWeight: 600, color: '#ECEEF3', marginBottom: '8px' }}>Port configuration</div>
+              <div className="c210" style={{ fontWeight: 600, color: '#ECEEF3', marginBottom: '8px' }}>Port Configuration</div>
               <div style={{ fontSize: '13px', color: '#8D95A5', lineHeight: 1.6 }}>
                 <div>Host Port: <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF' }}>:{app.port}</span></div>
                 <div>Bind Address: <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#ECEEF3' }}>{app.bind}</span></div>

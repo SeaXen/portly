@@ -1,209 +1,273 @@
 # Portly ⚓
 
-> A high-performance, self-hosted dashboard that automatically discovers every listening port and container on your system, displays live system telemetry with sparklines, and provides unified controls to organize, start, stop, change ports, and inspect logs.
+<p align="center">
+  <strong>A high-performance, self-hosted dashboard that automatically discovers every listening port, host process, and Docker container on your system.</strong><br>
+  Live telemetry with real-time sparklines, 1-click reverse proxy generators, container terminal, Docker Compose management, and unified lifecycle controls.
+</p>
 
-[![Tests](https://img.shields.io/badge/tests-101%20passed-5EEAD4?style=flat-square)](#testing)
-[![Port](https://img.shields.io/badge/port-5533-8C9EFF?style=flat-square)](#quickstart)
-[![Theme](https://img.shields.io/badge/theme-premium%20dark-151821?style=flat-square)](#design-system)
-
----
-
-## ⚡ Quickstart (Under 2 Minutes)
-
-### Option 1: Direct Local Execution (Python + Built Frontend)
-
-Portly runs natively on **Windows**, **Linux**, and **macOS**.
-
-1. **Install Python requirements**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Launch Portly on port 5533**:
-   ```bash
-   python -m portly run --port 5533
-   ```
-
-3. Open **[http://localhost:5533](http://localhost:5533)** in your browser.
+<p align="center">
+  <a href="#-testing"><img src="https://img.shields.io/badge/tests-146%20passed-5EEAD4?style=flat-square&logo=pytest&logoColor=white" alt="Tests"></a>
+  <a href="#-quickstart"><img src="https://img.shields.io/badge/port-5533-8C9EFF?style=flat-square" alt="Default Port"></a>
+  <a href="#-architecture"><img src="https://img.shields.io/badge/backend-FastAPI%20%7C%20SQLite%20WAL-009688?style=flat-square" alt="Backend"></a>
+  <a href="#-architecture"><img src="https://img.shields.io/badge/frontend-React%2018%20%7C%20Vite%20%7C%20Tailwind-61DAFB?style=flat-square" alt="Frontend"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-B6E36B?style=flat-square" alt="License"></a>
+  <a href="DESIGN.md"><img src="https://img.shields.io/badge/design-Obsidian%20Harbor-151821?style=flat-square" alt="Design System"></a>
+</p>
 
 ---
 
-### Option 2: Docker Compose (Server / NAS Mode)
+## ⚡ Quickstart
+
+### Option 1: Docker Compose (Server / Homelab / NAS)
 
 ```bash
 docker compose up -d
 ```
-
 Open **[http://localhost:5533](http://localhost:5533)**.
 
-> **Note for Docker environments:** Portly requires `network_mode: host` and `pid: host` in `docker-compose.yml` along with the Docker socket mount (`/var/run/docker.sock`) to discover both host network sockets and container ports.
+> **Note for Docker hosts:** Portly uses `network_mode: host` and `pid: host` in `docker-compose.yml` alongside the `/var/run/docker.sock` volume mount to discover host socket tables and Docker container states simultaneously.
 
 ---
 
-## 🛠️ CLI Usage
+### Option 2: Direct Local Run (Python 3.10+)
 
-Portly includes a built-in CLI:
+Portly runs natively on **Linux**, **macOS**, and **Windows**:
 
 ```bash
-# List all discovered ports, process names, and auto-categories in terminal
-python -m portly list
+# 1. Install dependencies
+pip install -r requirements.txt
 
-# Output formatted JSON
-python -m portly list --json
+# 2. Launch Portly on port 5533
+python -m portly run --port 5533
+```
+Open **[http://localhost:5533](http://localhost:5533)** in your browser.
 
-# Filter only Docker containers
-python -m portly list --docker
+---
 
-# Start or stop an application by name or ID
-python -m portly start "Billing API"
-python -m portly stop "Billing API"
+### Option 3: Full Development Mode (Live Hot-Reload)
 
-# Run on a custom port and host
-python -m portly run --port 5533 --host 127.0.0.1
+```bash
+# Terminal 1: Backend
+pip install -e .
+python -m portly run --port 5533
+
+# Terminal 2: Frontend (Vite dev server)
+cd portly/frontend
+npm install
+npm run dev
 ```
 
 ---
 
-## 🌟 Key Features
+## 🌟 Key Capabilities
 
-### 1. Automatic Discovery & Intelligent Deduplication
+### 1. Unified Real-Time Discovery & Intelligent Merge
 - **Host Processes:** Automatically reads listening TCP and UDP sockets using `psutil` (with fallback to `netstat -ano` / `lsof`). Resolves PID, command line, working directory, process CPU %, and RSS memory.
-- **Docker Containers:** Connects via Docker Engine API to extract container names, images, health status, compose projects, published port mappings, CPU %, and memory limits.
-- **Merge & Conflict Resolution:** Eliminates duplicates between Docker-published ports and raw host `docker-proxy` processes. Detects and flags conflicting apps claiming the same host port.
-- **Stable IDs:** Assigns persistent IDs (`docker:...`, `host:...`, `custom:...`) so names, categories, and tags survive restarts.
+- **Docker Containers:** Connects directly to the Docker Engine API to extract container names, images, health status, compose projects, published port mappings, CPU %, and memory limits.
+- **Zero-False-Conflict Engine:** Eliminates duplicates between Docker-published ports and raw host `docker-proxy` processes. Only flags true collisions (overlapping interfaces or `0.0.0.0` wildcards) while allowing multi-homed binds (e.g. `127.0.0.1` and `192.168.1.50` on the same port).
+- **Stable IDs:** Assigns persistent IDs (`docker:...`, `host:...`, `custom:...`) so custom names, categories, and tags survive machine reboots.
 
-### 2. Premium Glanceable Dark UI (4 Interactive Views + Dedicated Dashboards)
+### 2. Multi-View Interactive Dashboard
 - **Table View:** Sortable columns, checkboxes, density toggle (Compact / Comfy), quick action buttons (Start, Stop, Logs, More).
 - **Grid View:** Homarr / Homepage style tiles featuring large accent port typography, status dots, and direct Open links.
-- **List View:** Ultra-compact view for high-density monitoring.
+- **List View:** High-density listing for minimalist monitoring.
 - **Board View:** Interactive Kanban columns organized by category with drag-and-drop movement.
 - **Overview View:** Aggregate KPI telemetry cards and category distribution breakdown meters.
 - **Conflicts View:** Real-time port collision detector with side-by-side diagnosis.
 - **History View:** Chronological change log and system event timeline tracking opened/closed ports.
 - **Saved Views:** Instant tabs for `"All ports"`, `"Dev only"`, `"Exposed 0.0.0.0"`, `"Docker"`, and custom user-created views.
-- **Keyboard Shortcuts:** Built-in cheatsheet (`?`), search focus (`/`), Command Palette (`Ctrl+K`), and view shortcuts (`g` then `t`/`g`/`b`/`l`).
 
-### 3. One-Line Stats Strip
+### 3. One-Line Glanceable Stats Strip & Telemetry Drawer
 - Single horizontal strip that **never wraps**:
-  - **CPU:** Percent utilization, core count, 60-point live SVG sparkline (~5 minutes history).
-  - **Memory:** GB used, total GB, live SVG sparkline.
-  - **Disk:** GB used, total storage capacity, live bar.
+  - **CPU:** Utilization percent, logical core count, live 60-point SVG sparkline (~5 minutes history).
+  - **Memory:** GB used, total GB, memory percent, live SVG sparkline.
+  - **Disk:** GB used, total storage capacity, utilization bar.
   - **Network:** Real-time download and upload bandwidth rate with live SVG sparkline.
   - **Containers:** Active running container count.
   - **Listening:** Active listening ports and conflict indicator.
-- Clicking any segment opens the **System Telemetry Drawer** with per-core CPU bars, swap metrics, mount points, and network interface IPs.
+- Clicking any metric opens the **System Telemetry Drawer** displaying per-core CPU bars, swap metrics, mount points, and network interface IP addresses.
 
-### 4. Port Management & Rollback
-- **Check Availability:** Live socket binding and port reservation validation before making changes.
-- **Suggest Free Port:** Suggests next available safe ports with one click.
-- **Docker Port Reassignment:** Inspects, stops, removes, and recreates containers with updated port bindings, verifies health, and stores an automatic rollback snapshot.
-- **Custom Apps:** Automatically updates configuration and restarts with `PORT` environment variables.
+### 4. Non-Destructive Port Reassignment & Rollback
+- **Pre-Flight Validation:** Socket binding validation and port conflict checks before mutating services.
+- **One-Click Suggestions:** Scans for next available clean ports via single-pass socket probes.
+- **Multi-Port Remapping:** Remap multiple container port mappings simultaneously with individual port conflict validation.
+- **Safe Docker Recreation:** Takes snapshots of current container settings, environment, binds, and networks, recreates container with updated port bindings, and keeps automatic rollback snapshots in SQLite.
 
-### 5. Custom App Management & Adoption
-- "Add App" dialog with 4 modes: **Custom app**, **From Docker**, **From running process** (1-click adoption of detected host processes), and **External URL**.
+### 5. 1-Click Container Deployment & Custom Apps
+- **Add App Wizard with 5 Modes:** **Custom app**, **From Docker**, **From running process** (1-click adoption of detected host processes), **External URL**, and **Deploy Container**.
+- **Deploy Container Templates:** 1-click quick-deploy templates (PostgreSQL, Redis, Nginx, Uptime Kuma, Nextcloud) and custom container deployment with live port availability verification.
 - Configurable health check endpoints, intervals, start/stop commands, working directories, and log file paths.
 
-### 6. Live Log Streaming
+### 6. Cloudflare Tunnel & Remote Access Integration
+- **Manual Cloudflare Tunnel URLs:** Assign public Cloudflare Zero Trust tunnel URLs (e.g. `https://app.yourdomain.com` or `*.trycloudflare.com`), Tailscale Funnel, or custom domains.
+- **Visual Tunnel Badges:** Direct external links and amber/cyan `☁ Tunnel` badges on Grid and Table views.
+- **Cloudflare Ingress Rule Generator:** Generates production-ready `cloudflared` ingress YAML blocks alongside Caddy, Nginx, and Traefik in the 1-Click Reverse Proxy Generator.
+
+### 7. Docker Compose Stack Controls & System Hygiene
+- **Compose Stack Controls:** Direct 1-click Stack lifecycle actions (`Restart Stack`, `Stop Stack`, `Start Stack`, `Down Stack`) for Compose projects.
+- **Docker Storage & Hygiene:** Deep inspection of Docker images, volumes, and reclaimable disk space with 1-click system pruning in the System Drawer.
+
+### 8. Live Log Streaming
 - Live streaming tail buffer with real-time level filtering (`All`, `Info`, `Warn`, `Error`), follow switch, text wrapping, ANSI color formatting, and log file download.
 
-### 7. Security & Safe Mode
-- **Safe Mode ON by default:** Locks all mutating actions (start, stop, recreate, kill) until explicitly unlocked via confirmation.
-- **Server Mode:** Enforces user authentication and password hashing when binding to external interfaces (`0.0.0.0`).
+### 9. Production Security & Safe Mode
+- **Safe Mode ON by Default:** Locks all mutating actions (start, stop, recreate, kill, prune) until explicitly unlocked via top bar confirmation.
+- **Server vs Desktop Mode:** In desktop mode (localhost), operates with zero-friction local convenience. In server mode (`--mode server`), requires administrative account setup and session authentication.
+- **Guarded System Endpoints:** Diagnostic and telemetry endpoints require authentication when users exist, and webhook credentials are automatically masked from non-admin viewers.
+- **Persistent SQLite Sessions:** Multi-worker compatible authentication sessions stored in SQLite with WAL journal mode.
+- **SSRF & Injection Hardened:** Subprocess log file restrictions, strict reverse proxy domain regex sanitization (`^[a-zA-Z0-9.-]+$`), and protected IP filters.
 
-### 8. 1-Click Reverse Proxy Config Generator
-- Instantly generates production-ready reverse proxy blocks for **Caddy**, **Nginx**, **Traefik YAML**, and **Traefik Docker Labels**.
+### 10. 1-Click Reverse Proxy Config Generator
+- Instantly generates production-ready reverse proxy blocks for **Caddy**, **Nginx**, **Traefik YAML**, **Traefik Docker Labels**, and **Cloudflare Tunnel (`cloudflared`)**.
 - Supports custom domains (e.g. `vault.homelab.arpa`) with automatic sanitization and WebSocket upgrade headers.
 
-### 9. SSL / TLS Certificate Inspector
+### 11. SSL / TLS Certificate Inspector
 - Live certificate inspection for HTTPS/TLS ports.
 - Decodes certificate subject, issuer (e.g. Let's Encrypt), SAN alternative names, valid date windows, and days remaining until expiration.
 
-### 10. In-Browser Container Terminal
+### 12. In-Browser Container Terminal
 - Built-in container command executor (`docker exec`) with Safe Mode whitelisting of diagnostic commands (`ps`, `top`, `df`, `env`, `netstat`, `uname`, `free`, `uptime`, etc.).
-- Execution timing benchmarks and clear terminal output formatting.
+- Execution timing benchmarks and strict timeout handling (HTTP 408 on stall) to prevent worker starvation.
 
-### 11. Docker Compose Inspector
+### 13. Docker Compose Inspector
 - Automatically parses container compose labels to locate compose files on disk and renders the active service configuration directly in the app detail modal.
 
-### 12. Webhooks & Alerting
+### 14. Webhooks & Alerting
 - Real-time event notifications dispatched to **Discord**, **Telegram**, **Slack**, and **Generic / Ntfy / Gotify** webhooks.
 - Background asynchronous dispatcher ensures alerts never block discovery.
 - In-app test alert button in Customize drawer.
 
-### 13. Kiosk / Wall Display Mode & Progressive Web App (PWA)
+### 15. Kiosk / Wall Display Mode & Progressive Web App (PWA)
 - Fullscreen distraction-free monitoring mode toggled via **`Shift + K`** or top bar monitor icon.
 - Full PWA support (`manifest.webmanifest`, service worker, vector icons) for installability on desktop and mobile.
+
+---
+
+## 🛠️ CLI Reference
+
+Portly includes a powerful command-line interface:
+
+```bash
+# Run Portly dashboard on custom host and port
+python -m portly run --port 5533 --host 127.0.0.1 --mode desktop
+
+# Enforce authentication for LAN / WAN access
+python -m portly run --port 5533 --host 0.0.0.0 --mode server
+
+# List all discovered ports, process names, and auto-categories in terminal
+python -m portly list
+
+# Filter only Docker containers
+python -m portly list --docker
+
+# Filter only host processes
+python -m portly list --host-only
+
+# Output machine-readable JSON
+python -m portly list --json
+
+# Start or stop an application by name or ID
+python -m portly start "Billing API"
+python -m portly stop "docker:redis-cache:6379/tcp"
+```
+
+---
+
+## ⚙️ Configuration & Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `PORTLY_HOST` | `127.0.0.1` | Host address to bind (use `0.0.0.0` for all interfaces). |
+| `PORTLY_PORT` | `5533` | HTTP listening port. |
+| `PORTLY_MODE` | `desktop` | `desktop` (local access) or `server` (enforces authentication). |
+| `PORTLY_DATA_DIR` | `./data` | Directory where `portly.db` (SQLite) is stored. |
+| `PORTLY_CORS_ORIGINS` | `""` | Comma-separated list of allowed CORS origins. |
+| `PORTLY_ALLOW_INSECURE_BIND` | `false` | Set to `true` to allow binding to `0.0.0.0` in desktop mode without auth. |
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-portly/
-  backend/
-    app.py                FastAPI application, REST endpoints, SSE stream, static SPA serving
-    store.py              SQLite persistence (data/portly.db), migrations, defaults
-    stats.py              Ring buffer metrics, sparkline SVG generation, system stats
-    health.py             HTTP & TCP health checks, latency measurement
-    categories.py         Rules engine, priority evaluation, manual overrides
-    ports.py              Port availability checks, suggestion, migration planning
-    notifications.py      Real-time change detection, conflict events, webhook alerts
-    auth.py               Admin/viewer session management, bcrypt password hashing
-    proxy_gen.py          Reverse proxy generators (Caddy, Nginx, Traefik)
-    favicon.py            SSRF-safe favicon fetcher with magic byte detection & SVG fallback
-    tls_inspector.py      SSL/TLS certificate validator & expiration countdown
-    discovery/
-      host.py             psutil listening sockets with netstat/lsof fallback
-      docker_src.py       Docker Engine container discovery & event listener
-      merge.py            Deduplication, conflict detection, stable ID assignment
-    actions/
-      docker_actions.py   Container start/stop/restart/recreate/logs/exec with Safe Mode guards
-      process_actions.py  Subprocess launcher, log tailing, process termination
-  frontend/
-    src/
-      App.tsx             Main application controller, SSE listener & Kiosk mode
-      api.ts              Typed backend API client
-      types.ts            Data models & interfaces
-      components/
-        Sidebar.tsx       Navigation, categories, safe mode switch
-        TopBar.tsx        Search, theme toggle, export, scan, add app, kiosk toggle
-        StatsStrip.tsx    One-line non-wrapping sparkline metrics
-        Toolbar.tsx       View switcher, filters, sort, group, density
-        TableView.tsx     Data table with sticky header, favicons & row actions
-        GridView.tsx      Homepage-style tiles with favicons
-        ListView.tsx      Compact density listing
-        BoardView.tsx     Kanban board by category with drag & drop
-        OverviewView.tsx  Aggregate telemetry & category breakdown
-        ConflictsView.tsx Port collision detector & resolution
-        HistoryView.tsx   Audit change log & socket event timeline
-        AppDetailModal.tsx Logs, port editor, proxy generator, TLS inspector, terminal, compose
-        AddAppModal.tsx   4-tab custom app & process adoption dialog
-        CustomizeDrawer.tsx Layout, accent color, rules manager, webhooks & alerting
-        SystemDrawer.tsx  Deep hardware and mount point telemetry
-        CommandPalette.tsx Ctrl+K keyboard command palette
-        KeyboardShortcutsModal.tsx '?' Cheatsheet modal with Shift+K shortcut
-        BulkActionBar.tsx Floating multi-select actions
-        AppIcon.tsx       Dynamic favicon and initial vector badge renderer
+                       ┌──────────────────────────────────────────────┐
+                       │            Browser / PWA Client              │
+                       │   React 18 + TypeScript + Tailwind + Vite   │
+                       └──────────────────────┬───────────────────────┘
+                                              │ REST API & Live SSE (/api/stream)
+                                              ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Portly FastAPI Backend                             │
+│                                                                             │
+│  ┌───────────────────────┐  ┌───────────────────────┐  ┌──────────────────┐ │
+│  │   Discovery Engine    │  │   Actions & Proxy     │  │  Notifications   │ │
+│  │ • Host (psutil/lsof)  │  │ • Safe Mode Guard     │  │ • Discord/Slack  │ │
+│  │ • Docker Engine API   │  │ • Docker Recreation   │  │ • Telegram/Ntfy  │ │
+│  │ • Dedup & Merge       │  │ • Caddy/Nginx/Traefik │  │ • Conflict Alerts│ │
+│  └───────────┬───────────┘  └───────────┬───────────┘  └────────┬─────────┘ │
+│              │                          │                       │           │
+│              └──────────────────────────┼───────────────────────┘           │
+│                                         ▼                                   │
+│                        ┌─────────────────────────────────┐                  │
+│                        │       SQLite Store (WAL)        │                  │
+│                        │ • App Overrides & Categories    │                  │
+│                        │ • Persistent Sessions & History │                  │
+│                        │ • Auto-Pruning & Snapshots      │                  │
+│                        └─────────────────────────────────┘                  │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `?` | Open Keyboard Shortcuts modal |
+| `/` | Focus search bar |
+| `Ctrl + K` / `Cmd + K` | Open Command Palette |
+| `Shift + K` | Toggle Kiosk / Wall Display mode |
+| `g` then `t` | Switch to **Table** view |
+| `g` then `g` | Switch to **Grid** view |
+| `g` then `b` | Switch to **Board** view |
+| `g` then `l` | Switch to **List** view |
+| `Escape` | Close active modal, drawer, or dialog |
 
 ---
 
 ## 🧪 Testing
 
-Run the full pytest suite:
+Portly maintains high test coverage across unit, security, and integration layers:
 
 ```bash
+# Run the complete test suite
 python -m pytest tests/
 ```
 
-All 17 test suites (101 automated tests) verify:
-- Host discovery and stable ID formatting
-- Docker deduplication & port conflict detection
-- Categorization rule priority and manual overrides
-- Port availability checking and free port suggestion
-- Safe mode blocking mutating actions and command injection
-- Reverse proxy snippet generation (Caddy, Nginx, Traefik)
-- SSL/TLS certificate inspection and expiration calculation
-- SSRF filtering and image MIME detection
-- Webhook alert payload formatting for Discord, Slack, and generic webhooks
-- Complete API endpoints, custom app CRUD, and export formats (JSON, CSV, Markdown)
+146 automated tests verify:
+- Host discovery and stable ID formatting across Linux/macOS/Windows.
+- Docker deduplication & multi-homed port conflict detection.
+- Categorization rule priority and manual overrides.
+- Single-pass port availability checking and free port suggestion.
+- Safe Mode mutation locking and command injection prevention.
+- Container exec timeout handling and thread pool protection.
+- Persistent SQLite session management across restarts.
+- Automatic SQLite health history and event table retention pruning.
+- Reverse proxy configuration generation for Caddy, Nginx, Traefik, and Cloudflare Tunnels.
+- SSL/TLS certificate inspection and expiration calculation.
+- SSRF filtering and image MIME detection.
+- Webhook alert payload formatting for Discord, Slack, Telegram, Ntfy, and Gotify.
+- Complete REST API endpoints, custom app CRUD, and export formats (JSON, CSV, Markdown).
+
+---
+
+## 📐 Design & Product Authority
+
+- [PRODUCT.md](PRODUCT.md) — Product positioning, operating context, capabilities, and principles.
+- [DESIGN.md](DESIGN.md) — Canonical design system specification, Obsidian Harbor visual direction, tokens, typography, and guardrails.
+- [.impeccable/design.json](.impeccable/design.json) — Extension tokens, component shadows, and UI component styling.
+
+---
+
+## 📄 License
+
+MIT License — see [LICENSE](LICENSE) for details. Built by [SeaXen](https://github.com/SeaXen).

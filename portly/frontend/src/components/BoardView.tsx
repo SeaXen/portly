@@ -62,7 +62,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '12px',
-                transition: 'border-color 0.15s, background 0.15s',
+                transition: 'border-color 0.15s, background-color 0.15s',
               }}
               onDragOver={(e) => handleDragOver(e, cat.id)}
               onDrop={(e) => handleDrop(e, cat.id)}
@@ -91,10 +91,19 @@ export const BoardView: React.FC<BoardViewProps> = ({
               {categoryApps.map((app) => (
                 <div
                   key={app.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`View details for ${app.name}`}
                   className="c153 draggable-card"
                   draggable
                   onDragStart={(e) => handleDragStart(e, app.id)}
                   onClick={() => onOpenDetail(app)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onOpenDetail(app);
+                    }
+                  }}
                   style={{
                     background: '#151821',
                     border: '1px solid rgba(255,255,255,0.07)',

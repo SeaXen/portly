@@ -15,7 +15,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   availableApps,
   onAppAdded,
 }) => {
-  const [activeTab, setActiveTab] = useState<'custom' | 'docker' | 'process' | 'external'>('custom');
+  const [activeTab, setActiveTab] = useState<'custom' | 'docker' | 'process' | 'external' | 'deploy'>('custom');
 
   // Custom Form fields
   const [name, setName] = useState('');
@@ -42,6 +42,24 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   const [manualDockerName, setManualDockerName] = useState('');
   const [manualDockerPort, setManualDockerPort] = useState(8080);
 
+  // Deploy Container fields
+  const [deployImage, setDeployImage] = useState('redis:7-alpine');
+  const [deployName, setDeployName] = useState('my-redis');
+  const [deployHostPort, setDeployHostPort] = useState(6379);
+  const [deployContainerPort, setDeployContainerPort] = useState('6379/tcp');
+  const [deployEnv, setDeployEnv] = useState('');
+  const [deployRestart, setDeployRestart] = useState('unless-stopped');
+  const [deploying, setDeploying] = useState(false);
+  const [deployPortStatus, setDeployPortStatus] = useState<{ free: boolean; used_by: string } | null>(null);
+
+  const PRESET_TEMPLATES = [
+    { label: 'PostgreSQL', image: 'postgres:16-alpine', name: 'postgres', hostPort: 5432, containerPort: '5432/tcp', env: 'POSTGRES_PASSWORD=postgres' },
+    { label: 'Redis', image: 'redis:7-alpine', name: 'redis', hostPort: 6379, containerPort: '6379/tcp', env: '' },
+    { label: 'Nginx', image: 'nginx:alpine', name: 'nginx', hostPort: 8080, containerPort: '80/tcp', env: '' },
+    { label: 'Uptime Kuma', image: 'louislam/uptime-kuma:1', name: 'uptime-kuma', hostPort: 3001, containerPort: '3001/tcp', env: '' },
+    { label: 'Nextcloud', image: 'nextcloud:apache', name: 'nextcloud', hostPort: 8088, containerPort: '80/tcp', env: '' },
+  ];
+
   // Live port check
   const [portStatus, setPortStatus] = useState<{ free: boolean; used_by: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -49,8 +67,10 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   useEffect(() => {
     if (activeTab === 'custom') {
       checkPort(port);
+    } else if (activeTab === 'deploy') {
+      checkDeployPort(deployHostPort);
     }
-  }, [port, activeTab]);
+  }, [port, deployHostPort, activeTab]);
 
   const checkPort = async (p: number) => {
     try {
@@ -58,6 +78,56 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
       setPortStatus(res);
     } catch {
       setPortStatus(null);
+    }
+  };
+
+  const checkDeployPort = async (p: number) => {
+    try {
+      const res = await api.checkPort(p);
+      setDeployPortStatus(res);
+    } catch {
+      setDeployPortStatus(null);
+    }
+  };
+
+  const handleSelectPreset = (p: typeof PRESET_TEMPLATES[0]) => {
+    setDeployImage(p.image);
+    setDeployName(p.name);
+    setDeployHostPort(p.hostPort);
+    setDeployContainerPort(p.containerPort);
+    setDeployEnv(p.env);
+    checkDeployPort(p.hostPort);
+  };
+
+  const handleDeploySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deployImage.trim() || !deployName.trim()) {
+      alert('Container image and name are required.');
+      return;
+    }
+    setDeploying(true);
+    try {
+      const envObj: Record<string, string> = {};
+      deployEnv.split('\n').forEach(line => {
+        const [k, ...v] = line.split('=');
+        if (k && k.trim()) {
+          envObj[k.trim()] = v.join('=').trim();
+        }
+      });
+      await api.deployContainer({
+        image: deployImage.trim(),
+        name: deployName.trim(),
+        ports: { [deployContainerPort]: deployHostPort },
+        env: envObj,
+        restart_policy: deployRestart,
+      });
+      alert(`Container '${deployName}' deployed successfully!`);
+      onAppAdded();
+      onClose();
+    } catch (e: any) {
+      alert(`Deployment failed: ${e.message}`);
+    } finally {
+      setDeploying(false);
     }
   };
 
@@ -199,7 +269,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         {/* Header */}
         <div className="c226" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div>
-            <div className="c227" style={{ fontSize: '18px', fontWeight: 600, color: '#ECEEF3' }}>Add custom app</div>
+            <div className="c227" style={{ fontSize: '18px', fontWeight: 600, color: '#ECEEF3' }}>Add Custom App</div>
             <div className="c228" style={{ fontSize: '13px', color: '#8D95A5', marginTop: '2px' }}>
               Track an app Portly can’t detect, adopt running services, or bookmark external web dashboards.
             </div>
@@ -214,14 +284,14 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             className={activeTab === 'custom' ? 'c094' : 'c095'}
             onClick={() => setActiveTab('custom')}
           >
-            Custom app
+            Custom App
           </button>
           <button
             type="button"
             className={activeTab === 'process' ? 'c094' : 'c095'}
             onClick={() => setActiveTab('process')}
           >
-            From process
+            From Process
           </button>
           <button
             type="button"
@@ -236,6 +306,13 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             onClick={() => setActiveTab('external')}
           >
             External URL
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'deploy' ? 'c094' : 'c095'}
+            onClick={() => setActiveTab('deploy')}
+          >
+            Deploy Container
           </button>
         </div>
 
@@ -329,6 +406,9 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 <form onSubmit={handleManualDockerSubmit} style={{ display: 'flex', gap: '10px' }}>
                   <input
                     type="text"
+                    name="manualDockerName"
+                    aria-label="Container name"
+                    autoComplete="off"
                     placeholder="Container Name (e.g. postgres-prod)"
                     value={manualDockerName}
                     onChange={(e) => setManualDockerName(e.target.value)}
@@ -338,6 +418,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                   />
                   <input
                     type="number"
+                    name="manualDockerPort"
+                    aria-label="Port"
                     placeholder="Port"
                     value={manualDockerPort}
                     onChange={(e) => setManualDockerPort(parseInt(e.target.value) || 0)}
@@ -359,24 +441,30 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
               Add remote web dashboards, NAS portals, router admin pages, or cloud services to Portly:
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>App / Dashboard Name</label>
+              <label htmlFor="ext-name" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>App / Dashboard Name</label>
               <input
+                id="ext-name"
+                name="extName"
                 type="text"
                 placeholder="e.g. Synology DSM or Proxmox VE"
                 value={extName}
                 onChange={(e) => setExtName(e.target.value)}
+                autoComplete="off"
                 className="c220"
                 style={{ width: '100%', boxSizing: 'border-box' }}
                 required
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Full Target URL</label>
+              <label htmlFor="ext-url" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Full Target URL</label>
               <input
+                id="ext-url"
+                name="extUrl"
                 type="url"
                 placeholder="https://192.168.1.50:8006 or https://nas.local:5001"
                 value={extUrl}
                 onChange={(e) => setExtUrl(e.target.value)}
+                autoComplete="off"
                 className="c220"
                 style={{ width: '100%', boxSizing: 'border-box' }}
                 required
@@ -384,8 +472,10 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Category</label>
+                <label htmlFor="ext-category" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Category</label>
                 <select
+                  id="ext-category"
+                  name="extCategory"
                   value={extCategory}
                   onChange={(e) => setExtCategory(e.target.value)}
                   className="c215"
@@ -397,11 +487,14 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Tags</label>
+                <label htmlFor="ext-tags" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Tags</label>
                 <input
+                  id="ext-tags"
+                  name="extTags"
                   type="text"
                   value={extTags}
                   onChange={(e) => setExtTags(e.target.value)}
+                  autoComplete="off"
                   className="c220"
                   style={{ width: '100%', boxSizing: 'border-box' }}
                 />
@@ -410,7 +503,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
               <button type="button" className="c078" onClick={onClose}>Cancel</button>
               <button type="submit" className="c080" disabled={submitting}>
-                {submitting ? 'Saving...' : 'Add Bookmark'}
+                {submitting ? 'Saving…' : 'Add Bookmark'}
               </button>
             </div>
           </form>
@@ -422,19 +515,22 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             {/* Name & Icon */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Name</label>
+                <label htmlFor="custom-name" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Name</label>
                 <input
+                  id="custom-name"
+                  name="customName"
                   type="text"
                   placeholder="Billing API"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  autoComplete="off"
                   className="c220"
                   style={{ width: '100%', boxSizing: 'border-box' }}
                   required
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Icon</label>
+                <span style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Icon</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div
                     className="c233"
@@ -460,18 +556,23 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginTop: '6px' }}>Network</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Host</label>
+                <label htmlFor="custom-host" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Host</label>
                 <input
+                  id="custom-host"
+                  name="customHost"
                   type="text"
                   value={host}
                   onChange={(e) => setHost(e.target.value)}
+                  autoComplete="off"
                   className="c220"
                   style={{ width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Port</label>
+                <label htmlFor="custom-port" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Port</label>
                 <input
+                  id="custom-port"
+                  name="customPort"
                   type="number"
                   value={port}
                   onChange={(e) => setPort(parseInt(e.target.value) || 0)}
@@ -483,7 +584,10 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
 
             {/* Live Port Check */}
             {portStatus && (
-              <div style={{ fontSize: '12px', color: portStatus.free ? '#5EEAD4' : '#FF8A8A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div
+                aria-live="polite"
+                style={{ fontSize: '12px', color: portStatus.free ? '#5EEAD4' : '#FF8A8A', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
                 <span>{portStatus.free ? '✓' : '✗'}</span>
                 <span>
                   {portStatus.free
@@ -497,8 +601,10 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginTop: '6px' }}>Organize</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Category</label>
+                <label htmlFor="custom-category" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Category</label>
                 <select
+                  id="custom-category"
+                  name="customCategory"
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
                   className="c215"
@@ -510,12 +616,15 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Tags (comma-separated)</label>
+                <label htmlFor="custom-tags" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Tags (comma-separated)</label>
                 <input
+                  id="custom-tags"
+                  name="customTags"
                   type="text"
                   placeholder="internal, billing"
                   value={tags}
                   onChange={(e) => setTags(e.target.value)}
+                  autoComplete="off"
                   className="c220"
                   style={{ width: '100%', boxSizing: 'border-box' }}
                 />
@@ -523,26 +632,32 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             </div>
 
             {/* Run Controls */}
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginTop: '6px' }}>Run controls</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginTop: '6px' }}>Run Controls</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Start command</label>
+                <label htmlFor="custom-start-cmd" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Start command</label>
                 <input
+                  id="custom-start-cmd"
+                  name="customStartCmd"
                   type="text"
                   placeholder="npm run start or python app.py"
                   value={startCmd}
                   onChange={(e) => setStartCmd(e.target.value)}
+                  autoComplete="off"
                   className="c220"
                   style={{ width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Stop command</label>
+                <label htmlFor="custom-stop-cmd" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Stop command</label>
                 <input
+                  id="custom-stop-cmd"
+                  name="customStopCmd"
                   type="text"
                   placeholder="auto (terminate process)"
                   value={stopCmd}
                   onChange={(e) => setStopCmd(e.target.value)}
+                  autoComplete="off"
                   className="c220"
                   style={{ width: '100%', boxSizing: 'border-box' }}
                 />
@@ -551,23 +666,29 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Working directory</label>
+                <label htmlFor="custom-workdir" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Working directory</label>
                 <input
+                  id="custom-workdir"
+                  name="customWorkdir"
                   type="text"
                   placeholder="C:\projects\my-app"
                   value={workdir}
                   onChange={(e) => setWorkdir(e.target.value)}
+                  autoComplete="off"
                   className="c220"
                   style={{ width: '100%', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Log file path</label>
+                <label htmlFor="custom-log-file" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Log file path</label>
                 <input
+                  id="custom-log-file"
+                  name="customLogFile"
                   type="text"
                   placeholder="C:\projects\my-app\app.log"
                   value={logFile}
                   onChange={(e) => setLogFile(e.target.value)}
+                  autoComplete="off"
                   className="c220"
                   style={{ width: '100%', boxSizing: 'border-box' }}
                 />
@@ -577,11 +698,23 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             {/* Switches */}
             <div style={{ display: 'flex', gap: '20px', marginTop: '6px' }}>
               <label style={{ fontSize: '13px', color: '#ECEEF3', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <input type="checkbox" checked={startOnBoot} onChange={(e) => setStartOnBoot(e.target.checked)} className="c173" />
+                <input
+                  type="checkbox"
+                  name="startOnBoot"
+                  checked={startOnBoot}
+                  onChange={(e) => setStartOnBoot(e.target.checked)}
+                  className="c173"
+                />
                 Start on boot
               </label>
               <label style={{ fontSize: '13px', color: '#ECEEF3', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                <input type="checkbox" checked={pin} onChange={(e) => setPin(e.target.checked)} className="c173" />
+                <input
+                  type="checkbox"
+                  name="pin"
+                  checked={pin}
+                  onChange={(e) => setPin(e.target.checked)}
+                  className="c173"
+                />
                 Pin to favorites
               </label>
             </div>
@@ -592,9 +725,140 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button type="button" className="c078" onClick={onClose}>Cancel</button>
                 <button type="submit" className="c080" disabled={submitting}>
-                  {submitting ? 'Adding...' : 'Add app'}
+                  {submitting ? 'Adding…' : 'Add App'}
                 </button>
               </div>
+            </div>
+          </form>
+        )}
+
+        {/* Tab 4: Deploy New Container */}
+        {activeTab === 'deploy' && (
+          <form onSubmit={handleDeploySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ fontSize: '13px', color: '#8D95A5' }}>
+              Launch a new container directly from Docker registry with custom port bindings and automatic conflict checking:
+            </div>
+
+            {/* Quick Templates */}
+            <div>
+              <span style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '8px' }}>
+                1-Click Quick Deploy Templates
+              </span>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {PRESET_TEMPLATES.map((tmpl) => (
+                  <button
+                    key={tmpl.name}
+                    type="button"
+                    className="c078"
+                    style={{ fontSize: '12px', padding: '4px 10px', height: '28px' }}
+                    onClick={() => handleSelectPreset(tmpl)}
+                  >
+                    + {tmpl.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <div>
+                <label htmlFor="deploy-image" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
+                  Image Tag (e.g. redis:7-alpine, postgres:16)
+                </label>
+                <input
+                  id="deploy-image"
+                  type="text"
+                  required
+                  placeholder="e.g. redis:7-alpine"
+                  value={deployImage}
+                  onChange={(e) => setDeployImage(e.target.value)}
+                  className="c220"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="deploy-name" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
+                  Container Name
+                </label>
+                <input
+                  id="deploy-name"
+                  type="text"
+                  required
+                  placeholder="e.g. my-redis"
+                  value={deployName}
+                  onChange={(e) => setDeployName(e.target.value)}
+                  className="c220"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <div>
+                <label htmlFor="deploy-host-port" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
+                  Host Port
+                </label>
+                <input
+                  id="deploy-host-port"
+                  type="number"
+                  required
+                  value={deployHostPort}
+                  onChange={(e) => {
+                    const p = parseInt(e.target.value) || 0;
+                    setDeployHostPort(p);
+                    checkDeployPort(p);
+                  }}
+                  className="c218"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+                {deployPortStatus && (
+                  <div style={{ fontSize: '11px', marginTop: '4px', color: deployPortStatus.free ? '#5EEAD4' : '#FF8A8A' }}>
+                    {deployPortStatus.free ? '✓ Port is free to bind' : `✗ Port conflict: ${deployPortStatus.used_by}`}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="deploy-container-port" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
+                  Container Port / Protocol
+                </label>
+                <input
+                  id="deploy-container-port"
+                  type="text"
+                  required
+                  placeholder="e.g. 80/tcp or 6379/tcp"
+                  value={deployContainerPort}
+                  onChange={(e) => setDeployContainerPort(e.target.value)}
+                  className="c220"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="deploy-env" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
+                Environment Variables (KEY=VALUE, one per line)
+              </label>
+              <textarea
+                id="deploy-env"
+                rows={3}
+                placeholder="FOO=bar&#10;PORT=80"
+                value={deployEnv}
+                onChange={(e) => setDeployEnv(e.target.value)}
+                className="c220"
+                style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', justifyContent: 'flex-end', marginTop: '10px' }}>
+              <button type="button" className="c078" onClick={onClose}>Cancel</button>
+              <button
+                type="submit"
+                className="c080"
+                disabled={deploying || (deployPortStatus !== null && !deployPortStatus.free)}
+              >
+                {deploying ? 'Deploying Container…' : 'Deploy Container'}
+              </button>
             </div>
           </form>
         )}

@@ -33,12 +33,14 @@ export const StatsStrip: React.FC<StatsStripProps> = ({ stats, onOpenSystemDrawe
         const polyPoints = data?.sparkline || '0.0,20.0 60.0,20.0';
 
         return (
-          <div
+          <button
+            type="button"
             key={key}
             className={cls}
             onClick={() => onOpenSystemDrawer(key)}
+            aria-label={`View detailed ${data?.label || key} telemetry`}
             style={{
-              transition: 'background 0.15s ease',
+              transition: 'background-color 0.15s ease',
             }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)')}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
@@ -66,7 +68,7 @@ export const StatsStrip: React.FC<StatsStripProps> = ({ stats, onOpenSystemDrawe
                 strokeLinecap="round"
               />
             </svg>
-          </div>
+          </button>
         );
       })}
     </div>

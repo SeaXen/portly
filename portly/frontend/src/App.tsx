@@ -109,6 +109,12 @@ export const App: React.FC = () => {
 
       if (isInput) return;
 
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowCommandPalette((prev) => !prev);
+        return;
+      }
+
       if (e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setKioskMode((prev) => !prev);
@@ -571,7 +577,7 @@ export const App: React.FC = () => {
                   flexShrink: 0,
                 }}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
                   <line x1="12" y1="9" x2="12" y2="13"></line>
                   <line x1="12" y1="17" x2="12.01" y2="17"></line>
@@ -822,12 +828,15 @@ export const App: React.FC = () => {
             <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600 }}>Create New Category</h3>
             <form onSubmit={handleCreateCategory}>
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Category Name</label>
+                <label htmlFor="new-cat-name" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Category Name</label>
                 <input
+                  id="new-cat-name"
+                  name="newCatName"
                   type="text"
                   placeholder="e.g. AI Models"
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
+                  autoComplete="off"
                   autoFocus
                   className="c220"
                   style={{ width: '100%', boxSizing: 'border-box' }}
@@ -842,6 +851,7 @@ export const App: React.FC = () => {
                     <button
                       key={col}
                       type="button"
+                      aria-label={`Select color ${col}`}
                       onClick={() => setNewCatColor(col)}
                       style={{
                         width: '26px',
@@ -891,7 +901,7 @@ export const App: React.FC = () => {
           }}
           title="Exit Kiosk Mode (Shift + K)"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <polyline points="4 14 10 14 10 20"></polyline>
             <polyline points="20 10 14 10 14 4"></polyline>
             <line x1="14" y1="10" x2="21" y2="3"></line>

@@ -45,7 +45,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
           className="c079"
           onClick={() => setShowMoveMenu(!showMoveMenu)}
         >
-          Move to category
+          Move to Category
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="m6 9 6 6 6-6"></path>
           </svg>
@@ -90,7 +90,10 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <input
             type="text"
-            placeholder="Tag name"
+            name="tagInput"
+            aria-label="Tag name"
+            autoComplete="off"
+            placeholder="e.g. staging…"
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             className="c220"
@@ -112,6 +115,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
           <button
             type="button"
             className="c078"
+            aria-label="Cancel adding tag"
             style={{ height: '32px' }}
             onClick={() => setShowTagPrompt(false)}
           >
@@ -120,7 +124,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
         </div>
       ) : (
         <button type="button" className="c078" onClick={() => setShowTagPrompt(true)}>
-          Add tag
+          Add Tag
         </button>
       )}
 

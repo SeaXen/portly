@@ -136,9 +136,18 @@ export const TableView: React.FC<TableViewProps> = ({
                 return (
                   <div
                     key={app.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`View details for ${app.name}`}
                     className={`portly-table-row ${isSelected ? 'selected' : ''}`}
                     style={padStyle}
                     onClick={() => onOpenDetail(app)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onOpenDetail(app);
+                      }
+                    }}
                   >
                     {/* Checkbox */}
                     <div className="table-cell" onClick={(e) => e.stopPropagation()}>
@@ -154,7 +163,7 @@ export const TableView: React.FC<TableViewProps> = ({
 
                     {/* Grab handle */}
                     <div className="table-cell" style={{ color: '#64748B', cursor: 'grab' }}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <circle cx="9" cy="6" r="1"></circle>
                         <circle cx="15" cy="6" r="1"></circle>
                         <circle cx="9" cy="12" r="1"></circle>
@@ -186,7 +195,7 @@ export const TableView: React.FC<TableViewProps> = ({
                     </div>
 
                     {/* Source Badge */}
-                    <div className="table-cell">
+                    <div className="table-cell" style={{ gap: '6px' }}>
                       <span
                         style={{
                           fontSize: '11.5px',
@@ -202,6 +211,21 @@ export const TableView: React.FC<TableViewProps> = ({
                       >
                         {app.source}
                       </span>
+                      {(app.url_override || (app.open_url && !app.open_url.includes('localhost'))) && (
+                        <span
+                          style={{
+                            fontSize: '10.5px',
+                            padding: '1px 6px',
+                            borderRadius: '999px',
+                            background: 'rgba(251, 191, 119, 0.15)',
+                            color: '#FBBF77',
+                            border: '1px solid rgba(251, 191, 119, 0.25)',
+                          }}
+                          title={`Tunnel URL: ${app.url_override || app.open_url}`}
+                        >
+                          ☁ Tunnel
+                        </span>
+                      )}
                     </div>
 
                     {/* Category Badge */}
@@ -285,7 +309,7 @@ export const TableView: React.FC<TableViewProps> = ({
                           title={safeMode ? 'Safe mode is ON (locked)' : `Stop ${app.name}`}
                           onClick={(e) => onQuickStop(app, e)}
                         >
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <rect x="6" y="6" width="12" height="12" rx="2"></rect>
                           </svg>
                         </button>
@@ -297,7 +321,7 @@ export const TableView: React.FC<TableViewProps> = ({
                           title={safeMode ? 'Safe mode is ON (locked)' : `Start ${app.name}`}
                           onClick={(e) => onQuickStart(app, e)}
                         >
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <path d="M7 5v14l12-7z"></path>
                           </svg>
                         </button>
@@ -310,7 +334,7 @@ export const TableView: React.FC<TableViewProps> = ({
                         title="View live logs"
                         onClick={(e) => onQuickLogs(app, e)}
                       >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path>
                         </svg>
                       </button>
@@ -322,7 +346,7 @@ export const TableView: React.FC<TableViewProps> = ({
                         title="Open configuration & details"
                         onClick={() => onOpenDetail(app)}
                       >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <circle cx="5" cy="12" r="1.5"></circle>
                           <circle cx="12" cy="12" r="1.5"></circle>
                           <circle cx="19" cy="12" r="1.5"></circle>

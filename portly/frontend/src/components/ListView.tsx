@@ -13,6 +13,9 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail, categori
       {apps.map((app) => (
         <div
           key={app.id}
+          role="button"
+          tabIndex={0}
+          aria-label={`View details for ${app.name}`}
           className="c053"
           style={{
             height: '40px',
@@ -26,6 +29,12 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail, categori
             cursor: 'pointer',
           }}
           onClick={() => onOpenDetail(app)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onOpenDetail(app);
+            }
+          }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api';
-import { SystemStats } from '../types';
+import { DockerSystemDf, SystemStats } from '../types';
 
 interface SystemDrawerProps {
   onClose: () => void;
@@ -9,11 +9,17 @@ interface SystemDrawerProps {
 
 export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose, defaultSection }) => {
   const [stats, setStats] = useState<SystemStats | null>(null);
+  const [dockerDf, setDockerDf] = useState<DockerSystemDf | null>(null);
+  const [pruning, setPruning] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadStats();
-    const interval = setInterval(loadStats, 3000);
+    loadDockerStats();
+    const interval = setInterval(() => {
+      loadStats();
+      loadDockerStats();
+    }, 4000);
     return () => clearInterval(interval);
   }, []);
 
@@ -23,6 +29,27 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose, defaultSect
       setStats(data);
     } catch {} finally {
       setLoading(false);
+    }
+  };
+
+  const loadDockerStats = async () => {
+    try {
+      const df = await api.getDockerSystemDf();
+      setDockerDf(df);
+    } catch {}
+  };
+
+  const handlePrune = async () => {
+    if (!confirm('Are you sure you want to prune dangling images, stopped containers, and unused volumes to reclaim disk space?')) return;
+    setPruning(true);
+    try {
+      const res = await api.pruneDockerSystem();
+      alert(`Docker system pruned! Reclaimed ${res.space_reclaimed_mb} MB.`);
+      loadDockerStats();
+    } catch (e: any) {
+      alert(`Prune failed: ${e.message}`);
+    } finally {
+      setPruning(false);
     }
   };
 
@@ -55,7 +82,7 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose, defaultSect
         </div>
 
         {loading && !stats ? (
-          <div style={{ color: '#8D95A5', textAlign: 'center', paddingTop: '40px' }}>Loading system telemetry...</div>
+          <div style={{ color: '#8D95A5', textAlign: 'center', paddingTop: '40px' }}>Loading system telemetry…</div>
         ) : stats ? (
           <>
             {/* Overview Box */}
@@ -131,6 +158,49 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose, defaultSect
                 ))}
               </div>
             </div>
+
+            {/* Docker Storage & System Hygiene */}
+            {dockerDf?.available && (
+              <div style={{ background: '#151821', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>Docker Storage & Hygiene</span>
+                    <span style={{ fontSize: '11px', background: 'rgba(94, 234, 212, 0.15)', color: '#5EEAD4', padding: '2px 8px', borderRadius: '6px' }}>
+                      Engine
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="c078"
+                    style={{ height: '26px', fontSize: '11px', color: '#FF8A8A', borderColor: 'rgba(255,138,138,0.3)' }}
+                    disabled={pruning}
+                    onClick={handlePrune}
+                  >
+                    {pruning ? 'Pruning…' : '🧹 Prune Unused Space'}
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                  <div style={{ background: '#101218', padding: '10px', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '11px', color: '#8D95A5' }}>Docker Images</div>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#ECEEF3', marginTop: '4px' }}>
+                      {dockerDf.images_count}
+                    </div>
+                  </div>
+                  <div style={{ background: '#101218', padding: '10px', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '11px', color: '#8D95A5' }}>Volumes</div>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#ECEEF3', marginTop: '4px' }}>
+                      {dockerDf.volumes_count}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#8D95A5', background: '#101218', padding: '10px', borderRadius: '8px' }}>
+                  <span>Total Docker Disk: <strong style={{ color: '#ECEEF3' }}>{dockerDf.total_size_mb > 1024 ? `${(dockerDf.total_size_mb / 1024).toFixed(1)} GB` : `${dockerDf.total_size_mb} MB`}</strong></span>
+                  <span>Reclaimable: <strong style={{ color: '#5EEAD4' }}>{dockerDf.total_reclaimable_mb > 1024 ? `${(dockerDf.total_reclaimable_mb / 1024).toFixed(1)} GB` : `${dockerDf.total_reclaimable_mb} MB`}</strong></span>
+                </div>
+              </div>
+            )}
 
             {/* Network Interfaces */}
             <div style={{ background: '#151821', borderRadius: '12px', padding: '16px' }}>

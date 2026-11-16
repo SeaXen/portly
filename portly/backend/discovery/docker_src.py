@@ -114,6 +114,19 @@ def get_cached_container_stats(container_id: str) -> Dict[str, Any]:
     })
 
 
+def update_container_stats_cache(container_id: str, stats: Dict[str, Any]):
+    """Updates the container resource metrics cache."""
+    _container_stats_cache[container_id] = stats
+
+
+def clear_container_stats_cache(container_id: Optional[str] = None):
+    """Cleans up cached metrics for inactive or stopped containers."""
+    if container_id:
+        _container_stats_cache.pop(container_id, None)
+    else:
+        _container_stats_cache.clear()
+
+
 def discover_docker_containers() -> List[Dict[str, Any]]:
     global _client, _docker_available
     client = get_docker_client()

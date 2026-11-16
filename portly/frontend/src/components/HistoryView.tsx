@@ -36,12 +36,12 @@ export const HistoryView: React.FC = () => {
           </div>
         </div>
         <button type="button" className="c078" onClick={loadEvents}>
-          Refresh log
+          Refresh Log
         </button>
       </div>
 
       {loading ? (
-        <div style={{ padding: '40px', textAlign: 'center', color: '#8D95A5' }}>Loading event log...</div>
+        <div style={{ padding: '40px', textAlign: 'center', color: '#8D95A5' }}>Loading event log…</div>
       ) : events.length === 0 ? (
         <div style={{ padding: '40px', textAlign: 'center', color: '#8D95A5', fontSize: '14px' }}>
           No system events recorded yet. Events trigger as ports open, close, or containers change status.
@@ -49,7 +49,7 @@ export const HistoryView: React.FC = () => {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {events.map((evt) => {
-            const dateStr = new Date(evt.ts * 1000).toLocaleString();
+            const dateStr = new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(evt.ts * 1000));
             const badgeColor = getBadgeColor(evt.type);
 
             return (

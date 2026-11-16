@@ -2,8 +2,14 @@ import {
   AppItem,
   Category,
   CommandExecResponse,
+  ComposeActionResult,
   ComposeInfo,
   ConflictItem,
+  DeployContainerPayload,
+  DockerImageItem,
+  DockerSystemDf,
+  DockerVolumeItem,
+  PruneResult,
   ProxyConfigResponse,
   Rule,
   StatsData,
@@ -296,6 +302,47 @@ export const api = {
     return request('/settings/test-webhook', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  // Multi-Port Remapping
+  async applyMultiPortChange(appId: string, mappings: Array<{ container_port: string; host_port: number; bind?: string }>): Promise<any> {
+    return request(`/apps/${encodeURIComponent(appId)}/ports-multi`, {
+      method: 'POST',
+      body: JSON.stringify({ mappings }),
+    });
+  },
+
+  // Docker Hygiene & Storage
+  async getDockerSystemDf(): Promise<DockerSystemDf> {
+    return request('/docker/system');
+  },
+
+  async getDockerImages(): Promise<DockerImageItem[]> {
+    return request('/docker/images');
+  },
+
+  async getDockerVolumes(): Promise<DockerVolumeItem[]> {
+    return request('/docker/volumes');
+  },
+
+  async pruneDockerSystem(): Promise<PruneResult> {
+    return request('/docker/prune', { method: 'POST' });
+  },
+
+  // Docker Compose Stack Actions
+  async executeComposeAction(project: string, action: 'restart' | 'stop' | 'start' | 'down'): Promise<ComposeActionResult> {
+    return request(`/docker/compose/${encodeURIComponent(project)}/action`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    });
+  },
+
+  // Container Deployment
+  async deployContainer(payload: DeployContainerPayload): Promise<{ status: string; container: string; id: string }> {
+    return request('/docker/containers/deploy', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 };

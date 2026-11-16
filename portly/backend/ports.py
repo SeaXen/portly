@@ -82,16 +82,37 @@ def check_port_availability(port: int, bind_ip: str = "0.0.0.0") -> Dict[str, An
 
 
 def suggest_free_ports(start_port: int = 3000, count: int = 5, bind_ip: str = "0.0.0.0") -> List[int]:
-    """Scans and returns the next N free ports."""
+    """Scans and returns the next N free ports efficiently without looping system discovery."""
     free_ports: List[int] = []
     current = max(1024, start_port)
     host_listeners = discover_host_ports()
     used_ports = {h["port"] for h in host_listeners}
 
+    # Query Docker mapped ports once if available
+    docker_avail, _ = is_docker_available()
+    if docker_avail:
+        try:
+            client = get_docker_client()
+            if client:
+                for c in client.containers.list(all=True):
+                    ports = c.attrs.get("NetworkSettings", {}).get("Ports") or {}
+                    for _, host_maps in ports.items():
+                        if not host_maps:
+                            continue
+                        for m in host_maps:
+                            try:
+                                hp = int(m.get("HostPort", 0))
+                                if hp > 0:
+                                    used_ports.add(hp)
+                            except (ValueError, TypeError):
+                                pass
+        except Exception:
+            pass
+
     while len(free_ports) < count and current < 65535:
         if current not in used_ports:
-            res = check_port_availability(current, bind_ip)
-            if res["free"]:
+            can_bind, _ = can_bind_port(current, bind_ip)
+            if can_bind:
                 free_ports.append(current)
         current += 1
 

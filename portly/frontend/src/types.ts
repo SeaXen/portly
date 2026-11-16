@@ -139,7 +139,69 @@ export interface ProxyConfigResponse {
     traefik: string;
     traefik_yaml: string;
     traefik_labels: string;
+    cloudflared?: string;
   };
+}
+
+export interface MultiPortItem {
+  container_port: string;
+  host_port: number;
+  bind?: string;
+}
+
+export interface DockerSystemDf {
+  available: boolean;
+  images_count: number;
+  containers_count: number;
+  volumes_count: number;
+  build_cache_count?: number;
+  total_size_mb: number;
+  total_reclaimable_mb: number;
+  error?: string;
+}
+
+export interface DockerImageItem {
+  id: string;
+  full_id: string;
+  tags: string[];
+  primary_tag: string;
+  size_mb: number;
+  created: string;
+}
+
+export interface DockerVolumeItem {
+  name: string;
+  driver: string;
+  mountpoint: string;
+  created: string;
+  labels: Record<string, string>;
+}
+
+export interface PruneResult {
+  status: string;
+  space_reclaimed_mb: number;
+  deleted: {
+    containers: string[];
+    images: string[];
+    volumes: string[];
+    networks: string[];
+  };
+}
+
+export interface ComposeActionResult {
+  status: string;
+  action: string;
+  project: string;
+  affected_containers: string[];
+}
+
+export interface DeployContainerPayload {
+  image: string;
+  name: string;
+  ports: Record<string, number>;
+  env?: Record<string, string>;
+  volumes?: string[];
+  restart_policy?: string;
 }
 
 export interface TlsCertInfo {

@@ -81,7 +81,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         fontSize: '13px',
         padding: '7px 10px',
         borderRadius: '6px',
-        transition: 'background 0.1s',
+        transition: 'background-color 0.1s',
       }}
       onMouseEnter={(e) => {
         if (!isSelected) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
@@ -174,7 +174,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         </button>
         {showSourceMenu && (
           <div style={dropdownMenuStyle} onMouseLeave={() => setShowSourceMenu(false)}>
-            {renderDropdownItem('All sources', () => { onChangeSourceFilter(''); setShowSourceMenu(false); }, sourceFilter === '')}
+            {renderDropdownItem('All Sources', () => { onChangeSourceFilter(''); setShowSourceMenu(false); }, sourceFilter === '')}
             {renderDropdownItem('HOST', () => { onChangeSourceFilter('host'); setShowSourceMenu(false); }, sourceFilter === 'host')}
             {renderDropdownItem('DOCKER', () => { onChangeSourceFilter('docker'); setShowSourceMenu(false); }, sourceFilter === 'docker')}
             {renderDropdownItem('CUSTOM', () => { onChangeSourceFilter('custom'); setShowSourceMenu(false); }, sourceFilter === 'custom')}
@@ -197,7 +197,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         </button>
         {showStatusMenu && (
           <div style={dropdownMenuStyle} onMouseLeave={() => setShowStatusMenu(false)}>
-            {renderDropdownItem('All status', () => { onChangeStatusFilter(''); setShowStatusMenu(false); }, statusFilter === '')}
+            {renderDropdownItem('All Status', () => { onChangeStatusFilter(''); setShowStatusMenu(false); }, statusFilter === '')}
             {renderDropdownItem('UP', () => { onChangeStatusFilter('up'); setShowStatusMenu(false); }, statusFilter === 'up')}
             {renderDropdownItem('DOWN', () => { onChangeStatusFilter('down'); setShowStatusMenu(false); }, statusFilter === 'down')}
             {renderDropdownItem('CONFLICT', () => { onChangeStatusFilter('conflict'); setShowStatusMenu(false); }, statusFilter === 'conflict')}
@@ -220,7 +220,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         </button>
         {showCategoryMenu && (
           <div style={{ ...dropdownMenuStyle, maxHeight: '280px', overflowY: 'auto' }} onMouseLeave={() => setShowCategoryMenu(false)}>
-            {renderDropdownItem('All categories', () => { onChangeCategoryFilter(''); setShowCategoryMenu(false); }, categoryFilter === '')}
+            {renderDropdownItem('All Categories', () => { onChangeCategoryFilter(''); setShowCategoryMenu(false); }, categoryFilter === '')}
             {categories.map((c) =>
               renderDropdownItem(c.name, () => { onChangeCategoryFilter(c.id); setShowCategoryMenu(false); }, categoryFilter === c.id)
             )}
@@ -254,9 +254,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         {showSortMenu && (
           <div style={dropdownMenuStyle} onMouseLeave={() => setShowSortMenu(false)}>
             {[
-              { id: 'port', label: 'Port number' },
+              { id: 'port', label: 'Port Number' },
               { id: 'name', label: 'App Name' },
-              { id: 'cpu', label: 'CPU usage' },
+              { id: 'cpu', label: 'CPU Usage' },
               { id: 'ram', label: 'Memory RAM' },
               { id: 'uptime', label: 'Uptime' },
             ].map((s) =>
@@ -283,7 +283,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         {showGroupMenu && (
           <div style={{ ...dropdownMenuStyle, right: 0, left: 'auto' }} onMouseLeave={() => setShowGroupMenu(false)}>
             {['none', 'category', 'source', 'status'].map((g) =>
-              renderDropdownItem(g === 'none' ? 'No grouping' : `Group by ${g}`, () => { onChangeGroupBy(g); setShowGroupMenu(false); }, groupBy === g)
+              renderDropdownItem(g === 'none' ? 'No Grouping' : `Group by ${g}`, () => { onChangeGroupBy(g); setShowGroupMenu(false); }, groupBy === g)
             )}
           </div>
         )}

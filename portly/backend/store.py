@@ -149,6 +149,18 @@ class Store:
             );
             """)
 
+            # sessions
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                username TEXT NOT NULL,
+                role TEXT NOT NULL,
+                created_at REAL NOT NULL,
+                expires_at REAL NOT NULL
+            );
+            """)
+
             # port change snapshots for rollback
             conn.execute("""
             CREATE TABLE IF NOT EXISTS port_snapshots (
@@ -484,13 +496,18 @@ class Store:
             conn.commit()
 
     # Events
-    def log_event(self, event_type: str, message: str, app_id: Optional[str] = None) -> Dict[str, Any]:
+    def log_event(self, event_type: str, message: str, app_id: Optional[str] = None, max_events: int = 1000) -> Dict[str, Any]:
         now = time.time()
         with self._get_connection() as conn:
             cur = conn.execute("""
                 INSERT INTO events (ts, type, app_id, message)
                 VALUES (?, ?, ?, ?)
             """, (now, event_type, app_id, message))
+            conn.execute("""
+                DELETE FROM events WHERE id NOT IN (
+                    SELECT id FROM events ORDER BY id DESC LIMIT ?
+                )
+            """, (max_events,))
             conn.commit()
             return {"id": cur.lastrowid, "ts": now, "type": event_type, "app_id": app_id, "message": message}
 
@@ -500,13 +517,18 @@ class Store:
             return [dict(r) for r in cur.fetchall()]
 
     # Health history
-    def record_health(self, app_id: str, ok: bool, latency_ms: float):
+    def record_health(self, app_id: str, ok: bool, latency_ms: float, max_history: int = 200):
         now = time.time()
         with self._get_connection() as conn:
             conn.execute("""
                 INSERT INTO health_history (app_id, ts, ok, latency_ms)
                 VALUES (?, ?, ?, ?)
             """, (app_id, now, 1 if ok else 0, latency_ms))
+            conn.execute("""
+                DELETE FROM health_history WHERE app_id = ? AND id NOT IN (
+                    SELECT id FROM health_history WHERE app_id = ? ORDER BY id DESC LIMIT ?
+                )
+            """, (app_id, app_id, max_history))
             conn.commit()
 
     def get_health_history(self, app_id: str, limit: int = 30) -> List[Dict[str, Any]]:
@@ -586,3 +608,31 @@ class Store:
             """, (user_id, username, password_hash, role, now))
             conn.commit()
             return {"id": user_id, "username": username, "role": role, "created_at": now}
+
+    # Sessions
+    def save_session(self, token: str, user_id: str, username: str, role: str, expires_at: float):
+        now = time.time()
+        with self._get_connection() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO sessions (token, user_id, username, role, created_at, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (token, user_id, username, role, now, expires_at))
+            conn.commit()
+
+    def get_session(self, token: str) -> Optional[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            cur = conn.execute("SELECT * FROM sessions WHERE token = ?", (token,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def delete_session(self, token: str):
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+            conn.commit()
+
+    def prune_expired_sessions(self):
+        now = time.time()
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
+            conn.commit()
+

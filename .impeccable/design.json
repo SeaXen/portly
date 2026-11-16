@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-14T23:59:00Z",
+  "title": "Design System: Portly",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Periwinkle Harbor",
+        "canonical": "#8C9EFF",
+        "tonalRamp": ["#1A1E38", "#2A315C", "#434E91", "#6875DF", "#8C9EFF", "#ABB8FF", "#CCD5FF", "#EEF1FF"]
+      },
+      "accent-teal": {
+        "role": "secondary",
+        "displayName": "Seafoam Teal",
+        "canonical": "#5EEAD4",
+        "tonalRamp": ["#0C3831", "#15574D", "#238072", "#3EBEAB", "#5EEAD4", "#8EF2E2", "#BFF8EF", "#E6FDF9"]
+      },
+      "accent-amber": {
+        "role": "tertiary",
+        "displayName": "Amber Warning",
+        "canonical": "#FBBF77",
+        "tonalRamp": ["#3D270B", "#664213", "#99641D", "#CCA039", "#FBBF77", "#FCD39B", "#FDE5C2", "#FEF6EA"]
+      },
+      "accent-coral": {
+        "role": "tertiary",
+        "displayName": "Coral Danger",
+        "canonical": "#FF8A8A",
+        "tonalRamp": ["#421212", "#6E1F1F", "#A33131", "#D65A5A", "#FF8A8A", "#FFAAAA", "#FFCCCC", "#FFF0F0"]
+      },
+      "neutral-bg": {
+        "role": "neutral",
+        "displayName": "Void Canvas",
+        "canonical": "#0A0B0F",
+        "tonalRamp": ["#050608", "#0A0B0F", "#101218", "#151821", "#1C2030", "#282E44", "#3D4566", "#8D95A5"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero headlines, modals, and hardware drawer titles." },
+      "headline": { "displayName": "Headline", "purpose": "Section titles and dialog headers." },
+      "title": { "displayName": "Title", "purpose": "App names, table rows, and palette items." },
+      "body": { "displayName": "Body", "purpose": "Descriptions, table text, and help text." },
+      "label": { "displayName": "Label / Monospace", "purpose": "Network ports, PIDs, IP binds, and tabular telemetry." }
+    },
+    "shadows": [
+      { "name": "card-rest", "value": "0 1px 3px rgba(0, 0, 0, 0.4)", "purpose": "Resting elevation for cards and rows." },
+      { "name": "card-hover", "value": "0 4px 16px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(140, 158, 255, 0.3)", "purpose": "Interactive hover lift on cards and tiles." },
+      { "name": "overlay", "value": "0 20px 48px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.1)", "purpose": "Modal dialogs and command palette overlay." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Decelerated entrance curve for dialogs and drawers." },
+      { "name": "duration-fast", "value": "150ms", "purpose": "Quick interactive hover and state shifts." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Hero Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary call-to-action button for scans, saves, and additions.",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 5v14M5 12h14\"></path></svg> Add App</button>",
+      "css": ".ds-btn-primary { background: #8C9EFF; color: #0A0B0F; border: none; border-radius: 9px; padding: 7px 14px; font-family: Inter, system-ui, sans-serif; font-size: 13.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; transition: background-color 0.15s ease, transform 0.1s ease; } .ds-btn-primary:hover { background: #6875DF; } .ds-btn-primary:focus-visible { outline: 2px solid #8C9EFF; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Ghost Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Toolbar controls, filters, and auxiliary actions.",
+      "html": "<button class=\"ds-btn-secondary\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M21 12a9 9 0 1 1-3-6.7\"></path><path d=\"M21 4v5h-5\"></path></svg> Scan Now</button>",
+      "css": ".ds-btn-secondary { background: rgba(255, 255, 255, 0.04); color: #ECEEF3; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 9px; padding: 7px 12px; font-family: Inter, system-ui, sans-serif; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease; } .ds-btn-secondary:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.15); } .ds-btn-secondary:focus-visible { outline: 2px solid #8C9EFF; outline-offset: 2px; }"
+    },
+    {
+      "name": "Search & Command Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Command palette search and quick filter bar.",
+      "html": "<div class=\"ds-input-wrap\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#8D95A5\" stroke-width=\"2\"><circle cx=\"11\" cy=\"11\" r=\"8\"></circle><line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"></line></svg><input class=\"ds-input\" placeholder=\"Search ports, services, containers…\" /></div>",
+      "css": ".ds-input-wrap { display: flex; align-items: center; gap: 8px; background: #101218; border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 9px; padding: 0 12px; height: 36px; } .ds-input { background: transparent; border: none; color: #ECEEF3; font-family: Inter, system-ui, sans-serif; font-size: 13px; width: 100%; outline: none; } .ds-input::placeholder { color: #8D95A5; } .ds-input-wrap:focus-within { border-color: #8C9EFF; box-shadow: 0 0 0 2px rgba(140, 158, 255, 0.2); }"
+    },
+    {
+      "name": "Port Status Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Active port identifier pill with protocol badge.",
+      "html": "<div class=\"ds-port-chip\"><span class=\"ds-port-dot\"></span><span class=\"ds-port-num\">:5533</span><span class=\"ds-port-proto\">TCP</span></div>",
+      "css": ".ds-port-chip { display: inline-flex; align-items: center; gap: 6px; background: rgba(140, 158, 255, 0.1); border: 1px solid rgba(140, 158, 255, 0.25); border-radius: 9999px; padding: 2px 8px; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; } .ds-port-dot { width: 6px; height: 6px; border-radius: 50%; background: #5EEAD4; } .ds-port-num { font-size: 12.5px; font-weight: 600; color: #8C9EFF; } .ds-port-proto { font-size: 10px; color: #8D95A5; text-transform: uppercase; }"
+    },
+    {
+      "name": "Telemetry Stat Segment",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Interactive horizontal strip segment with live sparkline.",
+      "html": "<button class=\"ds-stat-card\"><div class=\"ds-stat-header\"><span class=\"ds-stat-label\">CPU</span><span class=\"ds-stat-val\">14.2%</span></div><div class=\"ds-stat-sub\">8 Cores · 2.4 GHz</div></button>",
+      "css": ".ds-stat-card { background: transparent; border: 0; border-right: 1px solid rgba(255, 255, 255, 0.07); padding: 10px 14px; text-align: left; cursor: pointer; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; gap: 2px; transition: background-color 0.15s ease; } .ds-stat-card:hover { background-color: rgba(255, 255, 255, 0.03); } .ds-stat-header { display: flex; align-items: baseline; gap: 8px; } .ds-stat-label { font-size: 11px; font-weight: 600; color: #8D95A5; text-transform: uppercase; } .ds-stat-val { font-size: 15px; font-weight: 700; color: #ECEEF3; font-variant-numeric: tabular-nums; } .ds-stat-sub { font-size: 11px; color: #8D95A5; font-variant-numeric: tabular-nums; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Obsidian Harbor",
+    "overview": "Portly is an industrial, precision-engineered observatory for local networks, containers, and background services. Built for operators who inspect dozens of concurrent workloads, its aesthetic rejects both the flat sterility of generic admin templates and the noisy neon oversaturation of hobbyist dashboards. Like the flight deck or shipping harbor control tower at night, the interface stays calm, deep, and dark, using light with surgical intention to communicate status, bandwidth flow, and system pressure.\n\nSurfaces exist on a disciplined three-tier tonal scale: deep void black (#0A0B0F) for global canvases, midnight stone (#101218) for sidebar docks and toolbars, and elevated obsidian (#151821) for cards, dialog panels, and table rows. Accent colors are sparse and semantic: Periwinkle Harbor (#8C9EFF) anchors focus and primary actions, Seafoam Teal (#5EEAD4) signals verified healthy uptime, while Coral Red (#FF8A8A) and Amber Gold (#FBBF77) flag collisions and resource bottlenecks.",
+    "keyCharacteristics": [
+      "Un-wrapping horizontal telemetry strips with live 60-point inline vector sparklines.",
+      "Dual-font typography hierarchy: humanistic sans (Inter) for controls; tabular monospaced figures (JetBrains Mono) for network sockets and metrics.",
+      "High-contrast, tactile micro-interactions with visible focus rings (#8C9EFF) and restrained transition timings (120–180ms).",
+      "Intentional density: Compact for high-volume sysadmin auditing, Comfy for glanceable wallboard displays."
+    ],
+    "rules": [
+      { "name": "The Single-Voice Accent Rule", "body": "Primary periwinkle (#8C9EFF) is reserved strictly for interactive state and primary affordances. It covers ≤5% of screen area at rest.", "section": "colors" },
+      { "name": "The Status Sovereignty Rule", "body": "Semantic colors (Teal, Amber, Coral) are never used for arbitrary aesthetic decoration. A red dot must always denote a dead process or port collision.", "section": "colors" },
+      { "name": "The Tabular Number Rule", "body": "All numerical readouts strictly enforce font-variant-numeric: tabular-nums to guarantee jitter-free rendering during real-time streaming updates.", "section": "typography" },
+      { "name": "The No-Kicker Rule", "body": "Section titles and cards never display uppercase micro-eyebrows or kickers above headings. Headings communicate context directly.", "section": "typography" },
+      { "name": "The Boundary Hairline Rule", "body": "Deep black overlays always feature an interior 1px semi-transparent border simulating an illuminated edge.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do preserve single-line horizontal layouts for the stats strip and toolbar at all screen widths.",
+      "Do use font-variant-numeric: tabular-nums for any container holding ports, PIDs, bytes, or percentages.",
+      "Do verify port availability before prompting users with port change migration dialogs.",
+      "Do respect prefers-reduced-motion by disabling translation animations while preserving subtle opacity transitions.",
+      "Do maintain safe mode by default for all destructive process and container actions."
+    ],
+    "donts": [
+      "Don't use decorative gradient text or multi-color glow halos outside semantic statuses.",
+      "Don't hide critical telemetry behind hover tooltips; prioritize glanceable numbers with inline context.",
+      "Don't wrap the stats strip or toolbars onto multiple vertical rows.",
+      "Don't perform destructive Docker container recreation without an automatic rollback snapshot.",
+      "Don't use raw emoji in place of authored, accessible SVG iconography."
+    ]
+  }
+}

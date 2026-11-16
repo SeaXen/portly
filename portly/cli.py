@@ -49,6 +49,11 @@ def main():
                 print("SECURITY ERROR: Binding to 0.0.0.0 requires authentication. Run with --mode server and set up an admin account or bind to 127.0.0.1.", file=sys.stderr)
                 sys.exit(1)
 
+        # Propagate configuration to environment for FastAPI lifespan and auth checks
+        os.environ["PORTLY_HOST"] = str(host)
+        os.environ["PORTLY_PORT"] = str(port)
+        os.environ["PORTLY_MODE"] = str(mode)
+
         print(f"Starting Portly dashboard on http://{host}:{port} (Mode: {mode})")
         uvicorn.run("portly.backend.app:app", host=host, port=port, log_level="info")
 

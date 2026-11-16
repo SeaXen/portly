@@ -25,14 +25,25 @@ def test_spa_path_traversal_blocked():
     # Also verify with serve_spa directly
     from portly.backend.app import serve_spa
     import asyncio
+    import concurrent.futures
     from fastapi import HTTPException
 
+    def _call_async(coro):
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(asyncio.run, coro).result()
+        return asyncio.run(coro)
+
     with pytest.raises(HTTPException) as exc1:
-        asyncio.run(serve_spa("../../data/portly.db"))
+        _call_async(serve_spa("../../data/portly.db"))
     assert exc1.value.status_code == 404
 
     with pytest.raises(HTTPException) as exc2:
-        asyncio.run(serve_spa("../pyproject.toml"))
+        _call_async(serve_spa("../pyproject.toml"))
     assert exc2.value.status_code == 404
 
 

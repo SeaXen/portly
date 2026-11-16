@@ -18,12 +18,21 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
         return (
           <div
             key={app.id}
+            role="button"
+            tabIndex={0}
+            aria-label={`View details for ${app.name}`}
             className="c026"
             style={{
               cursor: 'pointer',
               transition: 'border-color 0.15s, transform 0.1s',
             }}
             onClick={() => onOpenDetail(app)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpenDetail(app);
+              }
+            }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = 'rgba(140, 158, 255, 0.4)';
               e.currentTarget.style.transform = 'translateY(-2px)';
@@ -62,6 +71,25 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
                 {visibleFields.source !== false && (
                   <span className={app.source === 'docker' ? 'c040' : 'c036'} style={{ textTransform: 'capitalize' }}>
                     {app.source}
+                  </span>
+                )}
+                {(app.url_override || (app.open_url && !app.open_url.includes('localhost'))) && (
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      padding: '1px 7px',
+                      borderRadius: '6px',
+                      background: 'rgba(251, 191, 119, 0.15)',
+                      color: '#FBBF77',
+                      border: '1px solid rgba(251, 191, 119, 0.25)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                    }}
+                    title={app.url_override || app.open_url}
+                  >
+                    <span>☁</span>
+                    <span>Tunnel</span>
                   </span>
                 )}
                 {visibleFields.bind !== false && <span className="c037">{app.bind}</span>}

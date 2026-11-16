@@ -295,22 +295,35 @@ def test_import_endpoint():
     assert imp_app["env"] == {"KEY": "VAL"}
 
 
-@pytest.mark.asyncio
-async def test_sse_stream_snapshot():
+def test_sse_stream_snapshot():
+    import asyncio
+    import concurrent.futures
     import json
     from unittest.mock import AsyncMock, MagicMock
     from portly.backend.app import sse_stream
 
-    req = MagicMock()
-    req.is_disconnected = AsyncMock(side_effect=[False, True])
-    res = await sse_stream(req)
-    gen = res.body_iterator
-    item = await gen.__anext__()
-    assert item["event"] == "message"
-    data = json.loads(item["data"])
-    assert data["type"] == "snapshot"
-    assert "apps" in data
-    assert "stats" in data
+    async def _test():
+        req = MagicMock()
+        req.is_disconnected = AsyncMock(side_effect=[False, True])
+        res = await sse_stream(req)
+        gen = res.body_iterator
+        item = await gen.__anext__()
+        assert item["event"] == "message"
+        data = json.loads(item["data"])
+        assert data["type"] == "snapshot"
+        assert "apps" in data
+        assert "stats" in data
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(asyncio.run, _test()).result()
+    else:
+        asyncio.run(_test())
 
 
 def test_auth_flow(monkeypatch):

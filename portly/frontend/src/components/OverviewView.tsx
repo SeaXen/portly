@@ -100,13 +100,16 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
             <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#ECEEF3' }}>Pinned Services ★</h3>
             <button type="button" className="c078" style={{ height: '28px', fontSize: '12px' }} onClick={() => onSelectNav('ports')}>
-              View all ports →
+              View All Ports →
             </button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '14px' }}>
             {pinnedApps.map((app) => (
               <div
                 key={app.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`View details for ${app.name}`}
                 style={{
                   background: '#151821',
                   border: '1px solid rgba(255,255,255,0.08)',
@@ -118,6 +121,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                   justifyContent: 'space-between',
                 }}
                 onClick={() => onOpenDetail(app)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onOpenDetail(app);
+                  }
+                }}
               >
                 <div>
                   <div style={{ fontWeight: 600, color: '#ECEEF3' }}>{app.name}</div>

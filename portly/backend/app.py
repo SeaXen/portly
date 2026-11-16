@@ -28,11 +28,18 @@ from portly.backend.stats import collect_snapshot, get_current_stats, get_detail
 from portly.backend.store import Store
 
 logger = logging.getLogger("portly.app")
+_main_event_loop: Optional[asyncio.AbstractEventLoop] = None
 
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _main_event_loop
+    try:
+        _main_event_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+
     if os.getenv("PORTLY_TESTING") == "1":
         yield
         return
@@ -189,11 +196,20 @@ async def refresh_discovery():
 # Connect docker event listener to refresh discovery
 def on_docker_event():
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
+        global _main_event_loop
+        loop = _main_event_loop
+        if not loop or not loop.is_running():
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = None
+        if loop and loop.is_running():
             asyncio.run_coroutine_threadsafe(refresh_discovery(), loop)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Error dispatching docker event to event loop: {e}")
 
 set_on_docker_event(on_docker_event)
 
@@ -242,6 +258,29 @@ class CustomAppModel(BaseModel):
 class PortChangeModel(BaseModel):
     host_port: int
     bind: str = "0.0.0.0"
+
+
+class MultiPortItem(BaseModel):
+    container_port: str
+    host_port: int
+    bind: str = "0.0.0.0"
+
+
+class MultiPortChangeModel(BaseModel):
+    mappings: List[MultiPortItem]
+
+
+class ComposeActionModel(BaseModel):
+    action: str = "restart"
+
+
+class DeployContainerModel(BaseModel):
+    image: str
+    name: str
+    ports: Dict[str, Any] = {}
+    env: Dict[str, str] = {}
+    volumes: List[str] = []
+    restart_policy: str = "unless-stopped"
 
 
 class RuleModel(BaseModel):
@@ -427,7 +466,7 @@ async def get_proxy_config_endpoint(
             }
         raise HTTPException(
             status_code=400,
-            detail={"code": "INVALID_FORMAT", "message": f"Unsupported format '{format}'. Supported formats: caddy, nginx, traefik, traefik_yaml, traefik_labels"}
+            detail={"code": "INVALID_FORMAT", "message": f"Unsupported format '{format}'. Supported formats: caddy, nginx, traefik, traefik_yaml, traefik_labels, cloudflared"}
         )
 
     return configs_data
@@ -500,14 +539,22 @@ async def exec_command_endpoint(
         )
     container_name = app_id.split(":")[1]
     try:
-        res = await asyncio.to_thread(
-            docker_actions.exec_in_container,
-            container_name,
-            data.command,
-            store=store,
-            timeout=data.timeout
+        res = await asyncio.wait_for(
+            asyncio.to_thread(
+                docker_actions.exec_in_container,
+                container_name,
+                data.command,
+                store=store,
+                timeout=data.timeout
+            ),
+            timeout=float(data.timeout + 1.0)
         )
         return res
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=408,
+            detail={"code": "TIMEOUT", "message": f"Command timed out after {data.timeout} seconds."}
+        )
     except PermissionError as pe:
         raise HTTPException(
             status_code=403,
@@ -791,6 +838,33 @@ async def change_port_endpoint(
         raise HTTPException(status_code=400, detail={"code": "NOT_SUPPORTED", "message": "Unsupported app type for port change"})
 
 
+@app.post("/api/apps/{app_id:path}/ports-multi")
+async def change_multi_ports_endpoint(
+    app_id: str,
+    data: MultiPortChangeModel,
+    user: Dict[str, Any] = Depends(require_admin)
+):
+    if not app_id.startswith("docker:"):
+        raise HTTPException(status_code=400, detail={"code": "NOT_SUPPORTED", "message": "Multi-port remapping is only supported for Docker containers"})
+
+    parts = app_id.split(":")
+    container_name = parts[1] if len(parts) > 1 else ""
+    if not container_name:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_ID", "message": "Invalid container app id"})
+
+    mappings_dicts = [m.model_dump() for m in data.mappings]
+    try:
+        res = docker_actions.apply_multi_port_change_docker(container_name, mappings_dicts, store)
+        await refresh_discovery()
+        return res
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": str(e)})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"code": "PORT_CONFLICT", "message": str(e)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"code": "RECREATION_FAILED", "message": str(e)})
+
+
 # 5. Image updates
 @app.post("/api/apps/{app_id:path}/update/check")
 async def check_update_endpoint(app_id: str):
@@ -809,6 +883,79 @@ async def apply_update_endpoint(app_id: str, user: Dict[str, Any] = Depends(requ
     if store.get_setting("safe_mode", "true").lower() == "true":
         raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": "Safe mode is active. Mutating actions are locked."})
     return {"status": "ok", "message": "Image check complete. Image is latest."}
+
+
+# 5b. Docker System Hygiene & Storage endpoints
+@app.get("/api/docker/system")
+async def get_docker_system_endpoint(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+    if store.get_user_count() > 0 and not user:
+        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Authentication required"})
+    return docker_actions.get_docker_system_df(store)
+
+
+@app.get("/api/docker/images")
+async def get_docker_images_endpoint(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+    if store.get_user_count() > 0 and not user:
+        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Authentication required"})
+    return docker_actions.list_docker_images(store)
+
+
+@app.get("/api/docker/volumes")
+async def get_docker_volumes_endpoint(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+    if store.get_user_count() > 0 and not user:
+        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Authentication required"})
+    return docker_actions.list_docker_volumes(store)
+
+
+@app.post("/api/docker/prune")
+async def prune_docker_endpoint(user: Dict[str, Any] = Depends(require_admin)):
+    try:
+        return docker_actions.prune_docker_system(store)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": str(e)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"code": "PRUNE_FAILED", "message": str(e)})
+
+
+@app.post("/api/docker/compose/{project:path}/action")
+async def execute_compose_action_endpoint(
+    project: str,
+    data: ComposeActionModel,
+    user: Dict[str, Any] = Depends(require_admin)
+):
+    try:
+        return docker_actions.manage_compose_stack(project, data.action, store)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": str(e)})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_ACTION", "message": str(e)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"code": "STACK_ACTION_FAILED", "message": str(e)})
+
+
+@app.post("/api/docker/containers/deploy")
+async def deploy_container_endpoint(
+    data: DeployContainerModel,
+    user: Dict[str, Any] = Depends(require_admin)
+):
+    try:
+        res = docker_actions.deploy_container(
+            image=data.image,
+            name=data.name,
+            ports=data.ports,
+            env=data.env,
+            volumes=data.volumes,
+            restart_policy=data.restart_policy,
+            store=store
+        )
+        await refresh_discovery()
+        return res
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": str(e)})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"code": "DEPLOY_ERROR", "message": str(e)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"code": "DEPLOY_FAILED", "message": str(e)})
 
 
 # 6. Custom apps CRUD
@@ -870,12 +1017,16 @@ async def get_stats_endpoint():
 
 
 @app.get("/api/system")
-async def get_system_endpoint():
+async def get_system_endpoint(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+    if store.get_user_count() > 0 and not user:
+        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Authentication required"})
     return get_detailed_system_stats()
 
 
 @app.get("/api/events")
-async def get_events_endpoint(limit: int = 100):
+async def get_events_endpoint(limit: int = 100, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+    if store.get_user_count() > 0 and not user:
+        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Authentication required"})
     return store.get_events(limit=limit)
 
 
@@ -945,8 +1096,19 @@ async def delete_view_endpoint(view_id: str, user: Dict[str, Any] = Depends(requ
 
 # 9. Settings
 @app.get("/api/settings")
-async def get_settings_endpoint():
-    return store.get_settings()
+async def get_settings_endpoint(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+    if store.get_user_count() > 0 and not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "UNAUTHORIZED", "message": "Authentication required to view settings"}
+        )
+    settings = store.get_settings()
+    # Mask webhook secret URL if non-admin or unauthenticated
+    if (not user or user.get("role") != "admin") and settings.get("webhook_url"):
+        url = settings["webhook_url"]
+        if len(url) > 10:
+            settings["webhook_url"] = url[:8] + "..." + url[-4:]
+    return settings
 
 
 @app.patch("/api/settings")
@@ -1098,7 +1260,7 @@ async def auth_logout(response: Response, session_token: Optional[str] = Cookie(
 
 # 13. Real-time SSE Stream
 @app.get("/api/stream")
-async def sse_stream(request: Request):
+async def sse_stream(request: Request, user: Dict[str, Any] = Depends(require_auth)):
     q = asyncio.Queue()
     _sse_subscribers.append(q)
 

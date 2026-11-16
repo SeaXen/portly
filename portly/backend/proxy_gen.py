@@ -17,7 +17,8 @@ def sanitize_domain(domain: Optional[str], default_name: str) -> str:
         cleaned = re.sub(r"^https?://", "", domain.strip().lower())
         # Remove trailing slashes and paths
         cleaned = cleaned.split("/")[0].strip()
-        if cleaned:
+        # Strictly allow valid domain/hostname characters: letters, numbers, hyphens, dots
+        if re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?$", cleaned) and ".." not in cleaned:
             return cleaned
     return f"{sanitize_router_name(default_name)}.local"
 
@@ -77,6 +78,17 @@ def generate_traefik_labels(domain: str, port: int, router_name: str) -> str:
 """
 
 
+def generate_cloudflared_config(domain: str, upstream_host: str, port: int) -> str:
+    """Generates a Cloudflare Tunnel (cloudflared) ingress rule block."""
+    return f"""# Cloudflare Tunnel Ingress Rule
+# Add to ~/.cloudflared/config.yml or your tunnel config:
+ingress:
+  - hostname: {domain}
+    service: http://{upstream_host}:{port}
+  - service: http_status:404
+"""
+
+
 def generate_all_proxy_configs(
     name: str,
     port: int,
@@ -94,6 +106,7 @@ def generate_all_proxy_configs(
     nginx = generate_nginx_config(clean_domain, upstream_host, port)
     traefik_yaml = generate_traefik_yaml_config(clean_domain, upstream_host, port, router_name)
     traefik_labels = generate_traefik_labels(clean_domain, port, router_name)
+    cloudflared = generate_cloudflared_config(clean_domain, upstream_host, port)
 
     return {
         "domain": clean_domain,
@@ -106,5 +119,6 @@ def generate_all_proxy_configs(
             "traefik": traefik_yaml,
             "traefik_yaml": traefik_yaml,
             "traefik_labels": traefik_labels,
+            "cloudflared": cloudflared,
         }
     }

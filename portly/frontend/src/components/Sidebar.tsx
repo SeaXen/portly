@@ -44,13 +44,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       <aside className="portly-sidebar">
         {/* Brand */}
-        <div
+        <button
+          type="button"
           className="sidebar-brand"
           onClick={() => { onSelectNav('ports'); onSelectCategory(null); }}
           title="Portly Dashboard"
         >
           <div className="sidebar-logo">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <rect x="4" y="5" width="16" height="14" rx="3"></rect>
               <circle cx="9" cy="12" r="1.5" fill="currentColor"></circle>
               <circle cx="15" cy="12" r="1.5" fill="currentColor"></circle>
@@ -64,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Dashboard
             </span>
           </div>
-        </div>
+        </button>
 
         {/* Navigation */}
         <nav className="sidebar-nav">
@@ -73,7 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`sidebar-nav-btn ${activeNav === 'overview' ? 'active' : ''}`}
             onClick={() => { onSelectNav('overview'); onSelectCategory(null); }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
               <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
               <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
@@ -87,7 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`sidebar-nav-btn ${activeNav === 'ports' && selectedCategory === null ? 'active' : ''}`}
             onClick={() => { onSelectNav('ports'); onSelectCategory(null); }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <rect x="3" y="4" width="18" height="16" rx="2"></rect>
               <path d="M3 10h18M3 15h18M9 4v16"></path>
             </svg>
@@ -99,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`sidebar-nav-btn ${activeNav === 'docker' ? 'active' : ''}`}
             onClick={() => { onSelectNav('docker'); onSelectCategory(null); }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 8l9-5 9 5v8l-9 5-9-5z"></path>
               <path d="M3 8l9 5 9-5M12 13v8"></path>
             </svg>
@@ -111,7 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`sidebar-nav-btn ${activeNav === 'system' ? 'active' : ''}`}
             onClick={() => { onSelectNav('system'); }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 12h4l3-8 4 16 3-8h4"></path>
             </svg>
             <span className="sidebar-btn-label">System</span>
@@ -122,7 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`sidebar-nav-btn ${activeNav === 'conflicts' ? 'active' : ''}`}
             onClick={() => { onSelectNav('conflicts'); onSelectCategory(null); }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 3l10 18H2z"></path>
               <path d="M12 10v4M12 17h.01"></path>
             </svg>
@@ -135,7 +136,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className={`sidebar-nav-btn ${activeNav === 'history' ? 'active' : ''}`}
             onClick={() => { onSelectNav('history'); }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="9"></circle>
               <path d="M12 7v5l3 2"></path>
             </svg>
@@ -152,8 +153,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className="sidebar-add-cat-icon"
               onClick={onNewCategoryClick}
               title="Create new category"
+              aria-label="Create new category"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 5v14M5 12h14"></path>
               </svg>
             </button>
@@ -194,10 +196,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="sidebar-new-cat-btn"
             onClick={onNewCategoryClick}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M12 5v14M5 12h14"></path>
             </svg>
-            <span>New category</span>
+            <span>New Category</span>
           </button>
         </div>
 
@@ -211,7 +213,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 background: safeMode ? 'rgba(94, 234, 212, 0.12)' : 'rgba(255, 138, 138, 0.12)',
               }}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 {safeMode ? (
                   <>
                     <rect x="4" y="11" width="16" height="10" rx="2"></rect>
@@ -236,6 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <label className="portly-toggle">
               <input
                 type="checkbox"
+                aria-label="Toggle Safe Mode"
                 checked={safeMode}
                 onChange={handleSafeModeChange}
               />

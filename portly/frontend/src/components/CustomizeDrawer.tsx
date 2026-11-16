@@ -188,8 +188,10 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Group by</label>
+              <label htmlFor="custom-group-by" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Group By</label>
               <select
+                id="custom-group-by"
+                name="groupBy"
                 value={groupBy}
                 onChange={(e) => onChangeGroupBy(e.target.value)}
                 className="c215"
@@ -202,8 +204,10 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Sort by</label>
+              <label htmlFor="custom-sort-by" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Sort By</label>
               <select
+                id="custom-sort-by"
+                name="sortBy"
                 value={sortBy}
                 onChange={(e) => onChangeSortBy(e.target.value)}
                 className="c215"
@@ -312,6 +316,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                     </span>
                     <button
                       type="button"
+                      aria-label="Delete rule"
                       onClick={() => handleDeleteRule(r.id)}
                       style={{ background: 'none', border: 0, color: '#8D95A5', cursor: 'pointer', padding: 0 }}
                       title="Delete rule"
@@ -330,13 +335,25 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
           <form onSubmit={handleCreateRule} style={{ background: '#151821', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)' }}>
             <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginBottom: '10px' }}>Create Rule</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-              <select value={newRuleField} onChange={(e) => setNewRuleField(e.target.value)} className="c215">
+              <select
+                name="newRuleField"
+                aria-label="Rule match field"
+                value={newRuleField}
+                onChange={(e) => setNewRuleField(e.target.value)}
+                className="c215"
+              >
                 <option value="image">Image name</option>
                 <option value="process">Process name</option>
                 <option value="port">Port range</option>
                 <option value="compose_project">Compose project</option>
               </select>
-              <select value={newRuleOp} onChange={(e) => setNewRuleOp(e.target.value)} className="c215">
+              <select
+                name="newRuleOp"
+                aria-label="Rule operator"
+                value={newRuleOp}
+                onChange={(e) => setNewRuleOp(e.target.value)}
+                className="c215"
+              >
                 <option value="contains">Contains</option>
                 <option value="equals">Equals</option>
                 <option value="range">Range (e.g. 3000-3999)</option>
@@ -345,6 +362,9 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
             </div>
             <input
               type="text"
+              name="newRuleVal"
+              aria-label="Match value"
+              autoComplete="off"
               placeholder="Match value (e.g. postgres, 3000-3999)"
               value={newRuleVal}
               onChange={(e) => setNewRuleVal(e.target.value)}
@@ -353,8 +373,15 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
               required
             />
             <div style={{ marginBottom: '10px' }}>
-              <label style={{ display: 'block', fontSize: '11px', color: '#8D95A5', marginBottom: '4px' }}>Assign Category</label>
-              <select value={newRuleCat} onChange={(e) => setNewRuleCat(e.target.value)} className="c215" style={{ width: '100%' }}>
+              <label htmlFor="rule-cat-select" style={{ display: 'block', fontSize: '11px', color: '#8D95A5', marginBottom: '4px' }}>Assign Category</label>
+              <select
+                id="rule-cat-select"
+                name="newRuleCat"
+                value={newRuleCat}
+                onChange={(e) => setNewRuleCat(e.target.value)}
+                className="c215"
+                style={{ width: '100%' }}
+              >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -376,6 +403,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
             <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#ECEEF3', cursor: 'pointer' }}>
               <input
                 type="checkbox"
+                name="webhookEnabled"
                 checked={webhookEnabled}
                 onChange={(e) => setWebhookEnabled(e.target.checked)}
               />
@@ -385,8 +413,10 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '11px', color: '#8D95A5', marginBottom: '4px' }}>Webhook Type</label>
+              <label htmlFor="webhook-type" style={{ display: 'block', fontSize: '11px', color: '#8D95A5', marginBottom: '4px' }}>Webhook Type</label>
               <select
+                id="webhook-type"
+                name="webhookType"
                 value={webhookType}
                 onChange={(e) => setWebhookType(e.target.value)}
                 className="c215"
@@ -400,9 +430,11 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '11px', color: '#8D95A5', marginBottom: '4px' }}>Endpoint URL</label>
+              <label htmlFor="webhook-url" style={{ display: 'block', fontSize: '11px', color: '#8D95A5', marginBottom: '4px' }}>Endpoint URL</label>
               <input
-                type="text"
+                id="webhook-url"
+                name="webhookUrl"
+                type="url"
                 placeholder={webhookType === 'discord' ? 'https://discord.com/api/webhooks/…' : 'https://ntfy.sh/my-portly-alerts'}
                 value={webhookUrl}
                 onChange={(e) => setWebhookUrl(e.target.value)}

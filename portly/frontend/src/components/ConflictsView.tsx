@@ -31,7 +31,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
             Every active listener on your system has a unique, uncontested port assignment.
           </div>
           <button type="button" className="c078" onClick={() => onSelectNav('ports')}>
-            View all ports →
+            View All Ports →
           </button>
         </div>
       ) : (

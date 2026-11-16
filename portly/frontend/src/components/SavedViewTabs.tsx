@@ -66,7 +66,7 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
                 color: isActive ? '#ECEEF3' : '#8D95A5',
                 fontWeight: isActive ? 600 : 500,
                 fontSize: '13.5px',
-                transition: 'all 0.12s ease',
+                transition: 'color 0.12s ease, border-color 0.12s ease',
               }}
               onMouseEnter={(e) => {
                 if (!isActive) e.currentTarget.style.color = '#ECEEF3';
@@ -118,7 +118,7 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14"></path>
           </svg>
-          Save view
+          Save View
         </button>
       </div>
 
@@ -132,6 +132,9 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
             <form onSubmit={handleSave}>
               <input
                 type="text"
+                name="viewName"
+                aria-label="View name"
+                autoComplete="off"
                 placeholder="View name (e.g. Backend only)"
                 value={newViewName}
                 onChange={(e) => setNewViewName(e.target.value)}
@@ -142,7 +145,7 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
               />
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button type="button" className="c078" onClick={() => setShowSaveModal(false)}>Cancel</button>
-                <button type="submit" className="c080" style={{ background: '#8C9EFF', color: '#0A0D14', fontWeight: 600 }}>Save view</button>
+                <button type="submit" className="c080" style={{ background: '#8C9EFF', color: '#0A0D14', fontWeight: 600 }}>Save View</button>
               </div>
             </form>
           </div>
