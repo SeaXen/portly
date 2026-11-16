@@ -7,7 +7,12 @@ import subprocess
 import sys
 import time
 import pytest
-from playwright.sync_api import sync_playwright
+
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
+    collect_ignore_glob = ["*"]
 
 
 def get_free_port():

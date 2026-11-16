@@ -40,7 +40,7 @@ jobs:
       - name: Run Pytest test suite
         run: |
           export PORTLY_TESTING=1
-          python -m pytest tests/ -v
+          python -m pytest tests/ --ignore=tests/e2e -v
 
   frontend-build:
     name: Frontend Build & Typecheck

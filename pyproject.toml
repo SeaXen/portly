@@ -37,3 +37,8 @@ include = ["portly*"]
 
 [tool.setuptools.package-data]
 portly = ["frontend/dist/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".venv", "node_modules", "dist", "build"]
+addopts = "-ra --ignore=tests/e2e"

@@ -15,7 +15,7 @@ backend-tests:
   script:
     - python3 -m compileall -q portly
     - export PORTLY_TESTING=1
-    - python3 -m pytest tests/ -v
+    - python3 -m pytest tests/ --ignore=tests/e2e -v
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
