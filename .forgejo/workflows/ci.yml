@@ -21,25 +21,49 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Check Python environment
+      - name: Set up Python and pip
         run: |
+          set -e
+          echo "Checking Python..."
           python3 --version || python --version
+          if ! command -v pip3 >/dev/null 2>&1 && ! python3 -m pip --version >/dev/null 2>&1; then
+            echo "Installing pip and venv packages..."
+            apt-get update -qq && apt-get install -y -qq python3-pip python3-venv python3-full curl || true
+          fi
+          if ! command -v pip3 >/dev/null 2>&1 && ! python3 -m pip --version >/dev/null 2>&1; then
+            echo "Bootstrapping pip via get-pip.py..."
+            curl -sS https://bootstrap.pypa.io/get-pip.py | python3 - --break-system-packages || true
+          fi
 
-      - name: Install Python dependencies
+      - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          pip3 install -r requirements.txt
-          pip3 install pytest httpx pytest-asyncio pytest-cov
+          set -e
+          python3 -m venv .venv || python3 -m virtualenv .venv || true
+          if [ -d ".venv" ]; then
+            echo "Using Python virtual environment"
+            . .venv/bin/activate
+            pip install --upgrade pip || true
+            pip install -r requirements.txt
+            pip install pytest httpx pytest-asyncio pytest-cov
+          else
+            echo "Using system pip with break-system-packages"
+            python3 -m pip install --break-system-packages -r requirements.txt
+            python3 -m pip install --break-system-packages pytest httpx pytest-asyncio pytest-cov
+          fi
 
       - name: Verify Python syntax
         run: |
-          python3 -m py_compile portly/*.py
-          python3 -m py_compile portly/backend/*.py
-          python3 -m py_compile portly/backend/actions/*.py
-          python3 -m py_compile portly/backend/discovery/*.py
+          if [ -f .venv/bin/activate ]; then
+            . .venv/bin/activate
+          fi
+          python3 -m compileall -q portly
 
       - name: Run Pytest test suite
         run: |
+          if [ -f .venv/bin/activate ]; then
+            . .venv/bin/activate
+          fi
+          export PORTLY_TESTING=1
           python3 -m pytest tests/ -v
 
   frontend-build:
@@ -57,5 +81,5 @@ jobs:
       - name: Build frontend production bundle
         working-directory: portly/frontend
         run: |
-          npm ci
+          npm install --no-audit || npm ci
           npm run build

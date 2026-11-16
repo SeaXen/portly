@@ -13,7 +13,8 @@ backend-tests:
     - pip install -r requirements.txt
     - pip install pytest httpx pytest-asyncio pytest-cov
   script:
-    - python3 -m py_compile portly/*.py portly/backend/*.py portly/backend/actions/*.py portly/backend/discovery/*.py
+    - python3 -m compileall -q portly
+    - export PORTLY_TESTING=1
     - python3 -m pytest tests/ -v
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
@@ -24,7 +25,7 @@ frontend-build:
   image: node:20-alpine
   script:
     - cd portly/frontend
-    - npm ci
+    - npm install --no-audit || npm ci
     - npm run build
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'

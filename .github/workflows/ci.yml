@@ -35,13 +35,11 @@ jobs:
 
       - name: Verify Python syntax
         run: |
-          python -m py_compile portly/*.py
-          python -m py_compile portly/backend/*.py
-          python -m py_compile portly/backend/actions/*.py
-          python -m py_compile portly/backend/discovery/*.py
+          python -m compileall -q portly
 
       - name: Run Pytest test suite
         run: |
+          export PORTLY_TESTING=1
           python -m pytest tests/ -v
 
   frontend-build:
@@ -59,5 +57,5 @@ jobs:
       - name: Build frontend production bundle
         working-directory: portly/frontend
         run: |
-          npm ci
+          npm install --no-audit || npm ci
           npm run build
