@@ -1,0 +1,31 @@
+stages:
+  - test
+  - build
+
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+backend-tests:
+  stage: test
+  image: python:3.12-slim
+  before_script:
+    - python3 --version
+    - pip install -r requirements.txt
+    - pip install pytest httpx pytest-asyncio pytest-cov
+  script:
+    - python3 -m py_compile portly/*.py portly/backend/*.py portly/backend/actions/*.py portly/backend/discovery/*.py
+    - python3 -m pytest tests/ -v
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+
+frontend-build:
+  stage: build
+  image: node:20-alpine
+  script:
+    - cd portly/frontend
+    - npm ci
+    - npm run build
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
