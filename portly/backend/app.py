@@ -1787,6 +1787,24 @@ async def export_data(
 
 @app.post("/api/import")
 async def import_data(backup: Dict[str, Any], user: Dict[str, Any] = Depends(require_admin)):
+    # Validate every section before writing so a malformed backup cannot leave
+    # a half-imported database.
+    required = {
+        "categories": ("id", "name", "color"),
+        "rules": ("id", "category_id", "field", "operator", "value"),
+        "custom_apps": ("id", "name", "port"),
+        "views": ("id", "name"),
+    }
+    for section, keys in required.items():
+        entries = backup.get(section, [])
+        if not isinstance(entries, list) or any(
+            not isinstance(e, dict) or any(k not in e for k in keys) for e in entries
+        ):
+            raise HTTPException(status_code=400, detail={"code": "INVALID_BACKUP", "message": f"Invalid {section} section in backup."})
+    for section in ("app_overrides", "settings"):
+        if not isinstance(backup.get(section, {}), dict):
+            raise HTTPException(status_code=400, detail={"code": "INVALID_BACKUP", "message": f"Invalid {section} section in backup."})
+
     for c in backup.get("categories", []):
         store.upsert_category(c["id"], c["name"], c["color"], c.get("mode", "manual"), c.get("sort_order", 0))
     for r in backup.get("rules", []):

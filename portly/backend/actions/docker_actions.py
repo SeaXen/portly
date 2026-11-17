@@ -630,7 +630,7 @@ def rollback_port_change_docker(app_id: str, store: Store, actor: str = "system"
 
 
 FORBIDDEN_OPERATORS = [";", "&&", "||", "|", ">", ">>", "<", "`", "$(", "$", "\n", "\r", "&"]
-SAFE_COMMAND_BINARIES = {"ps", "free", "df", "uptime", "uname", "whoami", "id", "hostname", "date", "pwd", "ss", "netstat", "ip", "ls"}
+SAFE_COMMAND_BINARIES = {"ps", "free", "df", "uptime", "uname", "whoami", "id", "hostname", "date", "pwd", "ss", "netstat", "ip"}
 SAFE_COMMAND_ALLOWLIST = SAFE_COMMAND_BINARIES
 
 

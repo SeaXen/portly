@@ -24,6 +24,22 @@ import {
 
 const API_BASE = '/api';
 
+// Discovered ports live on the Portly host, but the backend emits localhost when
+// no public_host is configured. Point those links at the dashboard host instead.
+function resolveAppUrl<T extends { open_url?: string; url_override?: string }>(item: T): T {
+  if (!item.open_url || item.url_override || typeof window === 'undefined') return item;
+  try {
+    const url = new URL(item.open_url);
+    if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+      url.hostname = window.location.hostname;
+      return { ...item, open_url: url.toString() };
+    }
+  } catch {
+    // Not an absolute URL - leave it untouched.
+  }
+  return item;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -72,7 +88,14 @@ export const api = {
         q.append(k, String(v));
       }
     });
-    return request(`/apps?${q.toString()}`);
+    const data = await request<{
+      apps: AppItem[];
+      total: number;
+      conflicts: ConflictItem[];
+      docker_status: { available: boolean; message: string };
+      last_scan: number;
+    }>(`/apps?${q.toString()}`);
+    return { ...data, apps: data.apps.map(resolveAppUrl) };
   },
 
   async getAppDetail(appId: string): Promise<{
@@ -81,7 +104,13 @@ export const api = {
     health_history: Array<{ ts: number; ok: boolean; latency_ms: number }>;
     docker_inspect?: any;
   }> {
-    return request(`/apps/${encodeURIComponent(appId)}`);
+    const data = await request<{
+      app: AppItem;
+      health: { status: string; ok: boolean; latency_ms: number; code: number };
+      health_history: Array<{ ts: number; ok: boolean; latency_ms: number }>;
+      docker_inspect?: any;
+    }>(`/apps/${encodeURIComponent(appId)}`);
+    return { ...data, app: resolveAppUrl(data.app) };
   },
 
   async patchApp(appId: string, data: Partial<AppItem>): Promise<{ status: string; app: any }> {
