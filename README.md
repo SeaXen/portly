@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="#-testing"><img src="https://img.shields.io/badge/tests-170%20passed-5EEAD4?style=flat-square&logo=pytest&logoColor=white" alt="Tests"></a>
+  <a href="#-testing"><img src="https://img.shields.io/badge/tests-155%20unit%20%2B%2021%20e2e-5EEAD4?style=flat-square&logo=pytest&logoColor=white" alt="Tests"></a>
   <a href="#-quickstart"><img src="https://img.shields.io/badge/port-5533-8C9EFF?style=flat-square" alt="Default Port"></a>
   <a href="#-architecture"><img src="https://img.shields.io/badge/backend-FastAPI%20%7C%20SQLite%20WAL-009688?style=flat-square" alt="Backend"></a>
   <a href="#-architecture"><img src="https://img.shields.io/badge/frontend-React%2019%20%7C%20Vite%20%7C%20CSS%20Tokens-61DAFB?style=flat-square" alt="Frontend"></a>
@@ -88,20 +88,20 @@ npm run dev
 Portly includes a dedicated CLI for terminal automation:
 
 ```bash
-# List all discovered ports in table or JSON format
-portly list [--format table|json]
+# List all discovered ports (add --json for raw JSON output)
+portly list [--docker] [--host-only] [--json]
 
 # Open web dashboard in default browser
-portly open [--port 5533]
+portly open <app_id>
 
 # Check port availability and diagnose conflicts
-portly check-port 8080 [--proto tcp|udp]
+portly check-port 8080 [--bind 0.0.0.0]
 
 # Suggest free ports for binding
 portly suggest [--count 5] [--start 3000]
 
 # View process or container logs
-portly logs <app_id> [--lines 100]
+portly logs <app_id> [--tail 100]
 ```
 
 ---
@@ -162,14 +162,14 @@ portly logs <app_id> [--lines 100]
 ## 🧪 Testing
 
 ```bash
-# Run unit & integration tests (149 passed)
+# Run unit & integration tests (155 passed)
 python -m pytest tests --ignore=tests/e2e -q
 
-# Run end-to-end Playwright tests (21 passed)
-python -m pytest tests/e2e -q
+# Run end-to-end Playwright tests (21 tests; needs the frontend dev server)
+python -m pytest -o addopts= tests/e2e -q
 ```
 
-**170 automated tests** verify:
+**155 unit + 21 e2e tests** verify:
 - Host discovery and stable ID formatting across Linux/macOS/Windows.
 - Docker deduplication & multi-homed port conflict detection.
 - Multi-user RBAC, timing-safe authentication, and rate limiting.

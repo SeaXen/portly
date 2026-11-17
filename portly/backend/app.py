@@ -219,7 +219,7 @@ async def lifespan(app: FastAPI):
         maint_task.cancel()
 
 
-app = FastAPI(title="Portly API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Portly API", version="0.1.0", lifespan=lifespan)
 
 cors_origins_env = os.environ.get("PORTLY_CORS_ORIGINS", "")
 if cors_origins_env:
@@ -327,10 +327,14 @@ async def security_and_csrf_middleware(request: Request, call_next):
 
 
 def get_client_ip(request: Request) -> str:
-    xf = request.headers.get("x-forwarded-for")
-    if xf:
-        return xf.split(",")[0].strip()
-    return request.client.host if request.client else "127.0.0.1"
+    peer = request.client.host if request.client else "127.0.0.1"
+    # Only trust X-Forwarded-For from a reverse proxy on this host; otherwise a
+    # remote client can spoof it to bypass the login rate limit.
+    if peer in ("127.0.0.1", "::1", "localhost"):
+        xf = request.headers.get("x-forwarded-for")
+        if xf:
+            return xf.split(",")[0].strip()
+    return peer
 
 
 def get_current_user(
@@ -1481,12 +1485,14 @@ async def prometheus_metrics_endpoint(
     # Check metrics scrape token
     configured_token = os.getenv("PORTLY_METRICS_TOKEN") or store.get_setting("metrics_token", "")
     if configured_token:
-        if token and hmac.compare_digest(token, configured_token):
-            authenticated = True
-        elif authorization and authorization.startswith("Bearer "):
+        # Prefer the Authorization header; ?token= is kept for scrapers that
+        # cannot set headers, but query strings can leak into request logs.
+        if authorization and authorization.startswith("Bearer "):
             bearer = authorization.split(" ", 1)[1]
             if hmac.compare_digest(bearer, configured_token):
                 authenticated = True
+        elif token and hmac.compare_digest(token, configured_token):
+            authenticated = True
 
     if not authenticated and current_user and current_user.get("role") != "setup":
         authenticated = True
@@ -1790,15 +1796,18 @@ async def import_data(backup: Dict[str, Any], user: Dict[str, Any] = Depends(req
     # Validate every section before writing so a malformed backup cannot leave
     # a half-imported database.
     required = {
-        "categories": ("id", "name", "color"),
-        "rules": ("id", "category_id", "field", "operator", "value"),
-        "custom_apps": ("id", "name", "port"),
-        "views": ("id", "name"),
+        "categories": {"id": str, "name": str, "color": str},
+        "rules": {"id": str, "category_id": str, "field": str, "operator": str, "value": str},
+        "custom_apps": {"id": str, "name": str, "port": int},
+        "views": {"id": str, "name": str},
     }
-    for section, keys in required.items():
+    for section, fields in required.items():
         entries = backup.get(section, [])
         if not isinstance(entries, list) or any(
-            not isinstance(e, dict) or any(k not in e for k in keys) for e in entries
+            not isinstance(e, dict) or any(
+                k not in e or not isinstance(e[k], t) for k, t in fields.items()
+            )
+            for e in entries
         ):
             raise HTTPException(status_code=400, detail={"code": "INVALID_BACKUP", "message": f"Invalid {section} section in backup."})
     for section in ("app_overrides", "settings"):
@@ -1960,6 +1969,7 @@ async def update_user_role_endpoint(user_id: str, data: UserRoleModel, user: Dic
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "User not found."})
 
     store.update_user_role(user_id, role)
+    auth.revoke_all_sessions(user_id)
     store.log_event("user.role_change", f"Changed role of user {target_user['username']} to {role}", actor=user["username"])
     return {"status": "updated", "id": user_id, "role": role}
 

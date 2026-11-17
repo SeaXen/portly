@@ -21,6 +21,8 @@ _auth_lock = threading.Lock()
 
 # Rate limiting for logins: key (e.g. IP or username) -> list of failed timestamp floats
 _failed_attempts: Dict[str, List[float]] = {}
+_next_rate_cleanup: float = 0.0
+_RATE_CLEANUP_INTERVAL = 60.0
 
 # Precomputed valid bcrypt hash for constant-time evaluation on non-existent users
 # (prevents timing side-channel user enumeration)
@@ -55,17 +57,21 @@ def verify_setup_token(provided_token: str) -> bool:
     return hmac.compare_digest(provided_token.strip(), expected.strip())
 
 
-def validate_password_strength(password: str) -> Tuple[bool, str]:
-    """Enforces minimum 10 characters password rule."""
-    if not password or len(password) < 10:
-        return False, "Password must be at least 10 characters long."
-    return True, ""
-
-
 def check_rate_limit(key: str, max_attempts: int = 5, window_sec: float = 60.0) -> bool:
     """Returns True if the key is allowed to attempt login, False if rate limited."""
+    global _next_rate_cleanup
     now = time.time()
     with _auth_lock:
+        # Sweep all stale keys periodically; pruning only the requested key lets
+        # an attacker grow this dict forever with unique IPs/usernames.
+        if now >= _next_rate_cleanup:
+            for k in list(_failed_attempts):
+                live = [t for t in _failed_attempts[k] if now - t < window_sec]
+                if live:
+                    _failed_attempts[k] = live
+                else:
+                    del _failed_attempts[k]
+            _next_rate_cleanup = now + _RATE_CLEANUP_INTERVAL
         attempts = _failed_attempts.get(key, [])
         # Prune old attempts outside window
         valid_attempts = [t for t in attempts if now - t < window_sec]
