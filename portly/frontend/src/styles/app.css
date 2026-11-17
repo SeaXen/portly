@@ -867,3 +867,53 @@ button.c088 {
   cursor: pointer;
   padding: 12px 14px;
 }
+
+/* ==========================================================================
+   Mobile & Responsive Enhancements (< 720px)
+   ========================================================================== */
+@media (max-width: 720px) {
+  .c042 {
+    flex-direction: column;
+  }
+
+  .c067 {
+    padding: 12px 14px !important;
+  }
+
+  /* Modal responsiveness */
+  .modal-content {
+    width: 96vw !important;
+    max-width: 96vw !important;
+    max-height: 94vh !important;
+    padding: 16px !important;
+  }
+
+  /* Two-column modal split shifts to single column on mobile */
+  .c147 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Minimum touch targets on mobile for actions */
+  .row-action-btn {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  /* TopBar & Toolbar flex adjustments */
+  .c073 {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+}
+
+@media (pointer: coarse) {
+  .row-action-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  .c078, .c080, .c077 {
+    min-height: 44px;
+    padding: 0 14px;
+  }
+}

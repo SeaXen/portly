@@ -13,6 +13,7 @@ interface TableViewProps {
   onQuickStart: (app: AppItem, e: React.MouseEvent) => void;
   onQuickStop: (app: AppItem, e: React.MouseEvent) => void;
   onQuickLogs: (app: AppItem, e: React.MouseEvent) => void;
+  onAdoptApp?: (app: AppItem) => void;
   safeMode: boolean;
   visibleFields?: Record<string, boolean>;
   groupBy?: string;
@@ -29,6 +30,7 @@ export const TableView: React.FC<TableViewProps> = ({
   onQuickStart,
   onQuickStop,
   onQuickLogs,
+  onAdoptApp,
   safeMode,
   visibleFields = {},
   groupBy = 'none',
@@ -226,6 +228,41 @@ export const TableView: React.FC<TableViewProps> = ({
                           ☁ Tunnel
                         </span>
                       )}
+                      {app.has_tls && (
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            padding: '1px 6px',
+                            borderRadius: '999px',
+                            background: app.tls_expired
+                              ? 'rgba(255, 92, 92, 0.18)'
+                              : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30)
+                              ? 'rgba(251, 191, 119, 0.18)'
+                              : 'rgba(94, 234, 212, 0.14)',
+                            color: app.tls_expired
+                              ? '#FF8A8A'
+                              : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30)
+                              ? '#FBBF77'
+                              : '#5EEAD4',
+                            border: `1px solid ${
+                              app.tls_expired
+                                ? 'rgba(255, 92, 92, 0.3)'
+                                : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30)
+                                ? 'rgba(251, 191, 119, 0.3)'
+                                : 'rgba(94, 234, 212, 0.25)'
+                            }`,
+                          }}
+                          title={
+                            app.tls_expired
+                              ? 'TLS Certificate Expired!'
+                              : app.tls_days_remaining !== undefined
+                              ? `TLS valid for ${app.tls_days_remaining} days`
+                              : 'TLS / SSL Enabled'
+                          }
+                        >
+                          {app.tls_expired ? '❌ Expired' : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30) ? `⚠️ ${app.tls_days_remaining}d` : '🔒 TLS'}
+                        </span>
+                      )}
                     </div>
 
                     {/* Category Badge */}
@@ -338,6 +375,24 @@ export const TableView: React.FC<TableViewProps> = ({
                           <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path>
                         </svg>
                       </button>
+
+                      {app.source === 'host' && onAdoptApp && (
+                        <button
+                          type="button"
+                          className="row-action-btn"
+                          aria-label={`Adopt ${app.name} as Custom App`}
+                          title="Adopt this host process as a Portly-managed Custom App"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAdoptApp(app);
+                          }}
+                          style={{ color: '#8C9EFF' }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                          </svg>
+                        </button>
+                      )}
 
                       <button
                         type="button"

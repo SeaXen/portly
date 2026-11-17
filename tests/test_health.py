@@ -98,3 +98,16 @@ def test_check_app_health_invalid_port():
     res = health.check_app_health(app)
     assert res["status"] == "down"
     assert res["ok"] is False
+
+
+def test_check_http_endpoint_expected_status(dummy_http_server):
+    url = f"http://127.0.0.1:{dummy_http_server}/error"
+    # Normally 500 is failure
+    ok_normal, code, _ = health.check_http_endpoint(url)
+    assert ok_normal is False
+    assert code == 500
+
+    # If 500 is explicitly expected, reports ok
+    ok_expected, code, _ = health.check_http_endpoint(url, expected_status="200,500")
+    assert ok_expected is True
+    assert code == 500

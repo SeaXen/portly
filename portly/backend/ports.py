@@ -96,15 +96,31 @@ def can_bind_port(port: int, bind_ip: str = "0.0.0.0", proto: str = "tcp") -> Tu
             pass
 
 
-def check_port_availability(port: int, bind_ip: str = "0.0.0.0", proto: str = "tcp") -> Dict[str, Any]:
+def check_port_availability(port: int, bind_ip: str = "0.0.0.0", proto: str = "tcp", store: Optional[Any] = None) -> Dict[str, Any]:
     """
     Comprehensive availability check:
+    0. Active port reservation check
     1. Direct socket bind attempt (respecting proto, ipv4/v6, Windows exclusive rules)
     2. Host listening socket table check
     3. Docker container port mapping check (including stopped containers via HostConfig)
     """
     if port < 1 or port > 65535:
         return {"free": False, "available": False, "used_by": "Invalid port number (must be 1-65535)"}
+
+    # 0. Active port reservation check
+    if store is not None and hasattr(store, "get_port_reservations"):
+        try:
+            for r in store.get_port_reservations():
+                if r["port"] == port and r.get("proto", "tcp").lower() == proto.lower():
+                    return {
+                        "free": False,
+                        "available": False,
+                        "used_by": f"Reserved for '{r['name']}' ({r.get('service') or 'Intent Registry'})",
+                        "reserved": True,
+                        "reservation": r,
+                    }
+        except Exception:
+            pass
 
     # 1. Bind check
     try:
@@ -296,7 +312,10 @@ def check_preflight_collisions(
         port = req["host_port"]
         bind = req["bind"]
         proto = req["proto"]
-        avail = check_port_availability(port, bind, proto=proto)
+        try:
+            avail = check_port_availability(port, bind, proto=proto, store=store)
+        except TypeError:
+            avail = check_port_availability(port, bind, proto=proto)
         is_free = avail["free"]
         suggestion = None
         if not is_free:
@@ -312,6 +331,7 @@ def check_preflight_collisions(
             "available": is_free,
             "conflict_reason": avail.get("used_by", ""),
             "suggested_port": suggestion,
+            "reserved": avail.get("reserved", False),
         })
 
     collisions = [
@@ -320,10 +340,10 @@ def check_preflight_collisions(
             "proto": d["proto"],
             "bind": d["bind"],
             "conflict_with": d["conflict_reason"],
-            "conflict_type": "port_in_use",
+            "conflict_type": "reservation_conflict" if d.get("reserved") else "port_in_use",
             "service_name": d["conflict_reason"],
             "owner": d["conflict_reason"],
-            "source": "host",
+            "source": "reservation" if d.get("reserved") else "host",
         }
         for d in results
         if not d["available"]
@@ -350,7 +370,10 @@ def plan_port_change(app_id: str, new_port: int, bind: str, store: Store) -> Dic
     Creates a dry-run plan for changing an app's port.
     Returns details of actions that will be performed matching the exact non-destructive recreate procedure.
     """
-    avail = check_port_availability(new_port, bind)
+    try:
+        avail = check_port_availability(new_port, bind, store=store)
+    except TypeError:
+        avail = check_port_availability(new_port, bind)
     if not avail["free"]:
         return {
             "valid": False,

@@ -100,10 +100,18 @@ def _is_safe_log_path(path: str, workdir: Optional[str] = None) -> bool:
         blocked_names = (
             ".bash_history", ".zsh_history", ".history", "shadow", "passwd",
             "id_rsa", "id_ed25519", "credentials", ".docker/config.json",
-            "sam", "system32/config"
+            "sam", "system32/config", "auth.log", "secure", "wtmp", "btmp",
+            "lastlog", "audit.log", "tallylog", "faillog", ".bashrc", ".profile", ".zshrc"
         )
+        base_name = os.path.basename(lower)
         for b in blocked_names:
-            if lower.endswith(b) or f"/{b}" in lower:
+            if (
+                lower.endswith(b)
+                or f"/{b}" in lower
+                or base_name == b
+                or base_name.startswith(f"{b}.")
+                or base_name.startswith(f"{b}-")
+            ):
                 return False
 
         # Block database and sensitive extensions

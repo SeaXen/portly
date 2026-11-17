@@ -7,9 +7,10 @@ interface GridViewProps {
   onOpenDetail: (app: AppItem) => void;
   categories: Category[];
   visibleFields?: Record<string, boolean>;
+  onAdoptApp?: (app: AppItem) => void;
 }
 
-export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categories, visibleFields = {} }) => {
+export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categories, visibleFields = {}, onAdoptApp }) => {
   return (
     <div className="c025" style={{ width: '100%', boxSizing: 'border-box' }}>
       {apps.map((app) => {
@@ -92,6 +93,41 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
                     <span>Tunnel</span>
                   </span>
                 )}
+                {app.has_tls && (
+                  <span
+                    style={{
+                      fontSize: '10.5px',
+                      padding: '1px 6px',
+                      borderRadius: '6px',
+                      background: app.tls_expired
+                        ? 'rgba(255, 92, 92, 0.18)'
+                        : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30)
+                        ? 'rgba(251, 191, 119, 0.18)'
+                        : 'rgba(94, 234, 212, 0.14)',
+                      color: app.tls_expired
+                        ? '#FF8A8A'
+                        : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30)
+                        ? '#FBBF77'
+                        : '#5EEAD4',
+                      border: `1px solid ${
+                        app.tls_expired
+                          ? 'rgba(255, 92, 92, 0.3)'
+                          : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30)
+                          ? 'rgba(251, 191, 119, 0.3)'
+                          : 'rgba(94, 234, 212, 0.25)'
+                      }`,
+                    }}
+                    title={
+                      app.tls_expired
+                        ? 'TLS Certificate Expired!'
+                        : app.tls_days_remaining !== undefined
+                        ? `TLS valid for ${app.tls_days_remaining} days`
+                        : 'TLS / SSL Enabled'
+                    }
+                  >
+                    {app.tls_expired ? '❌ Expired' : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30) ? `⚠️ ${app.tls_days_remaining}d` : '🔒 TLS'}
+                  </span>
+                )}
                 {visibleFields.bind !== false && <span className="c037">{app.bind}</span>}
               </div>
             </div>
@@ -103,19 +139,35 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
                   CPU {app.cpu_percent || 0}% &nbsp;·&nbsp; RAM {app.ram_mb || 0} MB
                 </span>
               ) : <span />}
-              {app.open_url ? (
-                <a
-                  href={app.open_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="c039"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Open ↗
-                </a>
-              ) : (
-                <span className="c039">Details</span>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {app.source === 'host' && onAdoptApp && (
+                  <button
+                    type="button"
+                    className="c078"
+                    style={{ fontSize: '11px', padding: '2px 8px', height: '24px', color: '#8C9EFF' }}
+                    title="Adopt as Custom App"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAdoptApp(app);
+                    }}
+                  >
+                    Adopt
+                  </button>
+                )}
+                {app.open_url ? (
+                  <a
+                    href={app.open_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="c039"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Open ↗
+                  </a>
+                ) : (
+                  <span className="c039">Details</span>
+                )}
+              </div>
             </div>
           </div>
         );

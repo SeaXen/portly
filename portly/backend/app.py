@@ -2,6 +2,7 @@
 
 import asyncio
 import csv
+import hmac
 import io
 import json
 import logging
@@ -393,6 +394,8 @@ class CustomAppModel(BaseModel):
     start_on_boot: bool = False
     env: Dict[str, str] = Field(default_factory=dict)
     update_cmd: Optional[str] = None
+    expected_status: Optional[str] = "200,204,301,302"
+    custom_headers: Dict[str, str] = Field(default_factory=dict)
 
 
 class PortChangeModel(BaseModel):
@@ -490,6 +493,24 @@ class WebhookTestModel(BaseModel):
     url: Optional[str] = None
     type: Optional[str] = None
     event: Optional[str] = "test"
+
+
+class PortReservationModel(BaseModel):
+    port: int = Field(..., ge=1, le=65535)
+    proto: str = Field(default="tcp")
+    name: str = Field(..., min_length=1)
+    service: Optional[str] = Field(default="")
+    description: Optional[str] = Field(default="")
+
+
+class ComposeStackModel(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_\-]+$")
+    compose_yaml: str = Field(..., min_length=1)
+    force: bool = False
+
+
+class StackActionModel(BaseModel):
+    action: str = Field(..., pattern=r"^(up|down|restart|stop)$")
 
 
 # ---------------- API ROUTES ----------------
@@ -701,6 +722,7 @@ async def exec_command_endpoint(
             detail={"code": "NOT_DOCKER", "message": "Command execution is only supported for Docker containers."}
         )
     container_name = app_id.split(":")[1]
+    exec_timeout = max(1, min(60, int(data.timeout or 10)))
     try:
         res = await asyncio.wait_for(
             asyncio.to_thread(
@@ -708,15 +730,15 @@ async def exec_command_endpoint(
                 container_name,
                 data.command,
                 store=store,
-                timeout=data.timeout
+                timeout=exec_timeout
             ),
-            timeout=float(data.timeout + 2.0)
+            timeout=float(exec_timeout)
         )
         return res
     except asyncio.TimeoutError:
         raise HTTPException(
             status_code=408,
-            detail={"code": "TIMEOUT", "message": f"Command timed out after {data.timeout} seconds."}
+            detail={"code": "TIMEOUT", "message": f"Command timed out after {exec_timeout} seconds."}
         )
     except PermissionError as pe:
         raise HTTPException(
@@ -949,7 +971,7 @@ async def restart_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(requi
 # 4. Port checking and Change Port flow
 @app.get("/api/ports/check")
 async def check_port_endpoint(port: int = Query(...), bind: str = "0.0.0.0", user: Dict[str, Any] = Depends(require_auth)):
-    res = check_port_availability(port, bind)
+    res = check_port_availability(port, bind, store=store)
     return res
 
 
@@ -967,6 +989,47 @@ async def preflight_port_collisions_endpoint(data: PreflightModel, user: Dict[st
         return res
     except Exception as e:
         raise HTTPException(status_code=400, detail={"code": "PREFLIGHT_ERROR", "message": str(e)})
+
+
+@app.get("/api/ports/reservations")
+async def list_port_reservations_endpoint(user: Dict[str, Any] = Depends(require_auth)):
+    reservations = store.get_port_reservations()
+    # Check for collisions with active listeners
+    active_ports = { (a.get("port"), a.get("proto", "tcp").lower()): a for a in _cached_apps if a.get("port", 0) > 0 }
+    for r in reservations:
+        key = (r["port"], r.get("proto", "tcp").lower())
+        if key in active_ports:
+            r["is_colliding"] = True
+            r["colliding_app"] = active_ports[key].get("name")
+        else:
+            r["is_colliding"] = False
+            r["colliding_app"] = None
+    return {"reservations": reservations}
+
+
+@app.post("/api/ports/reservations")
+async def create_port_reservation_endpoint(data: PortReservationModel, user: Dict[str, Any] = Depends(require_admin)):
+    res_data = {
+        "port": data.port,
+        "proto": data.proto.lower(),
+        "name": data.name,
+        "service": data.service or "",
+        "description": data.description or "",
+        "created_by": user.get("username", "admin"),
+    }
+    saved = store.create_port_reservation(res_data)
+    store.log_audit_event(user=user.get("username", "admin"), action="create_port_reservation", target=f"Port {data.port}/{data.proto} reserved for '{data.name}'")
+    return saved
+
+
+@app.delete("/api/ports/reservations/{res_id}")
+async def delete_port_reservation_endpoint(res_id: str, user: Dict[str, Any] = Depends(require_admin)):
+    existing = store.get_port_reservation(res_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Reservation not found"})
+    store.delete_port_reservation(res_id)
+    store.log_audit_event(user=user.get("username", "admin"), action="delete_port_reservation", target=f"Reservation {res_id} (Port {existing.get('port')}) deleted")
+    return {"status": "success", "message": f"Reservation '{existing.get('name')}' deleted"}
 
 
 @app.post("/api/apps/{app_id:path}/port")
@@ -1145,6 +1208,95 @@ async def execute_compose_action_endpoint(
         raise HTTPException(status_code=500, detail={"code": "STACK_ACTION_FAILED", "message": str(e)})
 
 
+# Compose Stacks Management
+@app.get("/api/stacks")
+async def list_compose_stacks_endpoint(user: Dict[str, Any] = Depends(require_auth)):
+    stacks = store.get_compose_stacks()
+    client = get_docker_client()
+    for s in stacks:
+        running_count = 0
+        ports_list = []
+        if client:
+            try:
+                conts = client.containers.list(all=True, filters={"label": f"com.docker.compose.project={s['name']}"})
+                for c in conts:
+                    if c.status == "running":
+                        running_count += 1
+                    for port_spec, maps in (c.attrs.get("NetworkSettings", {}).get("Ports") or {}).items():
+                        if maps:
+                            for m in maps:
+                                hp = m.get("HostPort")
+                                if hp and int(hp) not in ports_list:
+                                    ports_list.append(int(hp))
+            except Exception:
+                pass
+        s["containers_running"] = running_count
+        s["ports"] = sorted(ports_list)
+        s["status"] = "running" if running_count > 0 else "stopped"
+    return {"stacks": stacks}
+
+
+@app.get("/api/stacks/{name}")
+async def get_compose_stack_endpoint(name: str, user: Dict[str, Any] = Depends(require_auth)):
+    stack = store.get_compose_stack(name)
+    if not stack:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"Stack '{name}' not found"})
+    return stack
+
+
+@app.post("/api/stacks")
+async def save_compose_stack_endpoint(data: ComposeStackModel, user: Dict[str, Any] = Depends(require_admin)):
+    preflight = check_preflight_collisions(compose_content=data.compose_yaml, store=store)
+    if preflight.get("has_conflicts") and not data.force:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "code": "PORT_COLLISION",
+                "message": f"Stack has {len(preflight.get('collisions', []))} port collision(s)",
+                "preflight": preflight,
+            }
+        )
+    saved = store.save_compose_stack(data.name, data.compose_yaml)
+    store.log_audit_event(user=user.get("username", "admin"), action="save_compose_stack", target=f"Stack '{data.name}' saved")
+    return {"status": "saved", "stack": saved, "preflight": preflight}
+
+
+@app.delete("/api/stacks/{name}")
+async def delete_compose_stack_endpoint(name: str, user: Dict[str, Any] = Depends(require_admin)):
+    stack = store.get_compose_stack(name)
+    if not stack:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"Stack '{name}' not found"})
+    client = get_docker_client()
+    if client:
+        try:
+            conts = client.containers.list(filters={"label": f"com.docker.compose.project={name}"})
+            if conts:
+                raise HTTPException(status_code=400, detail={"code": "STACK_RUNNING", "message": f"Stack '{name}' is running. Stop it before deleting."})
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    store.delete_compose_stack(name)
+    store.log_audit_event(user=user.get("username", "admin"), action="delete_compose_stack", target=f"Stack '{name}' deleted")
+    return {"status": "deleted", "message": f"Stack '{name}' removed"}
+
+
+@app.post("/api/stacks/{name}/action")
+async def execute_stack_action_endpoint(name: str, data: StackActionModel, user: Dict[str, Any] = Depends(require_admin)):
+    action = data.action.lower().strip()
+    stack = store.get_compose_stack(name)
+    if not stack:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"Stack '{name}' not found"})
+    
+    if store.get_setting("safe_mode", "true").lower() == "true":
+        raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": "Safe mode is ON. Unlock safe mode to execute stack actions."})
+
+    res = await asyncio.to_thread(docker_actions.execute_stack_file_action, name, stack["compose_yaml"], action)
+    await refresh_discovery()
+    store.log_audit_event(user=user.get("username", "admin"), action="stack_action", target=f"Stack '{name}' action '{action}': {res.get('status')}")
+    return res
+
+
 @app.post("/api/docker/containers/deploy")
 async def deploy_container_endpoint(
     data: DeployContainerModel,
@@ -1206,7 +1358,9 @@ async def create_or_update_custom_app(data: CustomAppModel, user: Dict[str, Any]
         log_file=data.log_file,
         start_on_boot=data.start_on_boot,
         env=data.env,
-        update_cmd=data.update_cmd
+        update_cmd=data.update_cmd,
+        expected_status=data.expected_status,
+        custom_headers=data.custom_headers,
     )
     if data.start_on_boot and data.start_cmd:
         try:
@@ -1234,6 +1388,98 @@ async def delete_custom_app_endpoint(app_id: str, user: Dict[str, Any] = Depends
 async def get_stats_endpoint(user: Dict[str, Any] = Depends(require_auth)):
     docker_running = sum(1 for a in _cached_apps if a.get("source") == "docker" and a.get("status") == "up")
     return get_current_stats(containers_running=docker_running, listening_count=len(_cached_apps), conflict_count=len(_cached_conflicts))
+
+
+@app.get("/api/metrics")
+async def prometheus_metrics_endpoint(
+    request: Request,
+    token: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_current_user),
+):
+    """
+    Prometheus exposition metrics endpoint:
+    Accepts:
+    1. Logged in user session cookie or standard Bearer token
+    2. Explicit query param ?token=<metrics_token> or Bearer <metrics_token> matching settings or env
+    3. Loopback convenience in desktop mode with no users
+    """
+    authenticated = False
+    
+    # Check metrics scrape token
+    configured_token = os.getenv("PORTLY_METRICS_TOKEN") or store.get_setting("metrics_token", "")
+    if configured_token:
+        if token and hmac.compare_digest(token, configured_token):
+            authenticated = True
+        elif authorization and authorization.startswith("Bearer "):
+            bearer = authorization.split(" ", 1)[1]
+            if hmac.compare_digest(bearer, configured_token):
+                authenticated = True
+
+    if not authenticated and current_user and current_user.get("role") != "setup":
+        authenticated = True
+
+    if not authenticated:
+        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Valid metrics token or session required"})
+
+    docker_running = sum(1 for a in _cached_apps if a.get("source") == "docker" and a.get("status") == "up")
+    docker_stopped = sum(1 for a in _cached_apps if a.get("source") == "docker" and a.get("status") == "down")
+    tcp_listeners = sum(1 for a in _cached_apps if a.get("proto", "tcp").lower() == "tcp")
+    udp_listeners = sum(1 for a in _cached_apps if a.get("proto", "tcp").lower() == "udp")
+    conflicts_count = len(_cached_conflicts)
+    reservations_count = len(store.get_port_reservations())
+
+    stats = get_current_stats(containers_running=docker_running, listening_count=len(_cached_apps), conflict_count=conflicts_count)
+    cpu_percent = stats.get("cpu", {}).get("percent", 0.0)
+    ram_mb = stats.get("memory", {}).get("used_mb", 0.0)
+    ram_total_mb = stats.get("memory", {}).get("total_mb", 0.0)
+    disk_percent = stats.get("disk", {}).get("percent", 0.0)
+    net_rx_rate = stats.get("network", {}).get("rx_rate", 0.0)
+    net_tx_rate = stats.get("network", {}).get("tx_rate", 0.0)
+
+    lines = [
+        "# HELP portly_active_listeners_total Number of listening ports detected by protocol",
+        "# TYPE portly_active_listeners_total gauge",
+        f'portly_active_listeners_total{{proto="tcp"}} {tcp_listeners}',
+        f'portly_active_listeners_total{{proto="udp"}} {udp_listeners}',
+        "",
+        "# HELP portly_containers_total Total Docker containers discovered by status",
+        "# TYPE portly_containers_total gauge",
+        f'portly_containers_total{{status="up"}} {docker_running}',
+        f'portly_containers_total{{status="down"}} {docker_stopped}',
+        "",
+        "# HELP portly_port_conflicts_total Total number of detected port collisions",
+        "# TYPE portly_port_conflicts_total gauge",
+        f'portly_port_conflicts_total {conflicts_count}',
+        "",
+        "# HELP portly_port_reservations_total Total number of active port reservations",
+        "# TYPE portly_port_reservations_total gauge",
+        f'portly_port_reservations_total {reservations_count}',
+        "",
+        "# HELP portly_host_cpu_percent Host CPU utilization percent",
+        "# TYPE portly_host_cpu_percent gauge",
+        f'portly_host_cpu_percent {cpu_percent}',
+        "",
+        "# HELP portly_host_memory_bytes Host memory utilization in bytes",
+        "# TYPE portly_host_memory_bytes gauge",
+        f'portly_host_memory_bytes{{type="used"}} {int(ram_mb * 1024 * 1024)}',
+        f'portly_host_memory_bytes{{type="total"}} {int(ram_total_mb * 1024 * 1024)}',
+        "",
+        "# HELP portly_host_disk_percent Host primary disk utilization percent",
+        "# TYPE portly_host_disk_percent gauge",
+        f'portly_host_disk_percent {disk_percent}',
+        "",
+        "# HELP portly_host_network_bytes_per_sec Host network rate in bytes per second",
+        "# TYPE portly_host_network_bytes_per_sec gauge",
+        f'portly_host_network_bytes_per_sec{{direction="rx"}} {net_rx_rate}',
+        f'portly_host_network_bytes_per_sec{{direction="tx"}} {net_tx_rate}',
+        "",
+        "# HELP portly_up Process uptime status",
+        "# TYPE portly_up gauge",
+        "portly_up 1",
+    ]
+    content = "\n".join(lines) + "\n"
+    return Response(content=content, media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 @app.get("/api/system")

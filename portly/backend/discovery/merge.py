@@ -57,6 +57,8 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
             "start_on_boot": ca.get("start_on_boot", False),
             "env": ca.get("env", {}),
             "update_cmd": ca.get("update_cmd"),
+            "expected_status": ca.get("expected_status", "200,204,301,302"),
+            "custom_headers": ca.get("custom_headers", {}),
             "cpu_percent": 0.0,
             "ram_mb": 0.0,
             "uptime_sec": 0,
@@ -158,6 +160,7 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
 
         # Local only badge if bound strictly to 127.0.0.1
         local_only = (bind == "127.0.0.1")
+        has_tls = bool(item.get("has_tls") or port in (443, 8443))
 
         final_app = {
             **item,
@@ -175,6 +178,9 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
             "open_url": open_url,
             "has_custom_url": has_custom_url,
             "local_only": local_only,
+            "has_tls": has_tls,
+            "tls_days_remaining": item.get("tls_days_remaining"),
+            "tls_expired": item.get("tls_expired"),
         }
         final_apps.append(final_app)
 

@@ -48,20 +48,42 @@ def check_tcp_port(host: str, port: int, timeout: float = 1.5) -> Tuple[bool, fl
             pass
 
 
-def check_http_endpoint(url: str, timeout: float = 2.0) -> Tuple[bool, int, float]:
+def check_http_endpoint(
+    url: str,
+    timeout: float = 2.0,
+    expected_status: Optional[str] = None,
+    custom_headers: Optional[Dict[str, str]] = None,
+) -> Tuple[bool, int, float]:
     """Attempts an HTTP GET request to url and returns (success, status_code, latency_ms)."""
     t0 = time.perf_counter()
+    headers = {"User-Agent": "Portly-HealthCheck/1.0"}
+    if custom_headers and isinstance(custom_headers, dict):
+        headers.update(custom_headers)
+
+    # Parse expected status codes if provided (e.g. "200,204,301,302")
+    allowed_codes = set()
+    if expected_status:
+        for s in str(expected_status).split(","):
+            s_clean = s.strip()
+            if s_clean.isdigit():
+                allowed_codes.add(int(s_clean))
+
     req = urllib.request.Request(
         url,
-        headers={"User-Agent": "Portly-HealthCheck/1.0"}
+        headers=headers
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
             latency = (time.perf_counter() - t0) * 1000.0
-            # Strict success: only 2xx and 3xx codes are healthy
-            return (response.status < 400), response.status, round(latency, 1)
+            if allowed_codes:
+                is_ok = response.status in allowed_codes
+            else:
+                is_ok = (response.status < 400)
+            return is_ok, response.status, round(latency, 1)
     except urllib.error.HTTPError as e:
         latency = (time.perf_counter() - t0) * 1000.0
+        if allowed_codes and e.code in allowed_codes:
+            return True, e.code, round(latency, 1)
         return False, e.code, round(latency, 1)
     except Exception:
         return False, 0, 0.0
@@ -72,6 +94,8 @@ def check_app_health(app: Dict[str, Any]) -> Dict[str, Any]:
     host = app.get("host") or (app.get("bind") if app.get("bind") not in ("0.0.0.0", "::", None) else "127.0.0.1")
     port = app.get("port")
     health_path = app.get("health_path")
+    expected_status = app.get("expected_status")
+    custom_headers = app.get("custom_headers")
 
     if not port or port <= 0:
         return {"status": "down", "ok": False, "latency_ms": 0.0, "code": 0}
@@ -82,7 +106,11 @@ def check_app_health(app: Dict[str, Any]) -> Dict[str, Any]:
     # If health_path is configured and valid, HTTP check is decisive
     if health_path and health_path.startswith("/"):
         http_url = f"http://{host}:{port}{health_path}"
-        ok, code, lat = check_http_endpoint(http_url)
+        ok, code, lat = check_http_endpoint(
+            http_url,
+            expected_status=expected_status,
+            custom_headers=custom_headers
+        )
         if ok:
             return {"status": "up", "ok": True, "latency_ms": lat, "code": code}
 

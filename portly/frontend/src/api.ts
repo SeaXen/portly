@@ -4,11 +4,13 @@ import {
   CommandExecResponse,
   ComposeActionResult,
   ComposeInfo,
+  ComposeStack,
   ConflictItem,
   DeployContainerPayload,
   DockerImageItem,
   DockerSystemDf,
   DockerVolumeItem,
+  PortReservation,
   PreflightResponse,
   PruneResult,
   ProxyConfigResponse,
@@ -400,6 +402,66 @@ export const api = {
     return request('/docker/containers/deploy', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  },
+
+  // Port Reservations & Intent Registry
+  async getPortReservations(): Promise<{ reservations: PortReservation[] }> {
+    return request('/ports/reservations');
+  },
+
+  async createPortReservation(data: {
+    port: number;
+    proto?: string;
+    name: string;
+    service?: string;
+    description?: string;
+  }): Promise<PortReservation> {
+    return request('/ports/reservations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deletePortReservation(id: string): Promise<any> {
+    return request(`/ports/reservations/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // In-UI Docker Compose Stack Manager
+  async getComposeStacks(): Promise<{ stacks: ComposeStack[] }> {
+    return request('/stacks');
+  },
+
+  async getComposeStack(name: string): Promise<ComposeStack> {
+    return request(`/stacks/${encodeURIComponent(name)}`);
+  },
+
+  async saveComposeStack(data: {
+    name: string;
+    compose_yaml: string;
+    force?: boolean;
+  }): Promise<any> {
+    return request('/stacks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteComposeStack(name: string): Promise<any> {
+    return request(`/stacks/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async executeStackAction(
+    name: string,
+    action: 'up' | 'down' | 'restart' | 'stop'
+  ): Promise<any> {
+    return request(`/stacks/${encodeURIComponent(name)}/action`, {
+      method: 'POST',
+      body: JSON.stringify({ action }),
     });
   },
 };

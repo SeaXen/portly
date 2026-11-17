@@ -14,6 +14,7 @@ import { ListView } from './components/ListView';
 import { OverviewView } from './components/OverviewView';
 import { SavedViewTabs } from './components/SavedViewTabs';
 import { Sidebar } from './components/Sidebar';
+import { StacksView } from './components/StacksView';
 import { StatsStrip } from './components/StatsStrip';
 import { SystemDrawer } from './components/SystemDrawer';
 import { TableView } from './components/TableView';
@@ -40,6 +41,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const [safeMode, setSafeMode] = useState(true);
   const [unlockCountdown, setUnlockCountdown] = useState<number | null>(null);
   const [kioskMode, setKioskMode] = useState(false);
+  const [kioskAutoCycle, setKioskAutoCycle] = useState(false);
 
   // Data
   const [apps, setApps] = useState<AppItem[]>([]);
@@ -79,6 +81,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   // Modals & Drawers
   const [detailApp, setDetailApp] = useState<AppItem | null>(null);
   const [showAddApp, setShowAddApp] = useState(false);
+  const [adoptingApp, setAdoptingApp] = useState<AppItem | null>(null);
   const [showCustomize, setShowCustomize] = useState(false);
   const [showSystemDrawer, setShowSystemDrawer] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
@@ -111,6 +114,20 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     }, 1000);
     return () => clearInterval(timer);
   }, [safeMode, unlockCountdown]);
+
+  // Kiosk Auto-Cycle Timer (30s rotation between Overview, Ports, Conflicts)
+  useEffect(() => {
+    if (!kioskMode || !kioskAutoCycle) return;
+    const viewsToCycle = ['overview', 'ports', 'conflicts'];
+    const timer = setInterval(() => {
+      setActiveNav((current) => {
+        const idx = viewsToCycle.indexOf(current);
+        const nextIdx = (idx + 1) % viewsToCycle.length;
+        return viewsToCycle[nextIdx];
+      });
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [kioskMode, kioskAutoCycle]);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -505,6 +522,11 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     setDetailApp(app);
   };
 
+  const handleAdoptApp = (app: AppItem) => {
+    setAdoptingApp(app);
+    setShowAddApp(true);
+  };
+
   // Drag and Drop move category
   const handleMoveCategory = async (appId: string, newCatId: string) => {
     await api.patchApp(appId, { category_id: newCatId });
@@ -769,6 +791,8 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
             onOpenDetail={setDetailApp}
             onSelectNav={handleSelectNav}
           />
+        ) : activeNav === 'stacks' ? (
+          <StacksView safeMode={safeMode} />
         ) : activeNav === 'history' ? (
           <HistoryView />
         ) : activeNav === 'conflicts' ? (
@@ -833,6 +857,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                   onQuickStart={handleQuickStart}
                   onQuickStop={handleQuickStop}
                   onQuickLogs={handleQuickLogs}
+                  onAdoptApp={handleAdoptApp}
                   safeMode={safeMode}
                   visibleFields={visibleFields}
                   groupBy={groupBy}
@@ -845,6 +870,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                   onOpenDetail={setDetailApp}
                   categories={categories}
                   visibleFields={visibleFields}
+                  onAdoptApp={handleAdoptApp}
                 />
               )}
 
@@ -904,10 +930,14 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       {/* Add Custom App Modal */}
       {showAddApp && (
         <AddAppModal
-          onClose={() => setShowAddApp(false)}
+          onClose={() => {
+            setShowAddApp(false);
+            setAdoptingApp(null);
+          }}
           categories={categories}
           availableApps={apps}
           onAppAdded={fetchAppsAndStats}
+          initialAdoptApp={adoptingApp}
         />
       )}
 
@@ -1028,11 +1058,9 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
         </div>
       )}
 
-      {/* Floating Kiosk Exit Button */}
+      {/* Floating Kiosk Controls */}
       {kioskMode && (
-        <button
-          type="button"
-          onClick={() => setKioskMode(false)}
+        <div
           style={{
             position: 'fixed',
             bottom: '24px',
@@ -1040,28 +1068,64 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
             zIndex: 9999,
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            background: 'rgba(16, 18, 24, 0.92)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(140, 158, 255, 0.4)',
-            color: '#ECEEF3',
-            padding: '8px 16px',
-            borderRadius: '24px',
-            fontSize: '12px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            gap: '10px',
           }}
-          title="Exit Kiosk Mode (Shift + K)"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polyline points="4 14 10 14 10 20"></polyline>
-            <polyline points="20 10 14 10 14 4"></polyline>
-            <line x1="14" y1="10" x2="21" y2="3"></line>
-            <line x1="3" y1="21" x2="10" y2="14"></line>
-          </svg>
-          Exit Kiosk (Shift+K)
-        </button>
+          <button
+            type="button"
+            onClick={() => setKioskAutoCycle((prev) => !prev)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: kioskAutoCycle ? 'rgba(94, 234, 212, 0.2)' : 'rgba(16, 18, 24, 0.92)',
+              backdropFilter: 'blur(10px)',
+              border: `1px solid ${kioskAutoCycle ? '#5EEAD4' : 'rgba(255, 255, 255, 0.15)'}`,
+              color: kioskAutoCycle ? '#5EEAD4' : '#ECEEF3',
+              padding: '8px 14px',
+              borderRadius: '24px',
+              fontSize: '12px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            }}
+            title="Toggle 30s automatic view cycle (Overview → Ports → Conflicts)"
+          >
+            <span>🔄</span>
+            {kioskAutoCycle ? 'Auto-Cycle ON (30s)' : 'Auto-Cycle (30s)'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setKioskMode(false);
+              setKioskAutoCycle(false);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'rgba(16, 18, 24, 0.92)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(140, 158, 255, 0.4)',
+              color: '#ECEEF3',
+              padding: '8px 16px',
+              borderRadius: '24px',
+              fontSize: '12px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            }}
+            title="Exit Kiosk Mode (Shift + K)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="4 14 10 14 10 20"></polyline>
+              <polyline points="20 10 14 10 14 4"></polyline>
+              <line x1="14" y1="10" x2="21" y2="3"></line>
+              <line x1="3" y1="21" x2="10" y2="14"></line>
+            </svg>
+            Exit Kiosk (Shift+K)
+          </button>
+        </div>
       )}
     </div>
   );

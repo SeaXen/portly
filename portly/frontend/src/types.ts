@@ -37,6 +37,33 @@ export interface AppItem {
   log_file?: string;
   icon?: string;
   has_tls?: boolean;
+  tls_days_remaining?: number;
+  tls_expired?: boolean;
+  expected_status?: string;
+  custom_headers?: Record<string, string>;
+}
+
+export interface PortReservation {
+  id: string;
+  port: number;
+  proto: string;
+  name: string;
+  service?: string;
+  description?: string;
+  created_by: string;
+  created_at: number;
+  is_colliding?: boolean;
+  colliding_app?: string | null;
+}
+
+export interface ComposeStack {
+  name: string;
+  compose_yaml: string;
+  status: 'running' | 'stopped';
+  containers_running: number;
+  ports: number[];
+  created_at: number;
+  updated_at: number;
 }
 
 export interface Category {
@@ -255,6 +282,17 @@ export interface PreflightCollision {
   source?: string;
 }
 
+export interface PreflightDetail {
+  requested_port: number;
+  container_port: number;
+  bind: string;
+  proto: string;
+  available: boolean;
+  conflict_reason: string;
+  suggested_port?: number | null;
+  reserved?: boolean;
+}
+
 export interface PreflightResponse {
   valid: boolean;
   has_collision: boolean;
@@ -262,6 +300,7 @@ export interface PreflightResponse {
   collisions: PreflightCollision[];
   ports: Array<{ port: number; proto: string; bind: string }>;
   checked_ports: number[];
+  details?: PreflightDetail[];
   summary: string;
 }
 

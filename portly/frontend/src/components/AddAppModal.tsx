@@ -8,6 +8,7 @@ interface AddAppModalProps {
   categories: Category[];
   availableApps: AppItem[];
   onAppAdded: () => void;
+  initialAdoptApp?: AppItem | null;
 }
 
 export const AddAppModal: React.FC<AddAppModalProps> = ({
@@ -15,6 +16,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   categories,
   availableApps,
   onAppAdded,
+  initialAdoptApp,
 }) => {
   const { success, error, warning } = useToast();
   const [activeTab, setActiveTab] = useState<'custom' | 'docker' | 'process' | 'external' | 'deploy' | 'preflight'>('custom');
@@ -27,12 +29,27 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   const [tags, setTags] = useState('internal');
   const [healthPath, setHealthPath] = useState('/health');
   const [healthInterval, setHealthInterval] = useState(30);
+  const [expectedStatus, setExpectedStatus] = useState('200,204,301,302');
+  const [customHeaders, setCustomHeaders] = useState('');
   const [startCmd, setStartCmd] = useState('');
   const [stopCmd, setStopCmd] = useState('auto');
   const [workdir, setWorkdir] = useState('');
   const [logFile, setLogFile] = useState('');
   const [startOnBoot, setStartOnBoot] = useState(false);
   const [pin, setPin] = useState(true);
+
+  useEffect(() => {
+    if (initialAdoptApp) {
+      setActiveTab('custom');
+      setName(initialAdoptApp.name || initialAdoptApp.process_name || 'Adopted App');
+      setPort(initialAdoptApp.port || 3000);
+      setHost(initialAdoptApp.bind === '0.0.0.0' ? 'localhost' : initialAdoptApp.bind);
+      setStartCmd(initialAdoptApp.cmdline || '');
+      setWorkdir(initialAdoptApp.cwd || '');
+      setTags('adopted, host');
+      setHealthPath('/');
+    }
+  }, [initialAdoptApp]);
 
   // Preflight check tab state (D-10, F-5)
   const [preflightMode, setPreflightMode] = useState<'command' | 'compose' | 'ports'>('command');
@@ -204,6 +221,22 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
     }
     setSubmitting(true);
     try {
+      let parsedHeaders: Record<string, string> = {};
+      if (customHeaders.trim()) {
+        try {
+          parsedHeaders = JSON.parse(customHeaders);
+        } catch {
+          customHeaders.split('\n').forEach((line) => {
+            const idx = line.indexOf(':');
+            if (idx > 0) {
+              const k = line.substring(0, idx).trim();
+              const v = line.substring(idx + 1).trim();
+              if (k) parsedHeaders[k] = v;
+            }
+          });
+        }
+      }
+
       const customId = `custom_${Date.now()}`;
       await api.saveCustomApp({
         id: customId,
@@ -218,6 +251,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         log_file: logFile || undefined,
         start_on_boot: startOnBoot,
         env: {},
+        expected_status: expectedStatus.trim() || '200,204,301,302',
+        custom_headers: parsedHeaders,
       });
 
       // Override category and tags
@@ -687,6 +722,66 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
               </div>
             </div>
 
+            {/* Health Probing Settings */}
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginTop: '6px' }}>Health Checks & Probing</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '14px' }}>
+              <div>
+                <label htmlFor="custom-health-path" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Health check path</label>
+                <input
+                  id="custom-health-path"
+                  name="customHealthPath"
+                  type="text"
+                  placeholder="/health or /"
+                  value={healthPath}
+                  onChange={(e) => setHealthPath(e.target.value)}
+                  className="c220"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label htmlFor="custom-health-interval" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Interval (sec)</label>
+                <input
+                  id="custom-health-interval"
+                  name="customHealthInterval"
+                  type="number"
+                  min={5}
+                  max={3600}
+                  value={healthInterval}
+                  onChange={(e) => setHealthInterval(parseInt(e.target.value) || 30)}
+                  className="c220"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <div>
+                <label htmlFor="custom-expected-status" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Expected status codes (comma-separated)</label>
+                <input
+                  id="custom-expected-status"
+                  name="customExpectedStatus"
+                  type="text"
+                  placeholder="200,204,301,302"
+                  value={expectedStatus}
+                  onChange={(e) => setExpectedStatus(e.target.value)}
+                  className="c220"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div>
+                <label htmlFor="custom-headers" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Custom headers (JSON or KEY: VAL)</label>
+                <input
+                  id="custom-headers"
+                  name="customHeaders"
+                  type="text"
+                  placeholder='Authorization: Bearer token123'
+                  value={customHeaders}
+                  onChange={(e) => setCustomHeaders(e.target.value)}
+                  className="c220"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+
             {/* Run Controls */}
             <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginTop: '6px' }}>Run Controls</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
@@ -954,10 +1049,37 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
               ))}
             </div>
 
-            <div>
-              <label htmlFor="preflight-input" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
-                {preflightMode === 'command' ? 'Command Line Invocation' : preflightMode === 'compose' ? 'Compose YAML Definition' : 'Comma or Space-separated Ports'}
-              </label>
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const file = e.dataTransfer.files[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    const text = event.target?.result as string;
+                    if (text) {
+                      setPreflightMode('compose');
+                      setPreflightInput(text);
+                      success(`Loaded '${file.name}' into Preflight!`);
+                    }
+                  };
+                  reader.readAsText(file);
+                }
+              }}
+              style={{
+                border: '1px dashed rgba(255,255,255,0.15)',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                background: 'rgba(255,255,255,0.02)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label htmlFor="preflight-input" style={{ fontSize: '12px', color: '#8D95A5' }}>
+                  {preflightMode === 'command' ? 'Command Line Invocation' : preflightMode === 'compose' ? 'Compose YAML Definition (or drop .yml file here)' : 'Comma or Space-separated Ports'}
+                </label>
+                <span style={{ fontSize: '11px', color: '#64748B' }}>Drag & drop .yml file supported</span>
+              </div>
               <textarea
                 id="preflight-input"
                 rows={6}
@@ -1002,30 +1124,55 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
 
                 {preflightResult.has_collision ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {preflightResult.collisions.map((col, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '8px 12px',
-                          background: '#161B22',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                        }}
-                      >
-                        <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#FF8A8A', fontWeight: 600 }}>
-                          Port {col.port}/{col.proto || 'tcp'}
-                        </span>
-                        <span style={{ color: '#ECEEF3' }}>
-                          Bound by: <strong style={{ color: '#FBBF77' }}>{col.service_name || col.owner || 'Unknown Socket'}</strong>
-                        </span>
-                        <span style={{ color: '#8D95A5', fontSize: '11px' }}>
-                          Source: {col.source || 'host'}
-                        </span>
-                      </div>
-                    ))}
+                    {preflightResult.collisions.map((col, idx) => {
+                      const detail = preflightResult.details?.find((d) => d.requested_port === col.port);
+                      const suggested = detail?.suggested_port;
+
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '8px 12px',
+                            background: '#161B22',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            gap: '8px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#FF8A8A', fontWeight: 600 }}>
+                              Port {col.port}/{col.proto || 'tcp'}
+                            </span>
+                            <span style={{ color: '#ECEEF3' }}>
+                              Bound by: <strong style={{ color: '#FBBF77' }}>{col.service_name || col.owner || 'Unknown Socket'}</strong>
+                            </span>
+                            <span style={{ color: '#8D95A5', fontSize: '11px' }}>
+                              Source: {col.source || 'host'}
+                            </span>
+                          </div>
+
+                          {suggested && (
+                            <button
+                              type="button"
+                              className="c078"
+                              style={{ fontSize: '11px', padding: '2px 8px', color: '#5EEAD4', borderColor: 'rgba(94, 234, 212, 0.3)', whiteSpace: 'nowrap' }}
+                              title={`Replace port ${col.port} with free port ${suggested}`}
+                              onClick={() => {
+                                const oldP = String(col.port);
+                                const newP = String(suggested);
+                                setPreflightInput(preflightInput.split(oldP).join(newP));
+                                success(`Remapped port ${oldP} -> ${newP}! Click Preflight to re-verify.`);
+                              }}
+                            >
+                              Use Free :{suggested} →
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div style={{ fontSize: '12px', color: '#8D95A5' }}>

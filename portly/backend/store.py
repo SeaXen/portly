@@ -120,6 +120,8 @@ class Store:
                 start_on_boot INTEGER DEFAULT 0,
                 env_json TEXT DEFAULT '{}',
                 update_cmd TEXT,
+                expected_status TEXT DEFAULT '200,204,301,302',
+                custom_headers TEXT DEFAULT '{}',
                 created_at REAL NOT NULL
             );
             """)
@@ -199,6 +201,32 @@ class Store:
                 new_port INTEGER NOT NULL,
                 config_json TEXT NOT NULL,
                 created_at REAL NOT NULL
+            );
+            """)
+
+            # port reservations & intent registry
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS port_reservations (
+                id TEXT PRIMARY KEY,
+                port INTEGER NOT NULL,
+                proto TEXT NOT NULL DEFAULT 'tcp',
+                name TEXT NOT NULL,
+                service TEXT DEFAULT '',
+                description TEXT DEFAULT '',
+                created_by TEXT DEFAULT 'admin',
+                created_at REAL NOT NULL
+            );
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_reservations_port ON port_reservations(port, proto);")
+
+            # compose stacks
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS compose_stacks (
+                name TEXT PRIMARY KEY,
+                compose_yaml TEXT NOT NULL,
+                status TEXT DEFAULT 'stopped',
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
             );
             """)
 
@@ -289,6 +317,44 @@ class Store:
                     conn.execute("ALTER TABLE events ADD COLUMN actor TEXT DEFAULT 'system';")
 
                 conn.execute("PRAGMA user_version = 1;")
+                conn.commit()
+
+            if current_ver < 2:
+                # 1. port_reservations table
+                conn.execute("""
+                CREATE TABLE IF NOT EXISTS port_reservations (
+                    id TEXT PRIMARY KEY,
+                    port INTEGER NOT NULL,
+                    proto TEXT NOT NULL DEFAULT 'tcp',
+                    name TEXT NOT NULL,
+                    service TEXT DEFAULT '',
+                    description TEXT DEFAULT '',
+                    created_by TEXT DEFAULT 'admin',
+                    created_at REAL NOT NULL
+                );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_reservations_port ON port_reservations(port, proto);")
+
+                # 2. compose_stacks table
+                conn.execute("""
+                CREATE TABLE IF NOT EXISTS compose_stacks (
+                    name TEXT PRIMARY KEY,
+                    compose_yaml TEXT NOT NULL,
+                    status TEXT DEFAULT 'stopped',
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                );
+                """)
+
+                # 3. Add expected_status & custom_headers to custom_apps if missing
+                cur = conn.execute("PRAGMA table_info(custom_apps);")
+                ca_cols = [c["name"] for c in cur.fetchall()]
+                if "expected_status" not in ca_cols:
+                    conn.execute("ALTER TABLE custom_apps ADD COLUMN expected_status TEXT DEFAULT '200,204,301,302';")
+                if "custom_headers" not in ca_cols:
+                    conn.execute("ALTER TABLE custom_apps ADD COLUMN custom_headers TEXT DEFAULT '{}';")
+
+                conn.execute("PRAGMA user_version = 2;")
                 conn.commit()
 
     # App overrides
@@ -436,6 +502,8 @@ class Store:
             for r in cur.fetchall():
                 d = dict(r)
                 d["env"] = json.loads(d.get("env_json") or "{}")
+                d["custom_headers"] = json.loads(d.get("custom_headers") or "{}")
+                d["expected_status"] = d.get("expected_status") or "200,204,301,302"
                 d["start_on_boot"] = bool(d.get("start_on_boot"))
                 res.append(d)
             return res
@@ -448,6 +516,8 @@ class Store:
                 return None
             d = dict(r)
             d["env"] = json.loads(d.get("env_json") or "{}")
+            d["custom_headers"] = json.loads(d.get("custom_headers") or "{}")
+            d["expected_status"] = d.get("expected_status") or "200,204,301,302"
             d["start_on_boot"] = bool(d.get("start_on_boot"))
             return d
 
@@ -455,13 +525,15 @@ class Store:
         with self._get_connection() as conn:
             now = time.time()
             env_json = json.dumps(kwargs.get("env", {}))
+            headers_json = json.dumps(kwargs.get("custom_headers", {}))
+            expected_status = kwargs.get("expected_status", "200,204,301,302")
             conn.execute("""
                 INSERT INTO custom_apps (
                     id, name, host, port, health_path, health_interval,
                     start_cmd, stop_cmd, workdir, log_file, start_on_boot,
-                    env_json, update_cmd, created_at
+                    env_json, update_cmd, expected_status, custom_headers, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     host = excluded.host,
@@ -474,7 +546,9 @@ class Store:
                     log_file = excluded.log_file,
                     start_on_boot = excluded.start_on_boot,
                     env_json = excluded.env_json,
-                    update_cmd = excluded.update_cmd
+                    update_cmd = excluded.update_cmd,
+                    expected_status = excluded.expected_status,
+                    custom_headers = excluded.custom_headers
             """, (
                 app_id,
                 name,
@@ -489,6 +563,8 @@ class Store:
                 1 if kwargs.get("start_on_boot") else 0,
                 env_json,
                 kwargs.get("update_cmd"),
+                expected_status,
+                headers_json,
                 now
             ))
             conn.commit()
@@ -513,6 +589,8 @@ class Store:
             start_on_boot=bool(data.get("start_on_boot")),
             env=data.get("env") or {},
             update_cmd=data.get("update_cmd"),
+            expected_status=data.get("expected_status", "200,204,301,302"),
+            custom_headers=data.get("custom_headers") or {},
         )
 
     def delete_custom_app(self, app_id: str):
@@ -751,3 +829,70 @@ class Store:
         with self._get_connection() as conn:
             conn.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
             conn.commit()
+
+    # Port Reservations
+    def get_port_reservations(self) -> List[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            cur = conn.execute("SELECT * FROM port_reservations ORDER BY port ASC")
+            return [dict(r) for r in cur.fetchall()]
+
+    def get_port_reservation(self, res_id: str) -> Optional[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            cur = conn.execute("SELECT * FROM port_reservations WHERE id = ?", (res_id,))
+            r = cur.fetchone()
+            return dict(r) if r else None
+
+    def create_port_reservation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        res_id = data.get("id") or f"res_{int(time.time()*1000)}"
+        port = int(data.get("port", 0))
+        proto = data.get("proto", "tcp").lower()
+        name = data.get("name", f"Reserved {port}")
+        service = data.get("service", "")
+        description = data.get("description", "")
+        created_by = data.get("created_by", "admin")
+        now = time.time()
+        with self._get_connection() as conn:
+            conn.execute("""
+                INSERT OR REPLACE INTO port_reservations (id, port, proto, name, service, description, created_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (res_id, port, proto, name, service, description, created_by, now))
+            conn.commit()
+        return self.get_port_reservation(res_id) or {}
+
+    def delete_port_reservation(self, res_id: str) -> bool:
+        with self._get_connection() as conn:
+            cur = conn.execute("DELETE FROM port_reservations WHERE id = ?", (res_id,))
+            conn.commit()
+            return cur.rowcount > 0
+
+    # Compose Stacks
+    def get_compose_stacks(self) -> List[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            cur = conn.execute("SELECT * FROM compose_stacks ORDER BY name ASC")
+            return [dict(r) for r in cur.fetchall()]
+
+    def get_compose_stack(self, name: str) -> Optional[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            cur = conn.execute("SELECT * FROM compose_stacks WHERE name = ?", (name,))
+            r = cur.fetchone()
+            return dict(r) if r else None
+
+    def save_compose_stack(self, name: str, compose_yaml: str, status: str = "stopped") -> Dict[str, Any]:
+        now = time.time()
+        with self._get_connection() as conn:
+            conn.execute("""
+                INSERT INTO compose_stacks (name, compose_yaml, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    compose_yaml = excluded.compose_yaml,
+                    status = excluded.status,
+                    updated_at = excluded.updated_at
+            """, (name, compose_yaml, status, now, now))
+            conn.commit()
+        return self.get_compose_stack(name) or {}
+
+    def delete_compose_stack(self, name: str) -> bool:
+        with self._get_connection() as conn:
+            cur = conn.execute("DELETE FROM compose_stacks WHERE name = ?", (name,))
+            conn.commit()
+            return cur.rowcount > 0

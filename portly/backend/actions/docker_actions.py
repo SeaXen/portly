@@ -1073,3 +1073,54 @@ def deploy_container(
     except Exception as e:
         logger.error(f"Failed to deploy container {clean_name}: {e}")
         raise RuntimeError(f"Failed to deploy container {clean_name}: {e}")
+
+
+def execute_stack_file_action(project_name: str, compose_yaml: str, action: str, data_dir: str = "data") -> Dict[str, Any]:
+    """Writes stack YAML to disk and invokes docker compose CLI with output capture."""
+    import subprocess
+    import shutil
+
+    stacks_dir = os.path.join(data_dir, "stacks", project_name)
+    os.makedirs(stacks_dir, exist_ok=True)
+    compose_path = os.path.join(stacks_dir, "docker-compose.yml")
+    with open(compose_path, "w", encoding="utf-8") as f:
+        f.write(compose_yaml)
+
+    docker_bin = shutil.which("docker")
+    if not docker_bin:
+        return {"status": "error", "message": "Docker CLI binary not found in PATH for stack orchestration", "output": ""}
+
+    cmd = [docker_bin, "compose", "-f", compose_path, "-p", project_name]
+    act = action.lower().strip()
+    if act == "up":
+        cmd.extend(["up", "-d"])
+    elif act == "down":
+        cmd.append("down")
+    elif act == "stop":
+        cmd.append("stop")
+    elif act == "restart":
+        cmd.append("restart")
+    else:
+        return {"status": "error", "message": f"Unsupported action: {action}", "output": ""}
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+        output = (proc.stdout + "\n" + proc.stderr).strip()
+        if proc.returncode == 0:
+            return {
+                "status": "success",
+                "message": f"Stack '{project_name}' {action} completed successfully.",
+                "output": output,
+                "exit_code": 0
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"docker compose returned code {proc.returncode}",
+                "output": output,
+                "exit_code": proc.returncode
+            }
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "message": "docker compose operation timed out (90s limit)", "output": ""}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "output": ""}

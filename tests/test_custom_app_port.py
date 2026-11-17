@@ -70,3 +70,38 @@ def test_custom_app_port_preserves_configuration(tmp_path):
     # Cleanup
     client.delete(f"/api/custom-apps/{app_id}")
     store.set_setting("safe_mode", "true")
+
+
+def test_custom_app_health_headers_and_status(tmp_path):
+    store.set_setting("safe_mode", "false")
+
+    app_id = "test_custom_health_adv"
+    create_payload = {
+        "id": app_id,
+        "name": "Custom Probed App",
+        "host": "localhost",
+        "port": 5055,
+        "health_path": "/healthz",
+        "health_interval": 15,
+        "expected_status": "200,204,301,302",
+        "custom_headers": {"Authorization": "Bearer test_probe", "X-Custom": "True"},
+    }
+
+    create_res = client.post("/api/custom-apps", json=create_payload)
+    assert create_res.status_code == 200
+
+    saved = store.get_custom_app(app_id)
+    assert saved is not None
+    assert saved["expected_status"] == "200,204,301,302"
+    assert saved["custom_headers"].get("Authorization") == "Bearer test_probe"
+    assert saved["custom_headers"].get("X-Custom") == "True"
+
+    # Verify custom app appears in summary discovery merge with health metadata
+    apps_res = client.get("/api/apps")
+    assert apps_res.status_code == 200
+    custom_in_list = next((a for a in apps_res.json()["apps"] if a["id"] == f"custom:{app_id}"), None)
+    assert custom_in_list is not None
+    assert custom_in_list["expected_status"] == "200,204,301,302"
+
+    client.delete(f"/api/custom-apps/{app_id}")
+    store.set_setting("safe_mode", "true")

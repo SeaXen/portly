@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import { parseAnsiToReact } from '../utils/ansi';
 import {
   AppItem,
   Category,
@@ -41,9 +42,12 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   const [activeTab, setActiveTab] = useState<DetailTab>('logs');
   const [logs, setLogs] = useState<string[]>([]);
   const [logFilter, setLogFilter] = useState('');
+  const [isRegexFilter, setIsRegexFilter] = useState(false);
+  const [regexError, setRegexError] = useState<string | null>(null);
   const [logLevel, setLogLevel] = useState<'all' | 'info' | 'warn' | 'error'>('all');
   const [wrapLogs, setWrapLogs] = useState(false);
   const [autoFollow, setAutoFollow] = useState(true);
+  const [scrollPaused, setScrollPaused] = useState(false);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   // Port change state
@@ -156,6 +160,31 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
     }
   }, [logs, autoFollow]);
+
+  const handleLogScroll = () => {
+    if (!logContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = logContainerRef.current;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight <= 45;
+    if (!isNearBottom && autoFollow) {
+      setAutoFollow(false);
+      setScrollPaused(true);
+    } else if (isNearBottom && scrollPaused) {
+      setScrollPaused(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isRegexFilter && logFilter) {
+      try {
+        new RegExp(logFilter, 'i');
+        setRegexError(null);
+      } catch (e: any) {
+        setRegexError(e.message || 'Invalid regular expression');
+      }
+    } else {
+      setRegexError(null);
+    }
+  }, [isRegexFilter, logFilter]);
 
   const loadLogs = async () => {
     try {
@@ -409,8 +438,19 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
 
   // Filter logs by search & level
   const filteredLogs = logs.filter((l) => {
-    if (logFilter && !l.toLowerCase().includes(logFilter.toLowerCase())) {
-      return false;
+    if (logFilter) {
+      if (isRegexFilter) {
+        try {
+          const re = new RegExp(logFilter, 'i');
+          if (!re.test(l)) return false;
+        } catch {
+          return false;
+        }
+      } else {
+        if (!l.toLowerCase().includes(logFilter.toLowerCase())) {
+          return false;
+        }
+      }
     }
     if (logLevel === 'all') return true;
     const lower = l.toLowerCase();
@@ -712,24 +752,45 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
             {activeTab === 'logs' && (
               <div>
                 {/* Log Toolbar */}
-                <div className="c073" style={{ marginBottom: '12px' }}>
-                  <label className="c197" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#151821', padding: '0 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <circle cx="11" cy="11" r="7"></circle>
-                      <path d="m20 20-3.5-3.5"></path>
-                    </svg>
-                    <input
-                      type="text"
-                      name="logFilter"
-                      aria-label="Filter logs"
-                      autoComplete="off"
-                      placeholder="Filter logs…"
-                      value={logFilter}
-                      onChange={(e) => setLogFilter(e.target.value)}
-                      className="c198"
-                      style={{ background: 'transparent', border: 0, outline: 0, color: '#ECEEF3', fontSize: '13px', width: '160px', height: '32px' }}
-                    />
-                  </label>
+                <div className="c073" style={{ marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <label className="c197" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#151821', padding: '0 10px', borderRadius: '8px', border: `1px solid ${regexError ? '#FF8A8A' : 'rgba(255,255,255,0.08)'}` }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <path d="m20 20-3.5-3.5"></path>
+                      </svg>
+                      <input
+                        type="text"
+                        name="logFilter"
+                        aria-label="Filter logs"
+                        autoComplete="off"
+                        placeholder={isRegexFilter ? "Regex pattern…" : "Filter logs…"}
+                        value={logFilter}
+                        onChange={(e) => setLogFilter(e.target.value)}
+                        className="c198"
+                        style={{ background: 'transparent', border: 0, outline: 0, color: '#ECEEF3', fontSize: '13px', width: '150px', height: '32px' }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      title={isRegexFilter ? "Regular Expression ON (click to disable)" : "Toggle Regular Expression"}
+                      onClick={() => setIsRegexFilter(!isRegexFilter)}
+                      style={{
+                        background: isRegexFilter ? 'rgba(140, 158, 255, 0.25)' : '#151821',
+                        color: isRegexFilter ? '#8C9EFF' : '#8D95A5',
+                        border: `1px solid ${isRegexFilter ? '#8C9EFF' : 'rgba(255,255,255,0.08)'}`,
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontFamily: 'monospace',
+                        fontWeight: 700,
+                        padding: '0 8px',
+                        height: '32px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      .*
+                    </button>
+                  </div>
 
                   <div className="c093">
                     {(['all', 'info', 'warn', 'error'] as const).map((lvl) => (
@@ -753,7 +814,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                       type="checkbox"
                       role="switch"
                       checked={autoFollow}
-                      onChange={(e) => setAutoFollow(e.target.checked)}
+                      onChange={(e) => {
+                        setAutoFollow(e.target.checked);
+                        if (e.target.checked) setScrollPaused(false);
+                      }}
                       className="c173"
                     />
                   </label>
@@ -765,6 +829,15 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     style={{ background: wrapLogs ? '#1C2030' : '#151821' }}
                   >
                     Wrap
+                  </button>
+
+                  <button
+                    type="button"
+                    className="c078"
+                    title="Copy full logs buffer to clipboard"
+                    onClick={() => copyToClipboard(logs.join('\n'), 'all logs')}
+                  >
+                    Copy All
                   </button>
 
                   <button
@@ -800,40 +873,85 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                   </button>
                 </div>
 
-                {/* Log Terminal Window */}
-                <div
-                  ref={logContainerRef}
-                  className="c200"
-                  style={{
-                    background: '#080A0E',
-                    border: '1px solid rgba(255,255,255,0.07)',
-                    borderRadius: '12px',
-                    padding: '16px',
-                    fontFamily: 'JetBrains Mono, monospace',
-                    fontSize: '12px',
-                    lineHeight: 1.6,
-                    height: '420px',
-                    overflowY: 'auto',
-                    whiteSpace: wrapLogs ? 'pre-wrap' : 'pre',
-                  }}
-                >
-                  {filteredLogs.length === 0 ? (
-                    <div style={{ color: '#8D95A5', textAlign: 'center', paddingTop: '40px' }}>
-                      No logs matching current filter.
-                    </div>
-                  ) : (
-                    filteredLogs.map((line, idx) => {
-                      const lower = line.toLowerCase();
-                      const isErr = lower.includes('error') || lower.includes('fail');
-                      const isWarn = lower.includes('warn');
-                      const color = isErr ? '#FF8A8A' : (isWarn ? '#FBBF77' : '#ECEEF3');
+                {regexError && (
+                  <div style={{ color: '#FF8A8A', fontSize: '11px', marginBottom: '8px', paddingLeft: '4px' }}>
+                    ⚠ Regex error: {regexError}
+                  </div>
+                )}
 
-                      return (
-                        <div key={idx} className="c201" style={{ color }}>
-                          {line}
-                        </div>
-                      );
-                    })
+                {/* Log Terminal Window */}
+                <div style={{ position: 'relative' }}>
+                  <div
+                    ref={logContainerRef}
+                    onScroll={handleLogScroll}
+                    className="c200"
+                    style={{
+                      background: '#080A0E',
+                      border: '1px solid rgba(255,255,255,0.07)',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: '12px',
+                      lineHeight: 1.6,
+                      height: '420px',
+                      overflowY: 'auto',
+                      whiteSpace: wrapLogs ? 'pre-wrap' : 'pre',
+                    }}
+                  >
+                    {filteredLogs.length === 0 ? (
+                      <div style={{ color: '#8D95A5', textAlign: 'center', paddingTop: '40px' }}>
+                        No logs matching current filter.
+                      </div>
+                    ) : (
+                      filteredLogs.map((line, idx) => {
+                        const hasAnsi = /(?:\x1b|\u001b)\[/.test(line);
+                        const lower = line.toLowerCase();
+                        const isErr = lower.includes('error') || lower.includes('fail');
+                        const isWarn = lower.includes('warn');
+                        const defaultColor = isErr ? '#FF8A8A' : (isWarn ? '#FBBF77' : '#ECEEF3');
+
+                        return (
+                          <div key={idx} className="c201" style={{ color: defaultColor }}>
+                            {hasAnsi ? parseAnsiToReact(line) : line}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {scrollPaused && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAutoFollow(true);
+                        setScrollPaused(false);
+                        if (logContainerRef.current) {
+                          logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+                        }
+                      }}
+                      style={{
+                        position: 'absolute',
+                        bottom: '16px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: '#1A1E2C',
+                        color: '#8C9EFF',
+                        border: '1px solid rgba(140, 158, 255, 0.4)',
+                        borderRadius: '20px',
+                        padding: '6px 16px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        zIndex: 10,
+                      }}
+                    >
+                      <span>Auto-scroll paused ⏸</span>
+                      <span style={{ textDecoration: 'underline', color: '#ECEEF3' }}>Resume</span>
+                    </button>
                   )}
                 </div>
               </div>

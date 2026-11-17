@@ -120,7 +120,7 @@ def test_container_exec_timeout_handling(monkeypatch):
     from portly.backend.actions import docker_actions
 
     def _stalled_exec(*args, **kwargs):
-        time.sleep(3.0)
+        time.sleep(2.0)
         return {"output": "done"}
 
     monkeypatch.setattr(docker_actions, "exec_in_container", _stalled_exec)
