@@ -4,9 +4,12 @@ import argparse
 import json
 import os
 import sys
+import webbrowser
 import uvicorn
 
+from portly.backend import auth
 from portly.backend.discovery.merge import merge_discovered_apps
+from portly.backend.ports import check_port_availability, suggest_free_ports
 from portly.backend.store import Store
 
 
@@ -34,6 +37,26 @@ def main():
     stop_parser = subparsers.add_parser("stop", help="Stop an app by name or ID")
     stop_parser.add_argument("app", help="App name or ID")
 
+    # open command
+    open_parser = subparsers.add_parser("open", help="Open an app URL in the default web browser")
+    open_parser.add_argument("app", help="App name or ID")
+
+    # check-port command
+    check_port_parser = subparsers.add_parser("check-port", help="Check if a specific port is available")
+    check_port_parser.add_argument("port", type=int, help="Port number to check")
+    check_port_parser.add_argument("--bind", default="0.0.0.0", help="Bind IP to check (default: 0.0.0.0)")
+
+    # suggest command
+    suggest_parser = subparsers.add_parser("suggest", help="Suggest free ports")
+    suggest_parser.add_argument("--start", type=int, default=3000, help="Starting port (default: 3000)")
+    suggest_parser.add_argument("--count", type=int, default=5, help="Number of ports to suggest (default: 5)")
+    suggest_parser.add_argument("--bind", default="0.0.0.0", help="Bind IP to check (default: 0.0.0.0)")
+
+    # logs command
+    logs_parser = subparsers.add_parser("logs", help="Fetch logs for a container or custom app")
+    logs_parser.add_argument("app", help="App name or ID")
+    logs_parser.add_argument("--tail", type=int, default=100, help="Number of lines to show (default: 100)")
+
     args = parser.parse_args()
 
     if not args.command or args.command == "run":
@@ -41,13 +64,22 @@ def main():
         port = getattr(args, "port", int(os.getenv("PORTLY_PORT", 5533)))
         mode = getattr(args, "mode", os.getenv("PORTLY_MODE", "desktop"))
 
-        # Security check: Refuse to start on non-loopback (0.0.0.0 or LAN) without auth setup if server mode requires it
         store = Store()
+
+        # Security check: Refuse to start on non-loopback (0.0.0.0 or LAN) without auth setup if server mode requires it
         if host in ("0.0.0.0", "::") and mode != "server" and store.get_user_count() == 0:
-            # Check environment bypass or enforce
             if os.getenv("PORTLY_ALLOW_INSECURE_BIND", "").lower() not in ("true", "1"):
                 print("SECURITY ERROR: Binding to 0.0.0.0 requires authentication. Run with --mode server and set up an admin account or bind to 127.0.0.1.", file=sys.stderr)
                 sys.exit(1)
+
+        # In server mode with no users, generate and display setup token
+        if mode == "server" and store.get_user_count() == 0:
+            setup_token = auth.get_setup_token()
+            print("=" * 80, file=sys.stderr)
+            print("⚓ PORTLY INITIAL ADMIN SETUP REQUIRED", file=sys.stderr)
+            print(f"Setup Token: {setup_token}", file=sys.stderr)
+            print(f"Complete setup at: http://{host}:{port}", file=sys.stderr)
+            print("=" * 80, file=sys.stderr)
 
         # Propagate configuration to environment for FastAPI lifespan and auth checks
         os.environ["PORTLY_HOST"] = str(host)
@@ -55,6 +87,7 @@ def main():
         os.environ["PORTLY_MODE"] = str(mode)
 
         print(f"Starting Portly dashboard on http://{host}:{port} (Mode: {mode})")
+        import uvicorn
         uvicorn.run("portly.backend.app:app", host=host, port=port, log_level="info")
 
     elif args.command == "list":
@@ -78,7 +111,6 @@ def main():
         store = Store()
         from portly.backend.actions import docker_actions, process_actions
         app_target = args.app
-        # Search app
         apps, _ = merge_discovered_apps(store)
         target = None
         for a in apps:
@@ -106,6 +138,79 @@ def main():
         except Exception as e:
             print(f"Failed: {e}", file=sys.stderr)
             sys.exit(1)
+
+    elif args.command == "open":
+        store = Store()
+        apps, _ = merge_discovered_apps(store)
+        app_target = args.app
+        target = None
+        for a in apps:
+            if a["id"] == app_target or a["name"].lower() == app_target.lower():
+                target = a
+                break
+
+        if not target:
+            print(f"Error: App '{app_target}' not found.", file=sys.stderr)
+            sys.exit(1)
+
+        url = target.get("url")
+        if not url:
+            port = target.get("port")
+            if port and port > 0:
+                bind = target.get("bind", "127.0.0.1")
+                host = "127.0.0.1" if bind in ("0.0.0.0", "::", "") else bind
+                url = f"http://{host}:{port}"
+
+        if not url:
+            print(f"Error: App '{app_target}' does not have an active URL or port.", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"Opening {target['name']} at {url}...")
+        webbrowser.open(url)
+
+    elif args.command == "check-port":
+        res = check_port_availability(args.port, args.bind)
+        is_free = res.get("free", res.get("available", False))
+        print(f"Port {args.port} ({args.bind}): {'AVAILABLE' if is_free else 'OCCUPIED'}")
+        if not is_free and res.get("used_by"):
+            print(f"  Reason: {res.get('used_by')}")
+
+    elif args.command == "suggest":
+        ports = suggest_free_ports(start_port=args.start, count=args.count, bind_ip=args.bind)
+        print(f"Suggested free ports starting from {args.start} ({args.bind}):")
+        for p in ports:
+            print(f"  - {p}")
+
+    elif args.command == "logs":
+        store = Store()
+        from portly.backend.actions import docker_actions, process_actions
+        app_target = args.app
+        apps, _ = merge_discovered_apps(store)
+        target = None
+        for a in apps:
+            if a["id"] == app_target or a["name"].lower() == app_target.lower():
+                target = a
+                break
+
+        if not target:
+            # Maybe direct container name or custom id
+            if app_target.startswith("docker:"):
+                target = {"source": "docker", "container_name": app_target.split(":", 1)[1]}
+            elif app_target.startswith("custom:"):
+                target = {"source": "custom", "id": app_target}
+            else:
+                target = {"source": "docker", "container_name": app_target}
+
+        if target.get("source") == "docker":
+            lines = docker_actions.get_container_logs(target.get("container_name", ""), tail=args.tail)
+        elif target.get("source") == "custom":
+            lines = process_actions.get_custom_app_logs(target.get("id", ""), store, tail=args.tail)
+        else:
+            print(f"Direct log capture not supported for host process '{app_target}'.", file=sys.stderr)
+            sys.exit(1)
+
+        for line in lines:
+            print(line)
 
 
 if __name__ == "__main__":

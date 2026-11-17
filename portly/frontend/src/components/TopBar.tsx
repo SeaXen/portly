@@ -13,6 +13,9 @@ interface TopBarProps {
   lastScanTime: number;
   kioskMode?: boolean;
   onToggleKiosk?: () => void;
+  user?: any;
+  onOpenUserManagement?: () => void;
+  onLogout?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -27,6 +30,9 @@ export const TopBar: React.FC<TopBarProps> = ({
   lastScanTime,
   kioskMode,
   onToggleKiosk,
+  user,
+  onOpenUserManagement,
+  onLogout,
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -283,6 +289,81 @@ export const TopBar: React.FC<TopBarProps> = ({
           </svg>
           {scanning ? 'Scanning…' : 'Scan Now'}
         </button>
+
+        {/* Users & Audit Button for Admins */}
+        {user?.role === 'admin' && onOpenUserManagement && (
+          <button
+            type="button"
+            onClick={onOpenUserManagement}
+            title="User Management & Audit Logs"
+            style={{
+              height: '36px',
+              padding: '0 12px',
+              borderRadius: '9px',
+              background: 'rgba(140, 158, 255, 0.1)',
+              border: '1px solid rgba(140, 158, 255, 0.3)',
+              color: '#8C9EFF',
+              fontSize: '13px',
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            Users &amp; Audit
+          </button>
+        )}
+
+        {/* User Info & Sign Out */}
+        {user && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '4px' }}>
+            <span
+              style={{
+                fontSize: '12px',
+                color: '#8D95A5',
+                background: 'rgba(255,255,255,0.05)',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              {user.username} <span style={{ color: user.role === 'admin' ? '#8C9EFF' : '#5EEAD4', marginLeft: 4 }}>({user.role})</span>
+            </span>
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                title="Sign Out"
+                aria-label="Sign Out"
+                style={{
+                  height: '36px',
+                  width: '36px',
+                  borderRadius: '9px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: '#8D95A5',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Add App Button (Primary Hero Action) */}
         <button

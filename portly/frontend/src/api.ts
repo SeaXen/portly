@@ -9,12 +9,14 @@ import {
   DockerImageItem,
   DockerSystemDf,
   DockerVolumeItem,
+  PreflightResponse,
   PruneResult,
   ProxyConfigResponse,
   Rule,
   StatsData,
   SystemStats,
   TlsCertInfo,
+  User,
   ViewItem,
 } from './types';
 
@@ -25,9 +27,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      'X-Portly-Client': '1',
       ...(options.headers || {}),
     },
   });
+
+  if (res.status === 401) {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('portly:unauthorized'));
+    }
+  }
 
   if (!res.ok) {
     let errDetail: any = {};
@@ -85,7 +94,7 @@ export const api = {
     action: string;
     category_id?: string;
     tag?: string;
-  }): Promise<{ status: string; count: number }> {
+  }): Promise<{ status: string; count: number; succeeded?: string[]; failed?: Array<{ id: string; error: string }> }> {
     return request('/apps/bulk', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -259,7 +268,7 @@ export const api = {
     });
   },
 
-  async setupAdmin(data: { username: string; password: string }): Promise<any> {
+  async setupAdmin(data: { username: string; password: string; setup_token?: string }): Promise<any> {
     return request('/auth/setup', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -268,6 +277,54 @@ export const api = {
 
   async logout(): Promise<any> {
     return request('/auth/logout', { method: 'POST' });
+  },
+
+  // User Management
+  async listUsers(): Promise<User[]> {
+    return request('/users');
+  },
+
+  async createUser(payload: { username: string; password: string; role?: string }): Promise<{ status: string; user: User }> {
+    return request('/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteUser(userId: string): Promise<{ status: string; id: string }> {
+    return request(`/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+  },
+
+  async updateUserRole(userId: string, role: string): Promise<{ status: string; id: string; role: string }> {
+    return request(`/users/${encodeURIComponent(userId)}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+  },
+
+  async updateUserPassword(userId: string, payload: { new_password: string; current_password?: string }): Promise<{ status: string }> {
+    return request(`/users/${encodeURIComponent(userId)}/password`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  // Audit Logs
+  async getAuditLogs(limit: number = 100): Promise<any[]> {
+    return request(`/audit-logs?limit=${limit}`);
+  },
+
+  // Preflight Port Collision Check
+  async checkPreflight(payload: { compose_content?: string; command?: string }): Promise<PreflightResponse> {
+    return request('/ports/preflight', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  // Reveal Environment Variables
+  async revealEnv(appId: string): Promise<{ env: Record<string, string> }> {
+    return request(`/apps/${encodeURIComponent(appId)}/inspect/reveal-env`);
   },
 
   // Reverse Proxy Generator

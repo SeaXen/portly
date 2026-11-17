@@ -1,7 +1,34 @@
-"""Categories and rules engine for Portly."""
+"""Categories and rules engine for Portly with ReDoS safeguards."""
 
 import re
 from typing import Any, Dict, List, Optional
+
+_regex_cache: Dict[str, Optional[re.Pattern]] = {}
+
+
+def _safe_regex_match(pattern: str, target: str) -> bool:
+    """Safely tests regex with length bounds and catastrophic backtracking prevention."""
+    if not pattern or len(pattern) > 100:
+        return False
+
+    # Block obvious nested quantifiers that cause ReDoS (e.g. (a+)+ or (x*)*)
+    if re.search(r'\([^)]*[\+\*]\)[\+\*]', pattern):
+        return False
+
+    if pattern not in _regex_cache:
+        try:
+            _regex_cache[pattern] = re.compile(pattern, re.IGNORECASE)
+        except Exception:
+            _regex_cache[pattern] = None
+
+    compiled = _regex_cache.get(pattern)
+    if compiled is None:
+        return False
+
+    try:
+        return bool(compiled.search(target))
+    except Exception:
+        return False
 
 
 def match_rule(app: Dict[str, Any], rule: Dict[str, Any]) -> bool:
@@ -24,7 +51,6 @@ def match_rule(app: Dict[str, Any], rule: Dict[str, Any]) -> bool:
         if port is None:
             return False
         if op == "range":
-            # e.g. "3000-3999"
             if "-" in rule_val:
                 try:
                     start_str, end_str = rule_val.split("-", 1)
@@ -58,10 +84,7 @@ def match_rule(app: Dict[str, Any], rule: Dict[str, Any]) -> bool:
     elif op == "startswith":
         return target_val.startswith(rule_val)
     elif op == "regex":
-        try:
-            return bool(re.search(rule_val, target_val, re.IGNORECASE))
-        except re.error:
-            return False
+        return _safe_regex_match(rule.get("value", ""), target_val)
 
     return False
 

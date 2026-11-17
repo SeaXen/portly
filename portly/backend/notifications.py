@@ -15,17 +15,23 @@ from portly.backend.store import Store
 
 logger = logging.getLogger("portly.notifications")
 
-_previous_ports: Dict[int, str] = {}
+# Key: (port, proto, app_id) -> name
+_previous_ports: Dict[Tuple[int, str, str], str] = {}
 _previous_container_states: Dict[str, str] = {}
-_previous_conflicts: Set[int] = set()
+_previous_conflicts: Set[Tuple[int, str]] = set()
 _initialized = False
+
+# Cooldown tracking: event_key -> last_sent_timestamp
+_cooldown_tracker: Dict[str, float] = {}
+_cooldown_lock = threading.Lock()
 
 
 def format_webhook_payload(
     webhook_type: str,
     event_type: str,
     message: str,
-    details: Optional[Dict[str, Any]] = None
+    details: Optional[Dict[str, Any]] = None,
+    url: str = ""
 ) -> Tuple[Dict[str, str], bytes]:
     """Formats event into target webhook payload and HTTP headers."""
     w_type = webhook_type.lower().strip()
@@ -65,18 +71,27 @@ def format_webhook_payload(
             ],
         }
     elif w_type == "telegram":
+        chat_id = ""
+        if url:
+            try:
+                parsed = urllib.parse.urlparse(url)
+                params = urllib.parse.parse_qs(parsed.query)
+                if "chat_id" in params:
+                    chat_id = params["chat_id"][0]
+            except Exception:
+                pass
         payload = {
             "text": f"⚓ *Portly: {event_type.replace('_', ' ').title()}*\n\n{message}",
             "parse_mode": "Markdown",
         }
+        if chat_id:
+            payload["chat_id"] = chat_id
     elif w_type == "ntfy":
         headers["Title"] = f"Portly: {event_type.replace('_', ' ').title()}"
         headers["Priority"] = "default"
         headers["Tags"] = "anchor,server"
-        payload = {
-            "title": f"Portly: {event_type.replace('_', ' ').title()}",
-            "message": message,
-        }
+        headers["Content-Type"] = "text/plain; charset=utf-8"
+        return headers, message.encode("utf-8")
     elif w_type == "gotify":
         payload = {
             "title": f"Portly: {event_type.replace('_', ' ').title()}",
@@ -101,26 +116,35 @@ def send_webhook_sync(
     event_type: str,
     message: str,
     details: Optional[Dict[str, Any]] = None,
-    timeout: float = 3.5
+    timeout: float = 3.5,
+    max_retries: int = 2
 ) -> Tuple[bool, str]:
-    """Synchronously delivers an alert payload to a webhook URL with strict timeout."""
+    """Delivers an alert payload to a webhook URL with timeout and retry backoff."""
     if not url or not (url.startswith("http://") or url.startswith("https://")):
         return False, "Invalid webhook URL: must begin with http:// or https://"
 
-    try:
-        headers, body = format_webhook_payload(webhook_type, event_type, message, details)
-        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            status = getattr(resp, "status", getattr(resp, "code", getattr(resp, "getcode", lambda: 200)()))
-            if status < 400:
-                return True, f"Delivered successfully (HTTP {status})"
-            return False, f"Server responded with status {status}"
-    except urllib.error.HTTPError as e:
-        return False, f"HTTP Error {e.code}: {e.reason}"
-    except urllib.error.URLError as e:
-        return False, f"Connection Error: {e.reason}"
-    except Exception as e:
-        return False, f"Webhook delivery error: {str(e)}"
+    headers, body = format_webhook_payload(webhook_type, event_type, message, details, url=url)
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+
+    last_err = ""
+    for attempt in range(max_retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                status = getattr(resp, "status", getattr(resp, "code", getattr(resp, "getcode", lambda: 200)()))
+                if status < 400:
+                    return True, f"Delivered successfully (HTTP {status})"
+                last_err = f"Server responded with status {status}"
+        except urllib.error.HTTPError as e:
+            last_err = f"HTTP Error {e.code}: {e.reason}"
+        except urllib.error.URLError as e:
+            last_err = f"Connection Error: {e.reason}"
+        except Exception as e:
+            last_err = f"Webhook delivery error: {str(e)}"
+
+        if attempt < max_retries:
+            time.sleep(0.5 * (attempt + 1))
+
+    return False, last_err
 
 
 def dispatch_webhook_async(
@@ -129,7 +153,7 @@ def dispatch_webhook_async(
     store: Store,
     details: Optional[Dict[str, Any]] = None
 ):
-    """Fires a webhook notification in a background daemon thread without blocking discovery."""
+    """Fires a webhook notification in a background daemon thread with cooldown gating."""
     enabled = store.get_setting("webhook_enabled", "false").lower() == "true"
     if not enabled:
         return
@@ -142,6 +166,15 @@ def dispatch_webhook_async(
     url = store.get_setting("webhook_url", "").strip()
     if not url:
         return
+
+    # Cooldown check: prevent flapping events within 10 seconds
+    cooldown_key = f"{event_type}:{details.get('port') if details else ''}:{details.get('container') if details else ''}"
+    now = time.time()
+    with _cooldown_lock:
+        last_time = _cooldown_tracker.get(cooldown_key, 0.0)
+        if now - last_time < 10.0:
+            return
+        _cooldown_tracker[cooldown_key] = now
 
     webhook_type = store.get_setting("webhook_type", "generic").strip()
 
@@ -159,9 +192,20 @@ def detect_changes(current_apps: List[Dict[str, Any]], current_conflicts: List[D
     global _previous_ports, _previous_container_states, _previous_conflicts, _initialized
 
     events_emitted = []
-    current_ports_map = {a["port"]: a["name"] for a in current_apps if a.get("port", 0) > 0}
+    # Key by (port, proto, app_id)
+    current_ports_map: Dict[Tuple[int, str, str], str] = {}
+    for a in current_apps:
+        port = a.get("port", 0)
+        if port > 0:
+            current_ports_map[(port, a.get("proto", "tcp").lower(), a.get("id", ""))] = a.get("name", "App")
+
     current_cont_map = {a["id"]: a.get("status", "up") for a in current_apps if a.get("source") == "docker"}
-    current_conflicts_map = {c["port"]: ", ".join(c.get("apps", [])) for c in current_conflicts if c.get("port")}
+
+    current_conflicts_map: Dict[Tuple[int, str], str] = {}
+    for c in current_conflicts:
+        port = c.get("port")
+        if port:
+            current_conflicts_map[(port, c.get("proto", "tcp").lower())] = ", ".join(c.get("apps", []))
 
     if not _initialized:
         _previous_ports = current_ports_map
@@ -171,20 +215,20 @@ def detect_changes(current_apps: List[Dict[str, Any]], current_conflicts: List[D
         return []
 
     # Check for newly opened ports
-    for port, name in current_ports_map.items():
-        if port not in _previous_ports:
-            msg = f"Port {port} opened by {name}"
-            evt = store.log_event("port_opened", msg)
+    for (port, proto, app_id), name in current_ports_map.items():
+        if (port, proto, app_id) not in _previous_ports:
+            msg = f"Port {port}/{proto} opened by {name}"
+            evt = store.log_event("port_opened", msg, app_id=app_id)
             events_emitted.append(evt)
-            dispatch_webhook_async("port_opened", msg, store, {"port": port, "name": name})
+            dispatch_webhook_async("port_opened", msg, store, {"port": port, "proto": proto, "name": name, "app_id": app_id})
 
     # Check for closed ports
-    for port, name in _previous_ports.items():
-        if port not in current_ports_map:
-            msg = f"Port {port} closed ({name})"
-            evt = store.log_event("port_closed", msg)
+    for (port, proto, app_id), name in _previous_ports.items():
+        if (port, proto, app_id) not in current_ports_map:
+            msg = f"Port {port}/{proto} closed ({name})"
+            evt = store.log_event("port_closed", msg, app_id=app_id)
             events_emitted.append(evt)
-            dispatch_webhook_async("port_closed", msg, store, {"port": port, "name": name})
+            dispatch_webhook_async("port_closed", msg, store, {"port": port, "proto": proto, "name": name, "app_id": app_id})
 
     # Check for container state changes
     for c_id, status in current_cont_map.items():
@@ -196,20 +240,20 @@ def detect_changes(current_apps: List[Dict[str, Any]], current_conflicts: List[D
             dispatch_webhook_async("container_state", msg, store, {"container": c_id, "from": old_status, "to": status})
 
     # Check for newly discovered conflicts
-    for port, apps in current_conflicts_map.items():
-        if port not in _previous_conflicts:
-            msg = f"Port conflict on port {port}: claimed by {apps}"
+    for (port, proto), apps in current_conflicts_map.items():
+        if (port, proto) not in _previous_conflicts:
+            msg = f"Port conflict on {port}/{proto}: claimed by {apps}"
             evt = store.log_event("port_conflict", msg)
             events_emitted.append(evt)
-            dispatch_webhook_async("port_conflict", msg, store, {"port": port, "apps": apps})
+            dispatch_webhook_async("port_conflict", msg, store, {"port": port, "proto": proto, "apps": apps})
 
     # Check for resolved conflicts
-    for port in _previous_conflicts:
-        if port not in current_conflicts_map:
-            msg = f"Port conflict on port {port} resolved"
+    for (port, proto) in _previous_conflicts:
+        if (port, proto) not in current_conflicts_map:
+            msg = f"Port conflict on {port}/{proto} resolved"
             evt = store.log_event("port_conflict_resolved", msg)
             events_emitted.append(evt)
-            dispatch_webhook_async("port_conflict_resolved", msg, store, {"port": port})
+            dispatch_webhook_async("port_conflict_resolved", msg, store, {"port": port, "proto": proto})
 
     _previous_ports = current_ports_map
     _previous_container_states = current_cont_map

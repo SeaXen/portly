@@ -237,3 +237,38 @@ export interface ComposeInfo {
   message?: string;
 }
 
+export interface User {
+  id: string;
+  username: string;
+  role: 'admin' | 'viewer';
+  created_at: number;
+}
+
+export interface PreflightCollision {
+  port: number;
+  proto: string;
+  bind?: string;
+  conflict_with?: string;
+  conflict_type?: string;
+  service_name?: string;
+  owner?: string;
+  source?: string;
+}
+
+export interface PreflightResponse {
+  valid: boolean;
+  has_collision: boolean;
+  has_conflicts: boolean;
+  collisions: PreflightCollision[];
+  ports: Array<{ port: number; proto: string; bind: string }>;
+  checked_ports: number[];
+  summary: string;
+}
+
+export interface ToastMessage {
+  id: string;
+  type: 'success' | 'error' | 'info' | 'warning';
+  message: string;
+  duration?: number;
+}
+

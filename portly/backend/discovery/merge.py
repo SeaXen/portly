@@ -21,18 +21,12 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
     app_overrides = store.get_all_app_overrides()
     rules = store.get_rules()
 
-    # Set of ports claimed by Docker containers
-    docker_ports: Set[int] = set()
-    for d_app in docker_apps:
-        docker_ports.add(d_app["port"])
-
-    # 1. Deduplicate host apps vs Docker (suppress raw host process if docker publishes that port)
+    # 1. Filter host apps: suppress docker-proxy wrapper processes so we don't double-count docker listeners,
+    # but KEEP host processes colliding with Docker ports so real port collisions are detected.
     filtered_host: List[Dict[str, Any]] = []
     for h in host_apps:
         p_name = h.get("process_name", "").lower()
-        port = h["port"]
-        # If docker-proxy owns it, or docker container maps this host port, suppress raw host process
-        if port in docker_ports or "docker-proxy" in p_name:
+        if "docker-proxy" in p_name:
             continue
         filtered_host.append(h)
 
@@ -53,7 +47,7 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
             "host": ca.get("host", "localhost"),
             "proto": "tcp",
             "bind": "127.0.0.1" if ca.get("host") in ("localhost", "127.0.0.1") else "0.0.0.0",
-            "status": "up",  # health checker updates this
+            "status": "up",  # live poller updates this
             "health_path": ca.get("health_path", "/health"),
             "health_interval": ca.get("health_interval", 30),
             "start_cmd": ca.get("start_cmd"),
@@ -69,40 +63,40 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
             "created_at": ca.get("created_at", time.time()),
         })
 
-    # Combine all
+    # Combine all raw discovered apps
     all_raw = docker_apps + filtered_host + custom_apps
 
     # 3. Conflict Detection:
-    # If two different apps claim the same host port, mark both conflict
-    port_to_apps: Dict[int, List[Dict[str, Any]]] = {}
+    # If two different apps claim the same host port on the same protocol with overlapping binds, mark conflict
+    port_proto_to_apps: Dict[Tuple[int, str], List[Dict[str, Any]]] = {}
     for app in all_raw:
-        port = app["port"]
+        port = app.get("port", 0)
         if port <= 0:
             continue
-        port_to_apps.setdefault(port, []).append(app)
+        proto = app.get("proto", "tcp").lower()
+        port_proto_to_apps.setdefault((port, proto), []).append(app)
 
     conflicts: List[Dict[str, Any]] = []
     conflicted_ids: Set[str] = set()
 
-    for port, app_list in port_to_apps.items():
+    for (port, proto), app_list in port_proto_to_apps.items():
         if len(app_list) > 1:
-            # Check if they are truly different (not duplicate IPv4/IPv6 of same container)
             unique_sources = set(a["id"] for a in app_list)
             if len(unique_sources) > 1:
-                # Check if bind addresses actually collide (wildcard 0.0.0.0 or duplicate specific IP)
                 binds = [a.get("bind", "0.0.0.0") for a in app_list]
                 has_wildcard = any(b in ("0.0.0.0", "::") for b in binds)
                 has_duplicate_bind = len(binds) != len(set(binds))
                 if has_wildcard or has_duplicate_bind:
                     conflicts.append({
                         "port": port,
+                        "proto": proto,
                         "apps": [a["name"] for a in app_list],
                         "ids": list(unique_sources)
                     })
                     for a in app_list:
                         conflicted_ids.add(a["id"])
 
-    # 4. Finalize Unified Apps List
+    # 4. Finalize Unified Apps List with Stored Overrides
     final_apps: List[Dict[str, Any]] = []
     seen_ids: Set[str] = set()
 
@@ -114,13 +108,23 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
 
         # Merge stored overrides
         override = app_overrides.get(app_id, {})
-        
+
         name = override.get("name") or item.get("label_name") or item.get("name") or "App"
         icon = override.get("icon") or item.get("label_icon") or ""
         tags = override.get("tags") or []
         notes = override.get("notes") or ""
-        pinned = bool(override.get("pinned", False))
-        hidden = bool(override.get("hidden", item.get("hidden_by_label", False)))
+
+        # Check explicit overrides vs label fallback
+        if override.get("pinned") is not None:
+            pinned = bool(override["pinned"])
+        else:
+            pinned = False
+
+        if override.get("hidden") is not None:
+            hidden = bool(override["hidden"])
+        else:
+            hidden = bool(item.get("hidden_by_label", False))
+
         sort_order = override.get("sort_order", 0)
         url_override = override.get("url_override") or item.get("label_url") or ""
 
@@ -141,11 +145,16 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
         # URL Construction
         port = item.get("port", 0)
         bind = item.get("bind", "127.0.0.1")
+        has_custom_url = bool(url_override)
         if url_override:
             open_url = url_override
         else:
-            host_for_url = public_host if public_host else ("localhost" if bind == "127.0.0.1" else "localhost")
-            open_url = f"http://{host_for_url}:{port}" if port > 0 else ""
+            if public_host:
+                open_url = f"http://{public_host}:{port}" if port > 0 else ""
+            elif bind == "127.0.0.1":
+                open_url = f"http://localhost:{port}" if port > 0 else ""
+            else:
+                open_url = f"http://{bind}:{port}" if port > 0 else ""
 
         # Local only badge if bound strictly to 127.0.0.1
         local_only = (bind == "127.0.0.1")
@@ -164,6 +173,7 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
             "sort_order": sort_order,
             "status": status,
             "open_url": open_url,
+            "has_custom_url": has_custom_url,
             "local_only": local_only,
         }
         final_apps.append(final_app)

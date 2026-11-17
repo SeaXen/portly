@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { api } from './api';
 import { AddAppModal } from './components/AddAppModal';
 import { AppDetailModal } from './components/AppDetailModal';
@@ -19,9 +19,18 @@ import { SystemDrawer } from './components/SystemDrawer';
 import { TableView } from './components/TableView';
 import { Toolbar } from './components/Toolbar';
 import { TopBar } from './components/TopBar';
+import { UserManagementDrawer } from './components/UserManagementDrawer';
+import { useToast } from './components/Toast';
 import { AppItem, Category, ConflictItem, Rule, StatsData, ViewItem } from './types';
 
-export const App: React.FC = () => {
+interface AppProps {
+  user?: any;
+  onLogout?: () => void;
+}
+
+export const App: React.FC<AppProps> = ({ user, onLogout }) => {
+  const { success, error, warning, info } = useToast();
+
   // Navigation & View
   const [activeNav, setActiveNav] = useState('ports');
   const [viewType, setViewType] = useState<'table' | 'grid' | 'list' | 'board'>('table');
@@ -29,6 +38,7 @@ export const App: React.FC = () => {
   const [theme, setTheme] = useState('dark');
   const [accent, setAccent] = useState('#8C9EFF');
   const [safeMode, setSafeMode] = useState(true);
+  const [unlockCountdown, setUnlockCountdown] = useState<number | null>(null);
   const [kioskMode, setKioskMode] = useState(false);
 
   // Data
@@ -71,6 +81,7 @@ export const App: React.FC = () => {
   const [showAddApp, setShowAddApp] = useState(false);
   const [showCustomize, setShowCustomize] = useState(false);
   const [showSystemDrawer, setShowSystemDrawer] = useState(false);
+  const [showUserManagement, setShowUserManagement] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showNewCatModal, setShowNewCatModal] = useState(false);
@@ -87,6 +98,20 @@ export const App: React.FC = () => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // Safe Mode Auto-Relock Countdown Timer
+  useEffect(() => {
+    if (safeMode || unlockCountdown === null) return;
+    if (unlockCountdown <= 0) {
+      handleToggleSafeMode(true);
+      info('Safe mode automatically re-locked.');
+      return;
+    }
+    const timer = setInterval(() => {
+      setUnlockCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [safeMode, unlockCountdown]);
+
   // Global Keyboard Shortcuts
   useEffect(() => {
     let gPressedAt = 0;
@@ -102,18 +127,20 @@ export const App: React.FC = () => {
         setShowAddApp(false);
         setShowCustomize(false);
         setShowSystemDrawer(false);
+        setShowUserManagement(false);
         setShowNewCatModal(false);
         setDetailApp(null);
         return;
       }
 
-      if (isInput) return;
-
+      // Ctrl+K / Cmd+K works from anywhere including inside inputs (D-6)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setShowCommandPalette((prev) => !prev);
         return;
       }
+
+      if (isInput) return;
 
       if (e.shiftKey && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -280,10 +307,33 @@ export const App: React.FC = () => {
     } catch {}
   };
 
-  // Safe Mode Toggle
-  const handleToggleSafeMode = async (newVal: boolean) => {
+  // Safe Mode Toggle with Auto-Relock & Rollback Error Handling (P1-17, D-8, F-10)
+  const handleToggleSafeMode = async (newVal: boolean, autoRelockSec?: number) => {
+    const prev = safeMode;
+    const prevCountdown = unlockCountdown;
     setSafeMode(newVal);
-    await api.updateSettings({ safe_mode: String(newVal) });
+    if (!newVal && autoRelockSec) {
+      setUnlockCountdown(autoRelockSec);
+    } else {
+      setUnlockCountdown(null);
+    }
+
+    try {
+      await api.updateSettings({ safe_mode: String(newVal) });
+      if (!newVal) {
+        warning(
+          autoRelockSec
+            ? `Safe mode disabled for ${Math.floor(autoRelockSec / 60)} minutes.`
+            : 'Safe mode disabled indefinitely. Live actions unlocked.'
+        );
+      } else {
+        success('Safe mode enabled. Real mutations are locked.');
+      }
+    } catch (err: any) {
+      setSafeMode(prev);
+      setUnlockCountdown(prevCountdown);
+      error(`Failed to update safe mode: ${err.message || 'Network error'}`);
+    }
   };
 
   // Theme Toggle
@@ -299,10 +349,32 @@ export const App: React.FC = () => {
     await fetchAppsAndStats();
   };
 
-  // Saved View Selection
+  // Saved View Selection (P1-15: loads saved filters, sort, grouping, view_type)
   const handleSelectView = (vId: string) => {
     setActiveViewId(vId);
     setSelectedCategory(null);
+
+    const custom = views.find((v) => v.id === vId);
+    if (custom) {
+      if (custom.filters) {
+        setSourceFilter(custom.filters.source || '');
+        setStatusFilter(custom.filters.status || '');
+        setCategoryFilter(custom.filters.category || '');
+      }
+      if (custom.sort) {
+        setSortBy(custom.sort.by || 'port');
+        setSortDir((custom.sort.dir as any) || 'asc');
+      }
+      if (custom.group_by) {
+        setGroupBy(custom.group_by);
+      }
+      if (custom.view_type) {
+        setViewType(custom.view_type as any);
+      }
+      return;
+    }
+
+    // Default views fallback
     if (vId === 'all') {
       setSourceFilter('');
       setStatusFilter('');
@@ -400,23 +472,31 @@ export const App: React.FC = () => {
   // Quick Row Actions
   const handleQuickStart = async (app: AppItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (safeMode) { alert('Safe mode is ON. Mutations are locked.'); return; }
+    if (safeMode) {
+      warning('Safe mode is ON. Mutations are locked. Disable safe mode to start apps.');
+      return;
+    }
     try {
       await api.startApp(app.id);
+      success(`Started ${app.name}`);
       await fetchAppsAndStats();
     } catch (err: any) {
-      alert(`Start failed: ${err.message}`);
+      error(`Start failed: ${err.message}`);
     }
   };
 
   const handleQuickStop = async (app: AppItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (safeMode) { alert('Safe mode is ON. Mutations are locked.'); return; }
+    if (safeMode) {
+      warning('Safe mode is ON. Mutations are locked. Disable safe mode to stop apps.');
+      return;
+    }
     try {
       await api.stopApp(app.id);
+      success(`Stopped ${app.name}`);
       await fetchAppsAndStats();
     } catch (err: any) {
-      alert(`Stop failed: ${err.message}`);
+      error(`Stop failed: ${err.message}`);
     }
   };
 
@@ -458,57 +538,73 @@ export const App: React.FC = () => {
     setActiveNav(nav);
   };
 
-  // Filter & Sort Pipeline
-  let displayedApps = apps.filter((a) => !a.hidden);
+  // Filter & Sort Pipeline (D-4, P1-20: Pinned apps stay on top in all views)
+  const displayedApps = useMemo(() => {
+    let list = apps.filter((a) => !a.hidden);
 
-  if (activeNav === 'docker') {
-    displayedApps = displayedApps.filter((a) => a.source === 'docker');
-  } else if (activeNav === 'conflicts') {
-    displayedApps = displayedApps.filter((a) => a.status === 'conflict');
-  }
+    if (activeNav === 'docker') {
+      list = list.filter((a) => a.source === 'docker');
+    } else if (activeNav === 'conflicts') {
+      list = list.filter((a) => a.status === 'conflict');
+    }
 
-  if (activeViewId === 'exposed') {
-    displayedApps = displayedApps.filter((a) => a.bind === '0.0.0.0');
-  }
+    if (activeViewId === 'exposed') {
+      list = list.filter((a) => a.bind === '0.0.0.0');
+    }
 
-  if (selectedCategory) {
-    displayedApps = displayedApps.filter((a) => a.category_id === selectedCategory);
-  }
+    if (selectedCategory) {
+      list = list.filter((a) => a.category_id === selectedCategory);
+    }
 
-  if (categoryFilter) {
-    displayedApps = displayedApps.filter((a) => a.category_id === categoryFilter);
-  }
+    if (categoryFilter) {
+      list = list.filter((a) => a.category_id === categoryFilter);
+    }
 
-  if (sourceFilter) {
-    displayedApps = displayedApps.filter((a) => a.source.toLowerCase() === sourceFilter.toLowerCase());
-  }
+    if (sourceFilter) {
+      list = list.filter((a) => a.source.toLowerCase() === sourceFilter.toLowerCase());
+    }
 
-  if (statusFilter) {
-    displayedApps = displayedApps.filter((a) => a.status.toLowerCase() === statusFilter.toLowerCase());
-  }
+    if (statusFilter) {
+      list = list.filter((a) => a.status.toLowerCase() === statusFilter.toLowerCase());
+    }
 
-  if (search) {
-    const s = search.toLowerCase();
-    displayedApps = displayedApps.filter(
-      (a) =>
-        a.name.toLowerCase().includes(s) ||
-        String(a.port).includes(s) ||
-        (a.process_name && a.process_name.toLowerCase().includes(s)) ||
-        (a.image && a.image.toLowerCase().includes(s)) ||
-        a.tags.some((t) => t.toLowerCase().includes(s))
-    );
-  }
+    if (search) {
+      const s = search.toLowerCase();
+      list = list.filter(
+        (a) =>
+          a.name.toLowerCase().includes(s) ||
+          String(a.port).includes(s) ||
+          (a.process_name && a.process_name.toLowerCase().includes(s)) ||
+          (a.image && a.image.toLowerCase().includes(s)) ||
+          a.tags.some((t) => t.toLowerCase().includes(s))
+      );
+    }
 
-  // Sorting
-  displayedApps.sort((a, b) => {
-    let diff = 0;
-    if (sortBy === 'port') diff = a.port - b.port;
-    else if (sortBy === 'name') diff = a.name.localeCompare(b.name);
-    else if (sortBy === 'cpu') diff = (a.cpu_percent || 0) - (b.cpu_percent || 0);
-    else if (sortBy === 'ram') diff = (a.ram_mb || 0) - (b.ram_mb || 0);
-    else if (sortBy === 'uptime') diff = (a.uptime_sec || 0) - (b.uptime_sec || 0);
-    return sortDir === 'asc' ? diff : -diff;
-  });
+    const compare = (a: AppItem, b: AppItem) => {
+      let diff = 0;
+      if (sortBy === 'port') diff = a.port - b.port;
+      else if (sortBy === 'name') diff = a.name.localeCompare(b.name);
+      else if (sortBy === 'cpu') diff = (a.cpu_percent || 0) - (b.cpu_percent || 0);
+      else if (sortBy === 'ram') diff = (a.ram_mb || 0) - (b.ram_mb || 0);
+      else if (sortBy === 'uptime') diff = (a.uptime_sec || 0) - (b.uptime_sec || 0);
+      return sortDir === 'asc' ? diff : -diff;
+    };
+
+    const pinned = list.filter((a) => a.pinned).sort(compare);
+    const unpinned = list.filter((a) => !a.pinned).sort(compare);
+    return [...pinned, ...unpinned];
+  }, [
+    apps,
+    activeNav,
+    activeViewId,
+    selectedCategory,
+    categoryFilter,
+    sourceFilter,
+    statusFilter,
+    search,
+    sortBy,
+    sortDir,
+  ]);
 
   return (
     <div className="c042" style={{ display: 'flex', width: '100%', minHeight: '100vh', background: 'var(--bg)' }}>
@@ -524,6 +620,7 @@ export const App: React.FC = () => {
           conflictCount={conflicts.length}
           safeMode={safeMode}
           onToggleSafeMode={handleToggleSafeMode}
+          unlockCountdown={unlockCountdown}
         />
       )}
 
@@ -546,7 +643,56 @@ export const App: React.FC = () => {
           lastScanTime={lastScanTime}
           kioskMode={kioskMode}
           onToggleKiosk={() => setKioskMode((prev) => !prev)}
+          user={user}
+          onOpenUserManagement={() => setShowUserManagement(true)}
+          onLogout={onLogout}
         />
+
+        {/* Safe Mode Warning Banner when safe mode is off (D-7, D-8, F-10) */}
+        {!safeMode && (
+          <div
+            style={{
+              padding: '10px 18px',
+              borderRadius: '12px',
+              background: 'rgba(255, 138, 138, 0.1)',
+              border: '1px solid rgba(255, 138, 138, 0.3)',
+              color: '#FF8A8A',
+              fontSize: '13px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '16px' }}>⚠️</span>
+              <div>
+                <strong>Safe Mode Unlocked:</strong> Real mutations on host processes &amp; containers are enabled.
+                {unlockCountdown != null && (
+                  <span style={{ marginLeft: 8, color: '#ECEEF3' }}>
+                    Auto-relocking in <strong>{Math.floor(unlockCountdown / 60)}m {unlockCountdown % 60}s</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="row-action-btn"
+              onClick={() => handleToggleSafeMode(true)}
+              style={{
+                height: '28px',
+                width: 'auto',
+                padding: '0 12px',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#FF8A8A',
+                borderColor: 'rgba(255, 138, 138, 0.4)',
+              }}
+            >
+              Lock Safe Mode Now
+            </button>
+          </div>
+        )}
 
         {/* Docker unavailable banner if applicable */}
         {!dockerAvailable && !dockerBannerDismissed && (
@@ -801,6 +947,13 @@ export const App: React.FC = () => {
       {showSystemDrawer && (
         <SystemDrawer onClose={() => setShowSystemDrawer(false)} />
       )}
+
+      {/* User Management & Audit Logs Drawer */}
+      <UserManagementDrawer
+        isOpen={showUserManagement}
+        onClose={() => setShowUserManagement(false)}
+        currentUser={user}
+      />
 
       {/* Command Palette */}
       <CommandPalette

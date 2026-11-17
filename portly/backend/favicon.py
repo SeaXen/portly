@@ -1,4 +1,4 @@
-"""Automatic Favicon and App Icon Fetcher with SSRF and private network safeguards."""
+"""Automatic Favicon and App Icon Fetcher with SSRF, private network safeguards, and SVG sanitization."""
 
 import hashlib
 import ipaddress
@@ -8,7 +8,7 @@ import re
 import socket
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 logger = logging.getLogger("portly.favicon")
 
@@ -54,6 +54,33 @@ def resolve_and_check_host(host: str) -> Tuple[bool, str]:
         return False, ""
 
 
+class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-validates SSRF rules on every redirect hop."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        parsed = urllib.parse.urlparse(newurl)
+        if parsed.scheme not in ("http", "https"):
+            return None
+        safe, _ = resolve_and_check_host(parsed.hostname or "")
+        if not safe:
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def sanitize_svg(data: Union[bytes, str]) -> Union[bytes, str]:
+    """Strips executable script tags, event handlers, and foreignObject from SVG content."""
+    is_str = isinstance(data, str)
+    try:
+        text = data if is_str else data.decode("utf-8", errors="replace")
+        text = re.sub(r'<script.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'\bon[a-z]+\s*=\s*["\'][^"\']*["\']', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bon[a-z]+\s*=\s*[^\s>]+', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'<foreignObject.*?</foreignObject>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'href\s*=\s*["\']javascript:[^"\']*["\']', '', text, flags=re.IGNORECASE)
+        return text if is_str else text.encode("utf-8")
+    except Exception:
+        return data
+
+
 def detect_image_type(data: bytes) -> Optional[str]:
     """Inspects magic bytes to determine image MIME type."""
     if len(data) < 4:
@@ -87,7 +114,7 @@ def extract_favicon_url(html_content: str, base_url: str) -> Optional[str]:
 
 
 def fetch_favicon_from_url(url: str, timeout: float = 1.5, max_bytes: int = 524288) -> Optional[Tuple[bytes, str]]:
-    """Safely fetches an image from URL with SSRF safeguards, short timeout, and size limit."""
+    """Safely fetches an image from URL with SSRF safeguards, short timeout, size limit, and SVG sanitization."""
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("http", "https"):
         return None
@@ -100,19 +127,25 @@ def fetch_favicon_from_url(url: str, timeout: float = 1.5, max_bytes: int = 5242
         url,
         headers={"User-Agent": "Portly-IconFetcher/1.0", "Accept": "image/*, */*"}
     )
+    opener = urllib.request.build_opener(SafeRedirectHandler())
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with opener.open(req, timeout=timeout) as resp:
             if resp.status != 200:
                 return None
             data = resp.read(max_bytes + 1)
             if len(data) > max_bytes:
                 return None  # Exceeded max size
             mime = detect_image_type(data)
+            if mime == "image/svg+xml":
+                data = sanitize_svg(data)
+                return data, mime
             if mime:
                 return data, mime
             # Content-Type header fallback if header claims image
             header_ct = resp.headers.get("Content-Type", "").split(";")[0].strip().lower()
             if header_ct.startswith("image/"):
+                if header_ct == "image/svg+xml":
+                    data = sanitize_svg(data)
                 return data, header_ct
             return None
     except Exception:
@@ -122,7 +155,15 @@ def fetch_favicon_from_url(url: str, timeout: float = 1.5, max_bytes: int = 5242
 def get_cached_icon(cache_dir: str, app_id: str) -> Optional[Tuple[bytes, str]]:
     """Checks if icon is already cached on disk."""
     safe_name = hashlib.sha256(app_id.encode()).hexdigest()[:24]
-    for ext, mime in [(".ico", "image/x-icon"), (".png", "image/png"), (".svg", "image/svg+xml"), (".webp", "image/webp")]:
+    for ext, mime in [
+        (".ico", "image/x-icon"),
+        (".png", "image/png"),
+        (".svg", "image/svg+xml"),
+        (".webp", "image/webp"),
+        (".jpg", "image/jpeg"),
+        (".jpeg", "image/jpeg"),
+        (".gif", "image/gif"),
+    ]:
         fp = os.path.join(cache_dir, f"{safe_name}{ext}")
         if os.path.isfile(fp):
             try:
@@ -139,80 +180,62 @@ def save_cached_icon(cache_dir: str, app_id: str, data: bytes, mime: str):
     safe_name = hashlib.sha256(app_id.encode()).hexdigest()[:24]
     ext_map = {
         "image/x-icon": ".ico",
+        "image/vnd.microsoft.icon": ".ico",
         "image/png": ".png",
-        "image/jpeg": ".jpg",
         "image/svg+xml": ".svg",
         "image/webp": ".webp",
-        "image/gif": ".gif"
+        "image/jpeg": ".jpg",
+        "image/gif": ".gif",
     }
-    ext = ext_map.get(mime, ".ico")
+    ext = ext_map.get(mime, ".png")
     fp = os.path.join(cache_dir, f"{safe_name}{ext}")
     try:
         with open(fp, "wb") as f:
             f.write(data)
     except Exception as e:
-        logger.warning(f"Could not save cached icon for {app_id}: {e}")
+        logger.warning(f"Could not cache icon to {fp}: {e}")
 
 
-def get_fallback_svg(app_name: str) -> Tuple[bytes, str]:
-    """Generates a clean vector SVG badge based on app name initial."""
-    letter = (app_name[0] if app_name else "P").upper()
-    svg = DEFAULT_FALLBACK_SVG.replace("{letter}", letter)
+def get_fallback_svg(letter: str = "A") -> Tuple[bytes, str]:
+    """Generates an aesthetic SVG circle with the app initial."""
+    clean_letter = letter.strip()[:1].upper() if letter else "A"
+    svg = DEFAULT_FALLBACK_SVG.format(letter=clean_letter)
     return svg.encode("utf-8"), "image/svg+xml"
 
 
-def fetch_or_generate_app_icon(
-    app: Dict[str, Any],
-    cache_dir: str,
-    probe_network: bool = True
-) -> Tuple[bytes, str]:
-    """Retrieves or probes favicon for app, with SSRF protection and fallback."""
-    app_id = app.get("id", "")
-    app_name = app.get("name", "App")
-
-    # 1. Check cache
+def fetch_or_generate_app_icon(app: Dict[str, Any], cache_dir: str) -> Tuple[bytes, str]:
+    """
+    Checks cache -> attempts remote fetch if http/url_override exists -> falls back to letter SVG.
+    """
+    app_id = app.get("id", "app")
     cached = get_cached_icon(cache_dir, app_id)
     if cached:
         return cached
 
-    if not probe_network:
-        return get_fallback_svg(app_name)
+    # If label_icon is direct URL
+    label_icon = app.get("label_icon")
+    if label_icon and (label_icon.startswith("http://") or label_icon.startswith("https://")):
+        res = fetch_favicon_from_url(label_icon)
+        if res:
+            save_cached_icon(cache_dir, app_id, res[0], res[1])
+            return res
 
-    # 2. Probe HTTP endpoint
+    # If app is bound to HTTP port, attempt probing /favicon.ico or root HTML
     port = app.get("port")
-    if not port or port <= 0:
-        return get_fallback_svg(app_name)
-
     bind = app.get("bind") or "127.0.0.1"
-    host = "127.0.0.1" if bind in ("0.0.0.0", "::", "") else bind
+    host = "127.0.0.1" if bind in ("0.0.0.0", "::", "127.0.0.1", "localhost") else bind
 
-    safe, _ = resolve_and_check_host(host)
-    if not safe:
-        return get_fallback_svg(app_name)
+    if port and port > 0:
+        base_url = f"http://{host}:{port}"
+        # 1. Direct /favicon.ico probe
+        fav_url = f"{base_url}/favicon.ico"
+        res = fetch_favicon_from_url(fav_url)
+        if res:
+            save_cached_icon(cache_dir, app_id, res[0], res[1])
+            return res
 
-    base_url = f"http://{host}:{port}"
-
-    # Try /favicon.ico first
-    result = fetch_favicon_from_url(f"{base_url}/favicon.ico")
-    if result:
-        data, mime = result
-        save_cached_icon(cache_dir, app_id, data, mime)
-        return data, mime
-
-    # Next, try index page HTML parse
-    try:
-        req = urllib.request.Request(base_url, headers={"User-Agent": "Portly-IconFetcher/1.0"})
-        with urllib.request.urlopen(req, timeout=1.5) as resp:
-            html = resp.read(32768).decode("utf-8", errors="ignore")
-            icon_url = extract_favicon_url(html, base_url)
-            if icon_url:
-                result = fetch_favicon_from_url(icon_url)
-                if result:
-                    data, mime = result
-                    save_cached_icon(cache_dir, app_id, data, mime)
-                    return data, mime
-    except Exception:
-        pass
-
-    # Fallback SVG badge
-    return get_fallback_svg(app_name)
+    # Fallback to generated letter icon
+    app_name = app.get("name") or "A"
+    initial = app_name[0] if app_name else "A"
+    svg_data, mime = get_fallback_svg(initial)
+    return svg_data, mime

@@ -29,7 +29,7 @@ EXPOSE 5533
 
 ENV PORTLY_PORT=5533 \
     PORTLY_HOST=0.0.0.0 \
-    PORTLY_MODE=desktop \
+    PORTLY_MODE=server \
     PYTHONUNBUFFERED=1
 
 # Create non-root user portly and set up data directory permissions
@@ -41,6 +41,6 @@ VOLUME ["/app/data"]
 USER portly
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl -f http://127.0.0.1:5533/api/stats || exit 1
+    CMD curl -f http://127.0.0.1:5533/api/health || exit 1
 
-CMD ["python", "-m", "portly", "run", "--port", "5533", "--host", "0.0.0.0"]
+CMD ["python", "-m", "portly", "run", "--port", "5533", "--host", "0.0.0.0", "--mode", "server"]

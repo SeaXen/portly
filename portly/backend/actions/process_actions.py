@@ -3,8 +3,10 @@
 import collections
 import logging
 import os
+import platform
 import shlex
 import subprocess
+import tempfile
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -29,68 +31,109 @@ CRITICAL_PROCESS_NAMES = {
     "fontdrvhost.exe", "dwm.exe", "registry", "memory compression",
     # Linux / Unix core & init processes
     "init", "systemd", "systemd-journald", "systemd-udevd", "systemd-logind",
-    "kthreadd", "kworker", "launchd"
+    "kthreadd", "kworker", "launchd",
+    # Infrastructure and critical daemons
+    "sshd", "dockerd", "containerd", "docker-proxy", "docker", "portly"
 }
 
 
-def _is_safe_log_path(path: str) -> bool:
+def _get_allowed_log_roots(workdir: Optional[str] = None) -> List[str]:
+    """Builds an allowlist of directories where log files are permitted."""
+    roots = []
+    # 1. Custom configured log roots from environment
+    env_dirs = os.environ.get("PORTLY_LOG_DIRS", "")
+    for p in env_dirs.split(","):
+        p = p.strip()
+        if p and os.path.isdir(p):
+            roots.append(os.path.realpath(p))
+
+    # 2. Portly data directory and logs subdir
+    data_dir = os.environ.get("PORTLY_DATA_DIR", "")
+    if not data_dir:
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+    if os.path.isdir(data_dir):
+        roots.append(os.path.realpath(data_dir))
+        logs_dir = os.path.join(data_dir, "logs")
+        if os.path.isdir(logs_dir):
+            roots.append(os.path.realpath(logs_dir))
+
+    # 3. Workdir of the app if valid
+    if workdir and os.path.isdir(workdir):
+        roots.append(os.path.realpath(workdir))
+
+    # 4. Standard OS log directories
+    if platform.system() != "Windows":
+        if os.path.isdir("/var/log"):
+            roots.append(os.path.realpath("/var/log"))
+    else:
+        system_drive = os.environ.get("SystemDrive", "C:")
+        sys_logs = os.path.join(system_drive, "\\Logs")
+        if os.path.isdir(sys_logs):
+            roots.append(os.path.realpath(sys_logs))
+
+    # 5. System temp directory (used for temporary logs and test suites)
+    try:
+        tmp_dir = tempfile.gettempdir()
+        if os.path.isdir(tmp_dir):
+            roots.append(os.path.realpath(tmp_dir))
+    except Exception:
+        pass
+
+    return roots
+
+
+def _is_safe_log_path(path: str, workdir: Optional[str] = None) -> bool:
+    """
+    Validates log path using an allowlist of permitted directories,
+    resolving symlinks and blocking sensitive files.
+    """
     if not path or not isinstance(path, str):
         return False
     if "\0" in path:
         return False
+
     try:
-        import posixpath
-        # Normalize separators for cross-platform resolution
-        norm = os.path.abspath(os.path.realpath(path.replace("\\", os.sep)))
-        lower = norm.lower().replace("\\", "/")
-        raw_lower = path.strip().lower().replace("\\", "/")
-        norm_posix = posixpath.normpath("/" + raw_lower.lstrip("/"))
+        norm_path = os.path.abspath(os.path.realpath(path.replace("\\", os.sep)))
+        lower = norm_path.lower().replace("\\", "/")
 
-        # Strip Windows drive letter (e.g. "c:" or "d:") to get absolute POSIX-like path
-        path_without_drive = lower
-        if len(lower) >= 2 and lower[1] == ":" and lower[0].isalpha():
-            path_without_drive = lower[2:]
-
-        # Forbidden system root directories (checked on canonical, posix, and raw paths)
-        forbidden_system_dirs = (
-            "/etc", "/var", "/proc", "/sys", "/dev", "/root", "/bin", "/sbin", "/boot", "/lib",
-            "/windows", "/winnt", "/program files", "/program files (x86)", "/programdata",
-            "/system volume information"
+        # Block credential & secret file patterns anywhere
+        blocked_names = (
+            ".bash_history", ".zsh_history", ".history", "shadow", "passwd",
+            "id_rsa", "id_ed25519", "credentials", ".docker/config.json",
+            "sam", "system32/config"
         )
-        for fdir in forbidden_system_dirs:
-            if (
-                path_without_drive.startswith(fdir + "/") or path_without_drive == fdir
-                or raw_lower.startswith(fdir + "/") or raw_lower == fdir
-                or norm_posix.startswith(fdir + "/") or norm_posix == fdir
-                or lower.startswith(fdir + "/") or lower == fdir
-            ):
+        for b in blocked_names:
+            if lower.endswith(b) or f"/{b}" in lower:
                 return False
 
-        # Windows system paths
-        system_root = os.environ.get("SystemRoot", r"C:\Windows").lower().replace("\\", "/")
-        if lower.startswith(system_root + "/") or lower == system_root or norm_posix.startswith("/windows/"):
-            return False
-
-        # Block credential & secret directory patterns anywhere in the path
-        blocked_path_patterns = (
-            "/.ssh", "/.gnupg", "/.aws", "/.azure", "/.kube", "/.docker",
-            "/credentials", "/shadow", "/passwd", "/sam", "/system32"
-        )
-        for pat in blocked_path_patterns:
-            if pat in lower or pat in raw_lower or pat in norm_posix:
-                return False
-
-        # Block database files, WAL files, private keys, certificates, secrets, env
+        # Block database and sensitive extensions
         blocked_extensions = (
             ".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm", ".sqlite-wal", ".sqlite-shm",
-            ".key", ".pem", ".env", ".id_rsa", ".id_ed25519", ".crt", ".pfx", ".p12",
-            ".cer", ".token", ".secret"
+            ".key", ".pem", ".env", ".crt", ".pfx", ".p12", ".cer", ".token", ".secret"
         )
         for ext in blocked_extensions:
-            if lower.endswith(ext) or raw_lower.endswith(ext) or norm_posix.endswith(ext):
+            if lower.endswith(ext):
                 return False
 
-        return True
+        # Verify path falls under at least one allowed root directory
+        allowed_roots = _get_allowed_log_roots(workdir)
+        for root in allowed_roots:
+            try:
+                common = os.path.commonpath([norm_path, root])
+                if common == root:
+                    return True
+            except ValueError:
+                continue
+
+        # If path is inside current working directory or relative to app dir
+        cwd = os.path.realpath(os.getcwd())
+        try:
+            if os.path.commonpath([norm_path, cwd]) == cwd:
+                return True
+        except ValueError:
+            pass
+
+        return False
     except Exception:
         return False
 
@@ -134,7 +177,7 @@ def _read_output_stream(app_id: str, proc: subprocess.Popen, log_file: Optional[
                 pass
 
 
-def start_custom_app(app_id: str, store: Store) -> Dict[str, Any]:
+def start_custom_app(app_id: str, store: Store, actor: str = "system") -> Dict[str, Any]:
     _check_safe_mode(store)
     clean_id = app_id.replace("custom:", "")
     custom_app = store.get_custom_app(clean_id)
@@ -165,7 +208,18 @@ def start_custom_app(app_id: str, store: Store) -> Dict[str, Any]:
         if existing and existing.poll() is None:
             return {"status": "already_running", "pid": existing.pid}
 
-        # Start process
+        # Clear existing in-memory log buffer on fresh start
+        if app_id in _log_buffers:
+            _log_buffers[app_id].clear()
+
+        # Start process with detached session / process group
+        creationflags = 0
+        start_new_session = False
+        if platform.system() == "Windows":
+            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            start_new_session = True
+
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -176,6 +230,8 @@ def start_custom_app(app_id: str, store: Store) -> Dict[str, Any]:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
+                creationflags=creationflags,
+                start_new_session=start_new_session,
             )
             _running_processes[app_id] = proc
         except Exception as e:
@@ -190,15 +246,16 @@ def start_custom_app(app_id: str, store: Store) -> Dict[str, Any]:
     )
     t.start()
 
-    store.log_event("custom_app_start", f"Started app '{custom_app['name']}' (PID {proc.pid})", app_id=app_id)
+    store.log_event("custom_app_start", f"Started app '{custom_app['name']}' (PID {proc.pid})", app_id=app_id, actor=actor)
     return {"status": "started", "pid": proc.pid, "name": custom_app["name"]}
 
 
-def stop_custom_app(app_id: str, store: Store) -> Dict[str, Any]:
+def stop_custom_app(app_id: str, store: Store, actor: str = "system") -> Dict[str, Any]:
     _check_safe_mode(store)
     clean_id = app_id.replace("custom:", "")
     custom_app = store.get_custom_app(clean_id)
     name = custom_app["name"] if custom_app else clean_id
+    workdir = custom_app.get("workdir") if custom_app else None
 
     stop_cmd = custom_app.get("stop_cmd") if custom_app else None
 
@@ -208,13 +265,20 @@ def stop_custom_app(app_id: str, store: Store) -> Dict[str, Any]:
     if proc and proc.poll() is None:
         try:
             parent = psutil.Process(proc.pid)
-            for child in parent.children(recursive=True):
+            # Terminate entire process tree
+            children = parent.children(recursive=True)
+            for child in children:
                 try:
                     child.terminate()
                 except Exception:
                     pass
             parent.terminate()
-            parent.wait(timeout=2)
+            gone, alive = psutil.wait_procs(children + [parent], timeout=3.0)
+            for p in alive:
+                try:
+                    p.kill()
+                except Exception:
+                    pass
         except Exception:
             try:
                 proc.kill()
@@ -229,41 +293,54 @@ def stop_custom_app(app_id: str, store: Store) -> Dict[str, Any]:
 
     if stop_cmd and stop_cmd.lower() != "auto":
         try:
-            subprocess.run(stop_cmd, shell=True, timeout=5)
+            env = os.environ.copy()
+            if custom_app and custom_app.get("port"):
+                env["PORT"] = str(custom_app["port"])
+            if custom_app and custom_app.get("env"):
+                for k, v in custom_app["env"].items():
+                    env[str(k)] = str(v)
+            subprocess.run(stop_cmd, shell=True, timeout=5, cwd=workdir, env=env)
         except Exception as e:
             logger.warning(f"Custom stop command failed: {e}")
 
-    store.log_event("custom_app_stop", f"Stopped app '{name}'", app_id=app_id)
+    store.log_event("custom_app_stop", f"Stopped app '{name}'", app_id=app_id, actor=actor)
     return {"status": "stopped", "name": name}
 
 
-def restart_custom_app(app_id: str, store: Store) -> Dict[str, Any]:
+def restart_custom_app(app_id: str, store: Store, actor: str = "system") -> Dict[str, Any]:
     _check_safe_mode(store)
-    stop_custom_app(app_id, store)
+    stop_custom_app(app_id, store, actor=actor)
     time.sleep(0.5)
-    return start_custom_app(app_id, store)
+    return start_custom_app(app_id, store, actor=actor)
 
 
 def get_custom_app_logs(app_id: str, store: Store, tail: int = 500) -> List[str]:
     clean_id = app_id.replace("custom:", "")
     custom_app = store.get_custom_app(clean_id)
 
-    # 1. Check in-memory log buffer
+    # 1. Check in-memory log buffer first
     with _lock:
         buf = _log_buffers.get(app_id) or _log_buffers.get(clean_id)
         if buf and len(buf) > 0:
             lines = list(buf)
             return lines[-tail:]
 
-    # 2. Check configured log_file if buffer is empty
+    # 2. Check configured log_file safely with tail seek
     if custom_app and custom_app.get("log_file"):
         path = custom_app["log_file"]
-        if not _is_safe_log_path(path):
-            return [f"Access denied: Log file path '{path}' is not permitted."]
+        workdir = custom_app.get("workdir")
+        if not _is_safe_log_path(path, workdir=workdir):
+            return [f"Access denied: Log file path '{path}' is not within an allowed directory."]
         if os.path.isfile(path):
             try:
-                with open(path, "r", encoding="utf-8", errors="replace") as f:
-                    lines = [l.rstrip("\r\n") for l in f.readlines()]
+                size = os.path.getsize(path)
+                # Seek tail of file to avoid reading large files into memory
+                read_size = min(size, 524288)  # Read up to last 512 KB
+                with open(path, "rb") as f:
+                    if size > read_size:
+                        f.seek(size - read_size)
+                    content = f.read().decode("utf-8", errors="replace")
+                    lines = [l.rstrip("\r\n") for l in content.splitlines()]
                     return lines[-tail:]
             except Exception as e:
                 return [f"Error reading log file {path}: {e}"]
@@ -271,7 +348,7 @@ def get_custom_app_logs(app_id: str, store: Store, tail: int = 500) -> List[str]
     return [f"No logs recorded yet for {clean_id}."]
 
 
-def kill_host_process(pid: int, store: Store) -> Dict[str, Any]:
+def kill_host_process(pid: int, store: Store, actor: str = "system") -> Dict[str, Any]:
     _check_safe_mode(store)
     if pid <= 4:
         raise ValueError("Cannot terminate system core process.")
@@ -288,8 +365,15 @@ def kill_host_process(pid: int, store: Store) -> Dict[str, Any]:
             or name_clean.startswith("systemd")
         ):
             raise ValueError(f"Cannot terminate critical system process '{name}' (PID {pid}).")
+
+        # Escalate SIGTERM -> SIGKILL
         p.terminate()
-        store.log_event("kill_process", f"Killed process {name} (PID {pid})")
+        try:
+            p.wait(timeout=3.0)
+        except psutil.TimeoutExpired:
+            p.kill()
+
+        store.log_event("kill_process", f"Killed process {name} (PID {pid})", actor=actor)
         return {"status": "killed", "pid": pid, "name": name}
     except ValueError:
         raise

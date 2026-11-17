@@ -4,11 +4,11 @@
 
 ## Platform
 
-web
+Web & Desktop Server (Linux, macOS, Windows)
 
 ## Users
 
-Self-hosters, software engineers, devops practitioners, and homelab enthusiasts running diverse sets of local services, databases, development servers, and containerized stacks (Docker, Docker Compose, Podman) on Linux, macOS, or Windows hosts. They frequently lose track of listening ports, face port collision errors, and require instant glanceable control over runtime states.
+Self-hosters, software engineers, DevOps practitioners, homelab operators, and systems administrators running diverse sets of local services, databases, development servers, and containerized stacks (Docker, Docker Compose, Podman). They require instant glanceable control over runtime states, proactive port collision prevention, and audit-logged operations.
 
 ## Product Purpose
 
@@ -16,21 +16,28 @@ Portly provides a unified, zero-overhead, real-time command dashboard that autom
 
 ## Positioning
 
-Unlike generic container dashboards (Portainer) or static bookmark launchpads (Homarr, Homepage), Portly actively reconciles raw OS network sockets (`psutil`, `netstat`, `lsof`) with container engine APIs (`docker.sock`). It uniquely detects port collisions before they happen, suggests next-available ports, and provides one-click safe port reassignment with automatic rollback snapshots.
+Unlike generic container dashboards (Portainer) or static bookmark launchpads (Homarr, Homepage), Portly actively reconciles raw OS network sockets (`psutil`, socket tables) with container engine APIs (`docker.sock`). It detects port collisions before they happen, suggests next-available ports, provides one-click safe port reassignment with automatic rollback snapshots, and enforces safe mode boundaries across mutating operations.
 
 ## Operating Context
 
 - **Local Desktop / Workstation Mode**: Single-command execution via `python -m portly run --port 5533` or `portly list`. Runs with zero mandatory dependencies beyond Python 3.10+ and standard build tools.
-- **NAS / Server / Homelab Mode**: Containerized via Docker Compose with `network_mode: host` and `pid: host`, mounted to `/var/run/docker.sock` for full host and container visibility.
-- **Network Boundaries**: Default loopback binding (`127.0.0.1`) for local desktop safety; protected setup and admin authentication when bound to `0.0.0.0` or accessed across subnets.
+- **NAS / Server / Homelab Mode**: Containerized via Docker Compose with `network_mode: host` and `pid: host`, mounted to `/var/run/docker.sock` and `/:/hostfs:ro` for accurate host telemetry and container control.
+- **Network Boundaries & Authentication**:
+  - Default loopback binding (`127.0.0.1`) for local desktop convenience.
+  - Strict setup token bootstrap on `0.0.0.0` or server mode.
+  - Multi-user RBAC (`admin` vs `viewer`) with Argon2id-equivalent PBKDF2-HMAC-SHA256 password hashing.
+  - Rate-limited timing-safe authentication and CSRF/Host header verification.
 
-## Capabilities and Constraints
+## Capabilities and Features
 
-- **Host & Container Discovery**: Scans listening TCP/UDP sockets, deduplicating Docker-proxy bindings and raw processes; assigns persistent stable IDs (`docker:...`, `host:...`, `custom:...`).
-- **Telemetry Engine**: Real-time 60-point ring buffers (~5-minute history) pushing CPU, RAM, Disk, Network bandwidth, and container metrics via Server-Sent Events (`/api/stream`).
-- **Control & Safety**: Safe mode by default preventing accidental process termination; granular Start, Stop, Restart, Log Streaming, and Exec terminal sessions for containers.
-- **Port Management**: Live socket binding checks, collision diagnosis, safe port migration with container recreation, rollback snapshots, and reverse proxy configuration generation (Caddy, Nginx, Traefik).
-- **Custom Apps**: Support for external web dashboards, non-listening tasks, and custom process management with health probes.
+- **Host & Container Discovery**: Scans listening TCP and UDP sockets, disambiguating Docker-proxy bindings from host processes; assigns persistent stable IDs (`docker:...`, `host:...`, `custom:...`).
+- **Telemetry Engine**: Real-time 60-point ring buffers (~5-minute history) pushing CPU, RAM, Disk (via host filesystem mount), Network bandwidth, and container metrics via Server-Sent Events (`/api/stream`).
+- **Safe Mode & Auto-Relock**: Enabled by default; locks all mutating actions (starts, stops, restarts, recreations, process terminations, prunes). Includes 5-minute temporary unlock countdowns with automatic re-locking.
+- **Preflight Port Collision Engine**: Analyzes `docker run` commands, `docker-compose.yml` declarations, or raw port arrays to detect socket collisions before deployment.
+- **Port Management & Rollback**: Safe port migration preserving container environment, labels, mounts, and network configurations; maintains rollback snapshots for 1-click restoration.
+- **Multi-User RBAC & Audit Logging**: Admin and viewer roles; complete audit log tracking all mutations with timestamp, actor, target, and success status.
+- **Zero External Network Dependencies**: Self-contained local-first architecture with system font stacks, embedded SVGs, and zero runtime CDNs.
+- **Reverse Proxy Generator**: Instant config generation for Caddy, Nginx, Traefik (file & labels), and Cloudflare Tunnels.
 
 ## Brand Commitments
 
@@ -40,10 +47,9 @@ Unlike generic container dashboards (Portainer) or static bookmark launchpads (H
 
 ## Evidence on Hand
 
-- Fully functional FastAPI backend with 110 automated tests passing (`tests/`).
-- Modern React + Vite frontend built into `portly/frontend/dist` with real-time SSE streaming.
-- Playwright E2E browser test suite validating user journeys, keyboard shortcuts, view switching, and telemetry drawers.
-- Documented CLI (`portly --help`) and multi-arch Docker image specification.
+- **Backend**: 136 automated unit and integration tests passing in pytest (`tests/`).
+- **Frontend**: Production React 19 + TypeScript + Vite build with zero bundle warnings and zero external runtime calls.
+- **Security**: Timing-safe auth, SSRF-protected favicon & health checks, command execution allowlists, accessible dialog focus traps.
 
 ## Product Principles
 
@@ -55,6 +61,6 @@ Unlike generic container dashboards (Portainer) or static bookmark launchpads (H
 ## Accessibility & Inclusion
 
 - Compliance with WCAG 2.1 AA standards.
-- Full keyboard navigation across all views (Table, Grid, List, Board) and global command palette (`Ctrl+K` / `Cmd+K`).
+- Full keyboard navigation across all views (Table, Grid, List, Board) and global command palette (`Ctrl+K` / `Cmd+K` accessible anywhere).
+- Accessible Toasts (`role="status"`, `role="alert"`) and modal dialogs (`role="dialog"`, `aria-modal="true"`, focus trapped, ESC to dismiss).
 - Strict 4.5:1 text contrast on all text elements and interactive controls.
-- Dedicated `color-scheme: dark` metadata and intentional `prefers-reduced-motion` modes preserving state change awareness without disorienting translation animations.

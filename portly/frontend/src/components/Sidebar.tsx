@@ -10,7 +10,8 @@ interface SidebarProps {
   onNewCategoryClick: () => void;
   conflictCount: number;
   safeMode: boolean;
-  onToggleSafeMode: (newVal: boolean) => void;
+  onToggleSafeMode: (newVal: boolean, autoRelockSec?: number) => void;
+  unlockCountdown?: number | null;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -23,8 +24,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   conflictCount,
   safeMode,
   onToggleSafeMode,
+  unlockCountdown,
 }) => {
   const [showSafeModeModal, setShowSafeModeModal] = useState(false);
+  const [autoRelockDuration, setAutoRelockDuration] = useState<number>(300); // 5 minutes default
 
   const handleSafeModeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const targetVal = e.target.checked;
@@ -37,7 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const confirmUnlockSafeMode = () => {
     setShowSafeModeModal(false);
-    onToggleSafeMode(false);
+    onToggleSafeMode(false, autoRelockDuration > 0 ? autoRelockDuration : undefined);
   };
 
   return (
@@ -232,7 +235,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 Safe Mode
               </div>
               <div style={{ fontSize: '11px', color: safeMode ? '#8D95A5' : '#FF8A8A', lineHeight: 1.3 }}>
-                {safeMode ? 'Mutations locked' : 'Actions unlocked (LIVE)'}
+                {safeMode
+                  ? 'Mutations locked'
+                  : unlockCountdown != null
+                  ? `Re-locks in ${Math.floor(unlockCountdown / 60)}m ${unlockCountdown % 60}s`
+                  : 'Actions unlocked (LIVE)'}
               </div>
             </div>
             <label className="portly-toggle">
@@ -254,7 +261,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div
             className="modal-content"
             style={{
-              width: '420px',
+              width: '440px',
               background: '#101218',
               border: '1px solid rgba(255,255,255,0.12)',
               borderRadius: '14px',
@@ -265,9 +272,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div style={{ fontSize: '18px', fontWeight: 600, color: '#ECEEF3', marginBottom: '8px' }}>
               Disable Safe Mode?
             </div>
-            <p style={{ fontSize: '13px', color: '#8D95A5', lineHeight: 1.5, margin: '0 0 20px 0' }}>
+            <p style={{ fontSize: '13px', color: '#8D95A5', lineHeight: 1.5, margin: '0 0 16px 0' }}>
               Turning off Safe mode allows executing real operations: starting/stopping services, killing processes, and recreating containers on your host machine.
             </p>
+
+            <div style={{ background: '#161B22', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#ECEEF3', marginBottom: '8px' }}>Auto-Relock Protection:</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#ECEEF3', cursor: 'pointer', marginBottom: '6px' }}>
+                <input
+                  type="radio"
+                  name="relock"
+                  checked={autoRelockDuration === 300}
+                  onChange={() => setAutoRelockDuration(300)}
+                />
+                Unlock for 5 minutes (Recommended)
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#ECEEF3', cursor: 'pointer', marginBottom: '6px' }}>
+                <input
+                  type="radio"
+                  name="relock"
+                  checked={autoRelockDuration === 900}
+                  onChange={() => setAutoRelockDuration(900)}
+                />
+                Unlock for 15 minutes
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#ECEEF3', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="relock"
+                  checked={autoRelockDuration === 0}
+                  onChange={() => setAutoRelockDuration(0)}
+                />
+                Stay unlocked indefinitely
+              </label>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button type="button" className="c078" onClick={() => setShowSafeModeModal(false)}>
                 Keep Locked

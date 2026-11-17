@@ -13,9 +13,11 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./data:/app/data
+      - /:/hostfs:ro
     environment:
       - PORTLY_PORT=5533
       - PORTLY_HOST=0.0.0.0
-      - PORTLY_MODE=desktop
+      - PORTLY_MODE=server
+      - PORTLY_HOSTFS=/hostfs
       - PORTLY_ALLOW_INSECURE_BIND=false
     restart: unless-stopped

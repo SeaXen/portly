@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api';
 import { DockerSystemDf, SystemStats } from '../types';
+import { useToast } from './Toast';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface SystemDrawerProps {
   onClose: () => void;
@@ -8,10 +10,12 @@ interface SystemDrawerProps {
 }
 
 export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose, defaultSection }) => {
+  const { success, error } = useToast();
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [dockerDf, setDockerDf] = useState<DockerSystemDf | null>(null);
   const [pruning, setPruning] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showPruneConfirm, setShowPruneConfirm] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -39,15 +43,19 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose, defaultSect
     } catch {}
   };
 
-  const handlePrune = async () => {
-    if (!confirm('Are you sure you want to prune dangling images, stopped containers, and unused volumes to reclaim disk space?')) return;
+  const handlePrune = () => {
+    setShowPruneConfirm(true);
+  };
+
+  const confirmPrune = async () => {
+    setShowPruneConfirm(false);
     setPruning(true);
     try {
       const res = await api.pruneDockerSystem();
-      alert(`Docker system pruned! Reclaimed ${res.space_reclaimed_mb} MB.`);
+      success(`Docker system pruned! Reclaimed ${res.space_reclaimed_mb} MB.`);
       loadDockerStats();
     } catch (e: any) {
-      alert(`Prune failed: ${e.message}`);
+      error(`Prune failed: ${e.message}`);
     } finally {
       setPruning(false);
     }
@@ -216,6 +224,16 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose, defaultSect
             </div>
           </>
         ) : null}
+
+        <ConfirmDialog
+          isOpen={showPruneConfirm}
+          title="Prune Docker System?"
+          message="Are you sure you want to prune dangling images, stopped containers, and unused volumes to reclaim host disk space? This operation cannot be undone."
+          confirmLabel="Prune System"
+          isDanger={true}
+          onConfirm={confirmPrune}
+          onCancel={() => setShowPruneConfirm(false)}
+        />
       </div>
     </div>
   );

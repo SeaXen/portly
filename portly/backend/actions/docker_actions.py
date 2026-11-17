@@ -1,6 +1,10 @@
-"""Docker container lifecycle actions, log streaming, and image updates."""
+"""Docker container lifecycle actions, log streaming, safe container recreation, and image updates."""
 
 import logging
+import os
+import re
+import shlex
+import time
 from typing import Any, Dict, Generator, List, Optional
 
 from portly.backend.discovery.docker_src import get_docker_client, is_docker_available
@@ -16,36 +20,36 @@ def _check_safe_mode(store: Store):
         raise PermissionError("Safe mode is active. Mutating actions (start, stop, recreate, update) are locked.")
 
 
-def start_container(container_name_or_id: str, store: Store) -> Dict[str, Any]:
+def start_container(container_name_or_id: str, store: Store, actor: str = "system") -> Dict[str, Any]:
     _check_safe_mode(store)
     client = get_docker_client()
     if not client:
         raise RuntimeError("Docker is not available.")
     container = client.containers.get(container_name_or_id)
     container.start()
-    store.log_event("container_start", f"Started container {container.name}", app_id=f"docker:{container.name}")
+    store.log_event("container_start", f"Started container {container.name}", app_id=f"docker:{container.name}", actor=actor)
     return {"status": "started", "container": container.name}
 
 
-def stop_container(container_name_or_id: str, store: Store) -> Dict[str, Any]:
+def stop_container(container_name_or_id: str, store: Store, actor: str = "system") -> Dict[str, Any]:
     _check_safe_mode(store)
     client = get_docker_client()
     if not client:
         raise RuntimeError("Docker is not available.")
     container = client.containers.get(container_name_or_id)
     container.stop(timeout=10)
-    store.log_event("container_stop", f"Stopped container {container.name}", app_id=f"docker:{container.name}")
+    store.log_event("container_stop", f"Stopped container {container.name}", app_id=f"docker:{container.name}", actor=actor)
     return {"status": "stopped", "container": container.name}
 
 
-def restart_container(container_name_or_id: str, store: Store) -> Dict[str, Any]:
+def restart_container(container_name_or_id: str, store: Store, actor: str = "system") -> Dict[str, Any]:
     _check_safe_mode(store)
     client = get_docker_client()
     if not client:
         raise RuntimeError("Docker is not available.")
     container = client.containers.get(container_name_or_id)
     container.restart(timeout=10)
-    store.log_event("container_restart", f"Restarted container {container.name}", app_id=f"docker:{container.name}")
+    store.log_event("container_restart", f"Restarted container {container.name}", app_id=f"docker:{container.name}", actor=actor)
     return {"status": "restarted", "container": container.name}
 
 
@@ -64,7 +68,7 @@ def get_container_logs(container_name_or_id: str, tail: int = 500, follow: bool 
         return [f"Error retrieving logs for {container_name_or_id}: {e}"]
 
 
-def inspect_container(container_name_or_id: str) -> Dict[str, Any]:
+def inspect_container(container_name_or_id: str, mask_secrets: bool = True) -> Dict[str, Any]:
     client = get_docker_client()
     if not client:
         raise RuntimeError("Docker is not available.")
@@ -74,6 +78,18 @@ def inspect_container(container_name_or_id: str) -> Dict[str, Any]:
     state = attrs.get("State", {})
     net = attrs.get("NetworkSettings", {})
 
+    raw_env = config.get("Env", [])
+    if mask_secrets:
+        processed_env = []
+        for e in raw_env:
+            if "=" in e:
+                k, _ = e.split("=", 1)
+                processed_env.append(f"{k}=********")
+            else:
+                processed_env.append(e)
+    else:
+        processed_env = raw_env
+
     return {
         "id": container.id[:12],
         "name": container.name,
@@ -82,7 +98,7 @@ def inspect_container(container_name_or_id: str) -> Dict[str, Any]:
         "status": state.get("Status", ""),
         "health": state.get("Health", {}).get("Status", "none"),
         "restart_policy": attrs.get("HostConfig", {}).get("RestartPolicy", {}).get("Name", "no"),
-        "env": config.get("Env", []),
+        "env": processed_env,
         "cmd": config.get("Cmd", []),
         "ports": net.get("Ports", {}),
         "mounts": [
@@ -99,7 +115,7 @@ def inspect_container(container_name_or_id: str) -> Dict[str, Any]:
 
 
 def check_image_update(image_tag: str) -> Dict[str, Any]:
-    """Checks if an updated image is available in the registry."""
+    """Checks if an updated image is available in the registry compared to local RepoDigests."""
     client = get_docker_client()
     if not client:
         return {"has_update": False, "current_digest": "", "latest_digest": "", "message": "Docker not available"}
@@ -107,21 +123,122 @@ def check_image_update(image_tag: str) -> Dict[str, Any]:
     try:
         local_img = client.images.get(image_tag)
         current_id = local_img.id[:19]
-        # In mock / rate-limited environments, return clean info
+        local_digests = local_img.attrs.get("RepoDigests", [])
+        current_digest = local_digests[0].split("@")[-1][:19] if local_digests else current_id
+
+        # Query registry data if possible
+        try:
+            reg_data = client.images.get_registry_data(image_tag)
+            remote_id = getattr(reg_data, "id", "")[:19]
+            if remote_id and remote_id != current_id:
+                return {
+                    "has_update": True,
+                    "current_image": image_tag,
+                    "current_digest": current_digest,
+                    "latest_digest": remote_id,
+                    "message": f"Update available: {remote_id}"
+                }
+        except Exception:
+            pass
+
         return {
             "has_update": False,
             "current_image": image_tag,
-            "current_digest": current_id,
-            "latest_digest": current_id,
+            "current_digest": current_digest,
+            "latest_digest": current_digest,
             "message": "Image is up to date"
         }
     except Exception as e:
         return {"has_update": False, "message": str(e)}
 
 
-def apply_port_change_docker(container_name: str, new_port: int, target_c_port: str, bind: str, store: Store) -> Dict[str, Any]:
-    """Recreates a docker container with new port mapping safely and saves rollback snapshot."""
-    import time
+def apply_image_update(container_name: str, store: Store, actor: str = "system") -> Dict[str, Any]:
+    """Pulls latest image and recreates container using safe recreation with rollback."""
+    _check_safe_mode(store)
+    client = get_docker_client()
+    if not client:
+        raise RuntimeError("Docker is not available.")
+
+    container = client.containers.get(container_name)
+    image_tag = container.attrs.get("Config", {}).get("Image")
+    if not image_tag:
+        raise ValueError(f"Container '{container_name}' has no image tag.")
+
+    # Pull latest image
+    try:
+        client.images.pull(image_tag)
+    except Exception as e:
+        raise RuntimeError(f"Failed to pull image {image_tag}: {e}")
+
+    # Recreate container
+    attrs = container.attrs
+    config = attrs.get("Config", {})
+    host_config = attrs.get("HostConfig", {})
+    ports = host_config.get("PortBindings") or {}
+    binds = list(host_config.get("Binds") or [])
+    networks = attrs.get("NetworkSettings", {}).get("Networks") or {}
+
+    backup_name = f"{container_name}_portly_update_bak_{int(time.time())}"
+    container.stop(timeout=10)
+    container.rename(backup_name)
+
+    run_kwargs: Dict[str, Any] = {
+        "image": image_tag,
+        "name": container_name,
+        "detach": True,
+        "ports": ports,
+        "environment": config.get("Env", []),
+        "labels": config.get("Labels") or {},
+        "volumes": binds,
+        "restart_policy": host_config.get("RestartPolicy"),
+    }
+    if config.get("Cmd"):
+        run_kwargs["command"] = config.get("Cmd")
+    if config.get("Entrypoint"):
+        run_kwargs["entrypoint"] = config.get("Entrypoint")
+    if config.get("User"):
+        run_kwargs["user"] = config.get("User")
+    if config.get("WorkingDir"):
+        run_kwargs["working_dir"] = config.get("WorkingDir")
+
+    try:
+        new_container = client.containers.run(**run_kwargs)
+        for net_name in networks:
+            try:
+                client.networks.get(net_name).connect(new_container)
+            except Exception:
+                pass
+
+        time.sleep(1.0)
+        new_container.reload()
+        if not new_container.attrs.get("State", {}).get("Running"):
+            raise RuntimeError("New container failed to stay running after update.")
+
+        # Cleanup backup
+        try:
+            container.remove(v=False)
+        except Exception:
+            pass
+
+        store.log_event("container_update", f"Updated container '{container_name}' to latest image", app_id=f"docker:{container_name}", actor=actor)
+        return {"status": "updated", "container": container_name, "image": image_tag}
+    except Exception as e:
+        try:
+            # Clean up new container if created
+            failed_c = client.containers.get(container_name)
+            failed_c.remove(force=True)
+        except Exception:
+            pass
+        try:
+            container.rename(container_name)
+            container.start()
+        except Exception as rb_err:
+            logger.error(f"Failed to restore original container after update failure: {rb_err}")
+        raise RuntimeError(f"Update failed: {e}. Original container restored.")
+
+
+def apply_port_change_docker(container_name: str, new_port: int, target_c_port: str, bind: str, store: Store, actor: str = "system") -> Dict[str, Any]:
+    """Recreates a docker container with new port mapping safely, verifying start before dropping backup."""
     _check_safe_mode(store)
     client = get_docker_client()
     if not client:
@@ -131,6 +248,10 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
     attrs = container.attrs
     config = attrs.get("Config", {})
     host_config = attrs.get("HostConfig", {})
+
+    if host_config.get("NetworkMode") == "host":
+        raise ValueError(f"Container '{container_name}' uses host networking mode. Port mappings cannot be changed via Docker.")
+
     ports = host_config.get("PortBindings") or {}
     binds = list(host_config.get("Binds") or [])
     mounts = attrs.get("Mounts") or []
@@ -147,6 +268,7 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
             if src:
                 binds.append(f"{src}:{dest}:{mode}")
                 existing_destinations.add(dest)
+
     networks = attrs.get("NetworkSettings", {}).get("Networks") or {}
     image = config.get("Image")
     env = config.get("Env", [])
@@ -165,7 +287,7 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
 
     # Save comprehensive snapshot
     app_id = f"docker:{container.name}:{target_c_port}"
-    store.save_port_snapshot(app_id, old_port or 0, new_port, {
+    snapshot_config = {
         "image": image,
         "ports": ports,
         "env": env,
@@ -178,13 +300,19 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
         "restart_policy": restart_policy,
         "binds": binds,
         "networks": list(networks.keys()),
-    })
+        "privileged": host_config.get("Privileged", False),
+        "cap_add": host_config.get("CapAdd"),
+        "cap_drop": host_config.get("CapDrop"),
+        "devices": host_config.get("Devices"),
+        "extra_hosts": host_config.get("ExtraHosts"),
+        "dns": host_config.get("Dns"),
+    }
+    store.save_port_snapshot(app_id, old_port or 0, new_port, snapshot_config)
 
     # Prepare new port bindings
     new_port_bindings = dict(ports)
     new_port_bindings[target_c_port] = [{"HostIp": bind, "HostPort": str(new_port)}]
 
-    # Prepare run kwargs
     run_kwargs: Dict[str, Any] = {
         "image": image,
         "name": container_name,
@@ -192,6 +320,7 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
         "ports": new_port_bindings,
         "environment": env,
         "labels": labels,
+        "privileged": host_config.get("Privileged", False),
     }
     if cmd:
         run_kwargs["command"] = cmd
@@ -205,6 +334,16 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
         run_kwargs["user"] = user
     if working_dir:
         run_kwargs["working_dir"] = working_dir
+    if host_config.get("CapAdd"):
+        run_kwargs["cap_add"] = host_config.get("CapAdd")
+    if host_config.get("CapDrop"):
+        run_kwargs["cap_drop"] = host_config.get("CapDrop")
+    if host_config.get("Devices"):
+        run_kwargs["devices"] = host_config.get("Devices")
+    if host_config.get("Dns"):
+        run_kwargs["dns"] = host_config.get("Dns")
+    if host_config.get("ExtraHosts"):
+        run_kwargs["extra_hosts"] = host_config.get("ExtraHosts")
 
     # Non-destructive recreation: rename original container first
     backup_name = f"{container_name}_portly_bak_{int(time.time())}"
@@ -213,21 +352,36 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
 
     try:
         new_container = client.containers.run(**run_kwargs)
-        # Connect additional networks if present
         for net_name in networks:
             try:
-                net_obj = client.networks.get(net_name)
-                net_obj.connect(new_container)
+                client.networks.get(net_name).connect(new_container)
             except Exception:
                 pass
 
-        # Old container is only removed after new container boots successfully
+        # Post-start verification: check container is running and not immediately exiting
+        time.sleep(0.1)
+        if hasattr(new_container, "reload"):
+            new_container.reload()
+        state = getattr(new_container, "attrs", {}).get("State", {})
+        if state and not state.get("Running", True):
+            raise RuntimeError(f"Container failed to remain running on port {new_port} (exit code: {state.get('ExitCode')})")
+        if state.get("Health", {}).get("Status") == "unhealthy":
+            raise RuntimeError(f"Container reported unhealthy after port change to {new_port}")
+
+        # Remove temporary backup container only after verification succeeds
         try:
             container.remove(v=False)
         except Exception as rm_err:
             logger.warning(f"Could not remove temporary backup container {backup_name}: {rm_err}")
     except Exception as run_err:
-        # Revert rename and restart original container
+        # 1. Clean up created container first to prevent name conflict on rename
+        try:
+            created_c = client.containers.get(container_name)
+            created_c.remove(force=True)
+        except Exception:
+            pass
+
+        # 2. Revert rename and restart original container
         try:
             container.rename(container_name)
             container.start()
@@ -235,7 +389,7 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
             logger.error(f"Critical: failed to restore original container {container_name}: {rb_err}")
         raise RuntimeError(f"Failed to apply port change: {run_err}. Original container was preserved and restored.")
 
-    store.log_event("port_change", f"Changed container {container_name} port to {new_port}", app_id=app_id)
+    store.log_event("port_change", f"Changed container {container_name} port to {new_port}", app_id=app_id, actor=actor)
     return {
         "status": "recreated",
         "container": new_container.name,
@@ -244,9 +398,8 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
     }
 
 
-def apply_multi_port_change_docker(container_name: str, mappings: List[Dict[str, Any]], store: Store) -> Dict[str, Any]:
+def apply_multi_port_change_docker(container_name: str, mappings: List[Dict[str, Any]], store: Store, actor: str = "system") -> Dict[str, Any]:
     """Recreates a docker container with multiple updated port mappings safely and saves rollback snapshot."""
-    import time
     _check_safe_mode(store)
     client = get_docker_client()
     if not client:
@@ -254,91 +407,76 @@ def apply_multi_port_change_docker(container_name: str, mappings: List[Dict[str,
 
     container = client.containers.get(container_name)
     attrs = container.attrs
-    image = attrs.get("Config", {}).get("Image", "")
-    env = attrs.get("Config", {}).get("Env", [])
-    labels = attrs.get("Config", {}).get("Labels") or {}
-    cmd = attrs.get("Config", {}).get("Cmd")
-    entrypoint = attrs.get("Config", {}).get("Entrypoint")
-    user = attrs.get("Config", {}).get("User")
-    working_dir = attrs.get("Config", {}).get("WorkingDir")
+    config = attrs.get("Config", {})
+    host_config = attrs.get("HostConfig", {})
+
+    if host_config.get("NetworkMode") == "host":
+        raise ValueError(f"Container '{container_name}' uses host networking mode. Port mappings cannot be changed via Docker.")
+
+    old_ports = host_config.get("PortBindings") or {}
+    binds = list(host_config.get("Binds") or [])
     networks = attrs.get("NetworkSettings", {}).get("Networks") or {}
 
-    host_config = attrs.get("HostConfig", {})
-    existing_ports = host_config.get("PortBindings") or {}
-    binds = list(host_config.get("Binds") or [])
-    mounts = attrs.get("Mounts") or []
-    existing_destinations = set()
-    for b in binds:
-        parts = b.split(":")
-        if len(parts) >= 2:
-            existing_destinations.add(parts[1])
-
-    for m in mounts:
-        dest = m.get("Destination")
-        src = m.get("Source")
-        m_type = m.get("Type")
-        rw = m.get("RW", True)
-        mode = "rw" if rw else "ro"
-        if dest and src and dest not in existing_destinations:
-            if m_type == "bind":
-                binds.append(f"{src}:{dest}:{mode}")
-                existing_destinations.add(dest)
-            elif m_type == "volume":
-                vol_name = m.get("Name")
-                if vol_name:
-                    binds.append(f"{vol_name}:{dest}:{mode}")
-                    existing_destinations.add(dest)
-
-    restart_policy = host_config.get("RestartPolicy")
-
-    new_port_bindings = dict(existing_ports)
+    new_port_bindings = dict(old_ports)
     for m in mappings:
-        c_port = m.get("container_port")
-        h_port = int(m.get("host_port", 0))
+        c_spec = m.get("container_port")
+        h_port = m.get("host_port")
         bind_ip = m.get("bind", "0.0.0.0")
-
-        chk = check_port_availability(h_port, bind_ip)
-        if not chk["free"]:
-            if f"'{container.name}'" not in chk.get("used_by", ""):
-                raise ValueError(f"Port {h_port} is not available: {chk.get('used_by')}")
-
-        new_port_bindings[c_port] = [{"HostIp": bind_ip, "HostPort": str(h_port)}]
+        if c_spec and h_port:
+            new_port_bindings[c_spec] = [{"HostIp": bind_ip, "HostPort": str(h_port)}]
 
     app_id = f"docker:{container.name}:multi"
     store.save_port_snapshot(app_id, 0, 0, {
-        "image": image,
-        "ports": existing_ports,
-        "env": env,
-        "cmd": cmd,
-        "entrypoint": entrypoint,
-        "labels": labels,
-        "user": user,
-        "working_dir": working_dir,
-        "restart_policy": restart_policy,
+        "image": config.get("Image"),
+        "ports": old_ports,
+        "env": config.get("Env", []),
+        "cmd": config.get("Cmd"),
+        "entrypoint": config.get("Entrypoint"),
+        "labels": config.get("Labels") or {},
+        "user": config.get("User"),
+        "working_dir": config.get("WorkingDir"),
+        "restart_policy": host_config.get("RestartPolicy"),
         "binds": binds,
         "networks": list(networks.keys()),
+        "privileged": host_config.get("Privileged", False),
+        "cap_add": host_config.get("CapAdd"),
+        "cap_drop": host_config.get("CapDrop"),
+        "devices": host_config.get("Devices"),
+        "dns": host_config.get("Dns"),
+        "extra_hosts": host_config.get("ExtraHosts"),
     })
 
     run_kwargs: Dict[str, Any] = {
-        "image": image,
+        "image": config.get("Image"),
         "name": container_name,
         "detach": True,
         "ports": new_port_bindings,
-        "environment": env,
-        "labels": labels,
+        "environment": config.get("Env", []),
+        "labels": config.get("Labels") or {},
+        "privileged": host_config.get("Privileged", False),
     }
-    if cmd:
-        run_kwargs["command"] = cmd
-    if entrypoint:
-        run_kwargs["entrypoint"] = entrypoint
-    if restart_policy:
-        run_kwargs["restart_policy"] = restart_policy
+    if config.get("Cmd"):
+        run_kwargs["command"] = config.get("Cmd")
+    if config.get("Entrypoint"):
+        run_kwargs["entrypoint"] = config.get("Entrypoint")
+    if host_config.get("RestartPolicy"):
+        run_kwargs["restart_policy"] = host_config.get("RestartPolicy")
     if binds:
         run_kwargs["volumes"] = binds
-    if user:
-        run_kwargs["user"] = user
-    if working_dir:
-        run_kwargs["working_dir"] = working_dir
+    if config.get("User"):
+        run_kwargs["user"] = config.get("User")
+    if config.get("WorkingDir"):
+        run_kwargs["working_dir"] = config.get("WorkingDir")
+    if host_config.get("CapAdd"):
+        run_kwargs["cap_add"] = host_config.get("CapAdd")
+    if host_config.get("CapDrop"):
+        run_kwargs["cap_drop"] = host_config.get("CapDrop")
+    if host_config.get("Devices"):
+        run_kwargs["devices"] = host_config.get("Devices")
+    if host_config.get("Dns"):
+        run_kwargs["dns"] = host_config.get("Dns")
+    if host_config.get("ExtraHosts"):
+        run_kwargs["extra_hosts"] = host_config.get("ExtraHosts")
 
     backup_name = f"{container_name}_portly_bak_{int(time.time())}"
     container.stop(timeout=10)
@@ -348,35 +486,40 @@ def apply_multi_port_change_docker(container_name: str, mappings: List[Dict[str,
         new_container = client.containers.run(**run_kwargs)
         for net_name in networks:
             try:
-                net_obj = client.networks.get(net_name)
-                net_obj.connect(new_container)
+                client.networks.get(net_name).connect(new_container)
             except Exception:
                 pass
+
+        time.sleep(0.1)
+        if hasattr(new_container, "reload"):
+            new_container.reload()
+        state = getattr(new_container, "attrs", {}).get("State", {})
+        if state and not state.get("Running", True):
+            raise RuntimeError("Container failed to remain running after multi-port change.")
 
         try:
             container.remove(v=False)
         except Exception as rm_err:
-            logger.warning(f"Could not remove temporary backup container {backup_name}: {rm_err}")
+            logger.warning(f"Could not remove backup container {backup_name}: {rm_err}")
     except Exception as run_err:
+        try:
+            created_c = client.containers.get(container_name)
+            created_c.remove(force=True)
+        except Exception:
+            pass
         try:
             container.rename(container_name)
             container.start()
         except Exception as rb_err:
-            logger.error(f"Critical: failed to restore original container {container_name}: {rb_err}")
-        raise RuntimeError(f"Failed to apply multi-port change: {run_err}. Original container was preserved and restored.")
+            logger.error(f"Failed to restore original container: {rb_err}")
+        raise RuntimeError(f"Multi-port change failed: {run_err}. Original container restored.")
 
-    store.log_event("port_change", f"Updated multi-port mappings for container {container_name}", app_id=app_id)
-    return {
-        "status": "recreated",
-        "container": new_container.name,
-        "mappings": mappings,
-        "rollback_available": True
-    }
+    store.log_event("port_change_multi", f"Updated multiple ports on container {container_name}", app_id=app_id, actor=actor)
+    return {"status": "recreated", "container": container_name, "mappings": mappings, "rollback_available": True}
 
 
-def rollback_port_change_docker(app_id: str, store: Store) -> Dict[str, Any]:
+def rollback_port_change_docker(app_id: str, store: Store, actor: str = "system") -> Dict[str, Any]:
     """Restores previous port mapping from snapshot non-destructively."""
-    import time
     _check_safe_mode(store)
     snap = store.get_port_snapshot(app_id)
     if not snap:
@@ -388,8 +531,6 @@ def rollback_port_change_docker(app_id: str, store: Store) -> Dict[str, Any]:
 
     parts = app_id.split(":")
     container_name = parts[1]
-    target_c_port = parts[2]
-    original_port = snap["original_port"]
     cfg = snap["config"]
 
     container = client.containers.get(container_name)
@@ -404,6 +545,7 @@ def rollback_port_change_docker(app_id: str, store: Store) -> Dict[str, Any]:
         "ports": cfg.get("ports"),
         "environment": cfg.get("env"),
         "labels": cfg.get("labels") or {},
+        "privileged": cfg.get("privileged", False),
     }
     if cfg.get("cmd"):
         run_kwargs["command"] = cfg.get("cmd")
@@ -417,13 +559,22 @@ def rollback_port_change_docker(app_id: str, store: Store) -> Dict[str, Any]:
         run_kwargs["user"] = cfg.get("user")
     if cfg.get("working_dir"):
         run_kwargs["working_dir"] = cfg.get("working_dir")
+    if cfg.get("cap_add"):
+        run_kwargs["cap_add"] = cfg.get("cap_add")
+    if cfg.get("cap_drop"):
+        run_kwargs["cap_drop"] = cfg.get("cap_drop")
+    if cfg.get("devices"):
+        run_kwargs["devices"] = cfg.get("devices")
+    if cfg.get("dns"):
+        run_kwargs["dns"] = cfg.get("dns")
+    if cfg.get("extra_hosts"):
+        run_kwargs["extra_hosts"] = cfg.get("extra_hosts")
 
     try:
         new_c = client.containers.run(**run_kwargs)
         for net_name in cfg.get("networks", []):
             try:
-                net_obj = client.networks.get(net_name)
-                net_obj.connect(new_c)
+                client.networks.get(net_name).connect(new_c)
             except Exception:
                 pass
         try:
@@ -432,6 +583,11 @@ def rollback_port_change_docker(app_id: str, store: Store) -> Dict[str, Any]:
             pass
     except Exception as run_err:
         try:
+            created_c = client.containers.get(container_name)
+            created_c.remove(force=True)
+        except Exception:
+            pass
+        try:
             container.rename(container_name)
             container.start()
         except Exception:
@@ -439,51 +595,100 @@ def rollback_port_change_docker(app_id: str, store: Store) -> Dict[str, Any]:
         raise RuntimeError(f"Rollback failed: {run_err}. Container restored to pre-rollback state.")
 
     store.clear_port_snapshot(app_id)
-    store.log_event("port_rollback", f"Rolled back container {container_name} port to {original_port}", app_id=app_id)
-    return {"status": "rolled_back", "port": original_port}
+    store.log_event("port_rollback", f"Rolled back container {container_name} ports", app_id=app_id, actor=actor)
+    return {"status": "rolled_back", "port": snap["original_port"]}
 
 
-SAFE_COMMAND_BINARIES = {
-    "ps", "top", "df", "du", "free", "uptime", "uname", "whoami", "id",
-    "netstat", "ss", "env", "printenv", "ls", "pwd", "date", "cat",
-    "head", "tail", "ip", "ifconfig", "hostname"
-}
-
-FORBIDDEN_OPERATORS = [">", ">>", "|", ";", "&&", "||", "$(", "`", "<"]
+FORBIDDEN_OPERATORS = [";", "&&", "||", "|", ">", ">>", "<", "`", "$(", "$", "\n", "\r", "&"]
+SAFE_COMMAND_BINARIES = {"ps", "top", "free", "df", "uptime", "uname", "whoami", "id", "hostname", "date", "pwd", "ss", "netstat", "ip", "ls", "env", "cat"}
+SAFE_COMMAND_ALLOWLIST = SAFE_COMMAND_BINARIES
 
 
-def _validate_safe_command(command: str):
-    """Enforces that command is a read-only diagnostic command without redirection or chaining."""
-    import os
-    cmd_str = command.strip()
-    if not cmd_str:
+def parse_and_validate_safe_command(command: str) -> List[str]:
+    """
+    Parses command into argv list and validates against strict allowlist.
+    Returns argv list for execution.
+    Raises ValueError or PermissionError.
+    """
+    if not command or not isinstance(command, str):
         raise ValueError("Command cannot be empty")
 
     for op in FORBIDDEN_OPERATORS:
-        if op in cmd_str:
-            raise PermissionError(
-                f"Safe mode is active. Command contains operator '{op}' which is restricted in safe mode."
-            )
+        if op in command:
+            raise PermissionError(f"Safe mode is active. Command contains restricted shell operator '{op}'.")
 
-    parts = cmd_str.split()
-    bin_name = os.path.basename(parts[0]).lower()
-    if bin_name not in SAFE_COMMAND_BINARIES:
+    try:
+        argv = shlex.split(command)
+    except Exception as e:
+        raise ValueError(f"Failed to parse command arguments: {e}")
+
+    if not argv:
+        raise ValueError("Command cannot be empty")
+
+    binary = os.path.basename(argv[0]).lower()
+
+    if binary not in SAFE_COMMAND_BINARIES:
         raise PermissionError(
-            f"Safe mode is active. Executable '{bin_name}' is not in the safe inspection whitelist. "
+            f"Command '{binary}' is not in the safe inspection whitelist. "
             f"Unlock safe mode in the top bar to execute custom commands."
         )
+
+    # Allowed argv rules
+    if binary in ("ps", "uptime", "free", "df", "uname", "whoami", "id", "hostname", "date", "pwd", "top", "env", "cat"):
+        for arg in argv[1:]:
+            if any(c in arg for c in (";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\\")):
+                raise PermissionError(f"Safe mode is active. Argument '{arg}' contains restricted shell operator.")
+        return argv
+
+    elif binary in ("ss", "netstat"):
+        for arg in argv[1:]:
+            if any(c in arg for c in (";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\\")):
+                raise PermissionError(f"Safe mode is active. Argument '{arg}' contains restricted shell operator.")
+        return argv
+
+    elif binary == "ip":
+        if len(argv) < 2:
+            raise PermissionError("Safe mode is active. Bare 'ip' command is not allowed.")
+        sub = argv[1].lower()
+        if sub in ("addr", "a", "address"):
+            if len(argv) > 2 and argv[2].lower() not in ("show", "list", "sh", "s"):
+                raise PermissionError(f"Safe mode is active. 'ip addr {argv[2]}' is not allowed in safe mode.")
+            return argv
+        elif sub in ("route", "r", "ro"):
+            if len(argv) > 2 and argv[2].lower() not in ("show", "list", "sh", "s"):
+                raise PermissionError(f"Safe mode is active. 'ip route {argv[2]}' is not allowed in safe mode.")
+            return argv
+        else:
+            raise PermissionError(f"Safe mode is active. 'ip {sub}' is not allowed in safe mode.")
+
+    elif binary == "ls":
+        for arg in argv[1:]:
+            if any(c in arg for c in (";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\\")):
+                raise PermissionError(f"Safe mode is active. Argument '{arg}' contains restricted shell operator.")
+        return argv
+
+    raise PermissionError(
+        f"Command '{binary}' is not in the safe inspection whitelist. "
+        f"Unlock safe mode in the top bar to execute custom commands."
+    )
+
+
+_validate_safe_command = parse_and_validate_safe_command
 
 
 def exec_in_container(
     container_name_or_id: str,
     command: str,
     store: Optional[Store] = None,
-    timeout: int = 10
+    timeout: int = 10,
+    actor: str = "system"
 ) -> Dict[str, Any]:
-    """Runs a command inside a Docker container subject to Safe Mode checks."""
-    import time
+    """Runs a command inside a Docker container enforcing argv allowlist, bounded timeout, and output cap."""
+    timeout = max(1, min(30, int(timeout or 10)))
     if store and store.get_setting("safe_mode", "true").lower() == "true":
-        _validate_safe_command(command)
+        cmd_exec = parse_and_validate_safe_command(command)
+    else:
+        cmd_exec = shlex.split(command)
 
     client = get_docker_client()
     if not client:
@@ -491,11 +696,16 @@ def exec_in_container(
 
     container = client.containers.get(container_name_or_id)
     t0 = time.perf_counter()
-    exec_res = container.exec_run(command, stdout=True, stderr=True, demux=False)
+    exec_res = container.exec_run(cmd_exec, stdout=True, stderr=True, demux=False)
     duration_ms = round((time.perf_counter() - t0) * 1000.0, 1)
 
     raw_output = exec_res.output
     output_str = raw_output.decode("utf-8", errors="replace") if isinstance(raw_output, (bytes, bytearray)) else str(raw_output or "")
+    if len(output_str) > 262144:  # Cap at 256 KB
+        output_str = output_str[:262144] + "\n... [Output truncated at 256 KB]"
+
+    if store:
+        store.log_event("container_exec", f"Executed '{command}' in container '{container.name}'", app_id=f"docker:{container.name}", actor=actor)
 
     return {
         "exit_code": exec_res.exit_code,
@@ -507,7 +717,6 @@ def exec_in_container(
 
 def get_container_compose_config(container_name_or_id: str) -> Dict[str, Any]:
     """Inspects container labels and securely retrieves docker-compose file configuration."""
-    import os
     client = get_docker_client()
     if not client:
         raise RuntimeError("Docker is not available.")
@@ -526,284 +735,270 @@ def get_container_compose_config(container_name_or_id: str) -> Dict[str, Any]:
             "message": f"Container '{container.name}' does not appear to be managed by Docker Compose (no compose labels found)."
         }
 
-    # Attempt to locate compose file
     candidate_path = None
+    first_file = None
     if config_files:
-        first_file = config_files.split(",")[0].strip()
-        if os.path.isabs(first_file):
-            candidate_path = first_file
-        elif working_dir:
-            candidate_path = os.path.join(working_dir, first_file)
+        files = [f.strip() for f in config_files.split(",") if f.strip()]
+        if files:
+            first_file = files[0]
+            if working_dir and not os.path.isabs(first_file):
+                first_file = os.path.join(working_dir, first_file)
+        for f in files:
+            if os.path.isabs(f) and os.path.isfile(f):
+                candidate_path = f
+                break
+            elif working_dir:
+                joined = os.path.join(working_dir, f)
+                if os.path.isfile(joined):
+                    candidate_path = joined
+                    break
 
     if not candidate_path and working_dir:
         for fname in ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]:
-            p = os.path.join(working_dir, fname)
-            if os.path.isfile(p):
-                candidate_path = p
+            fpath = os.path.join(working_dir, fname)
+            if os.path.isfile(fpath):
+                candidate_path = fpath
                 break
 
-    if not candidate_path:
+    resolved_config_path = candidate_path or first_file or ""
+
+    if not candidate_path or not os.path.isfile(candidate_path):
         return {
             "has_compose": True,
-            "project": project or "",
-            "service": service or "",
-            "working_dir": working_dir or "",
-            "config_file": config_files or "",
-            "content": None,
-            "error": "Compose file not found on host filesystem or path is not set.",
+            "project": project or "unknown",
+            "service": service or "unknown",
+            "config_file": resolved_config_path,
+            "compose_file": resolved_config_path or "Not found on host filesystem",
+            "content": "# Compose file could not be located on host.\n# Check if container was deployed remotely.",
+            "can_manage": False,
         }
 
-    # Security check: canonicalize and verify path
-    real_path = os.path.realpath(candidate_path)
-    if not os.path.isfile(real_path):
+    # Restrict compose read to yaml files <= 1MB
+    norm_path = os.path.realpath(candidate_path)
+    if not (norm_path.endswith(".yml") or norm_path.endswith(".yaml")):
         return {
             "has_compose": True,
-            "project": project or "",
-            "service": service or "",
-            "working_dir": working_dir or "",
-            "config_file": real_path,
-            "content": None,
-            "error": f"Compose file '{real_path}' does not exist on host filesystem.",
-        }
-
-    # Check extension and size
-    ext = os.path.splitext(real_path)[1].lower()
-    if ext not in (".yml", ".yaml"):
-        return {
-            "has_compose": True,
-            "project": project or "",
-            "service": service or "",
-            "working_dir": working_dir or "",
-            "config_file": real_path,
-            "content": None,
-            "error": "Security check failed: config file is not a YAML file.",
-        }
-
-    if os.path.getsize(real_path) > 1048576:
-        return {
-            "has_compose": True,
-            "project": project or "",
-            "service": service or "",
-            "working_dir": working_dir or "",
-            "config_file": real_path,
-            "content": None,
-            "error": "Compose file exceeds maximum allowed size (1MB).",
+            "project": project,
+            "service": service,
+            "config_file": resolved_config_path,
+            "compose_file": candidate_path,
+            "content": "# Error: Invalid compose file extension.",
+            "can_manage": False,
         }
 
     try:
-        with open(real_path, "r", encoding="utf-8", errors="replace") as f:
+        size = os.path.getsize(norm_path)
+        if size > 1048576:
+            return {
+                "has_compose": True,
+                "project": project,
+                "service": service,
+                "config_file": resolved_config_path,
+                "compose_file": candidate_path,
+                "content": "# Error: Compose file exceeds 1MB limit.",
+                "can_manage": False,
+            }
+        with open(norm_path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
-
-        return {
-            "has_compose": True,
-            "project": project or "",
-            "service": service or "",
-            "working_dir": working_dir or "",
-            "config_file": real_path,
-            "content": content,
-            "error": None,
-        }
     except Exception as e:
-        return {
-            "has_compose": True,
-            "project": project or "",
-            "service": service or "",
-            "working_dir": working_dir or "",
-            "config_file": real_path,
-            "content": None,
-            "error": f"Failed to read compose file: {str(e)}",
-        }
+        content = f"# Error reading compose file: {e}"
+
+    return {
+        "has_compose": True,
+        "project": project,
+        "service": service,
+        "working_dir": working_dir,
+        "config_file": resolved_config_path,
+        "compose_file": candidate_path,
+        "content": content,
+        "can_manage": True,
+    }
 
 
 def get_docker_system_df(store: Store) -> Dict[str, Any]:
-    """Returns Docker disk and resource usage information."""
     client = get_docker_client()
     if not client:
-        return {
-            "available": False,
-            "images_count": 0,
-            "containers_count": 0,
-            "volumes_count": 0,
-            "total_size_mb": 0.0,
-            "total_reclaimable_mb": 0.0,
-        }
-
+        raise RuntimeError("Docker is not available.")
     try:
-        df_data = client.df()
-        images = df_data.get("Images") or []
-        containers = df_data.get("Containers") or []
-        volumes = df_data.get("Volumes") or []
-        build_cache = df_data.get("BuildCache") or []
+        raw_df = client.df()
+        images = raw_df.get("Images") or []
+        containers = raw_df.get("Containers") or []
+        volumes = raw_df.get("Volumes") or []
 
-        total_size = sum(img.get("Size", 0) for img in images)
-        total_size += sum(v.get("UsageData", {}).get("Size", 0) for v in volumes if v.get("UsageData"))
-        total_size += sum(b.get("Size", 0) for b in build_cache)
+        img_total = sum(i.get("Size", 0) for i in images)
+        img_reclaim = sum(i.get("Size", 0) for i in images if i.get("Containers", 0) == 0)
+        cont_total = sum(c.get("SizeRw", 0) for c in containers)
+        vol_total = sum(v.get("UsageData", {}).get("Size", 0) for v in volumes if "UsageData" in v)
+        vol_reclaim = sum(v.get("UsageData", {}).get("Size", 0) for v in volumes if v.get("UsageData", {}).get("RefCount", 0) == 0)
 
-        reclaimable = 0
-        for img in images:
-            if img.get("Containers", 0) == 0:
-                reclaimable += img.get("Size", 0)
-        for v in volumes:
-            if v.get("UsageData", {}).get("RefCount", 0) == 0:
-                reclaimable += v.get("UsageData", {}).get("Size", 0)
-        for b in build_cache:
-            if not b.get("InUse", False):
-                reclaimable += b.get("Size", 0)
+        total_disk = img_total + cont_total + vol_total
+        total_reclaimable = img_reclaim + vol_reclaim
 
         return {
-            "available": True,
             "images_count": len(images),
             "containers_count": len(containers),
             "volumes_count": len(volumes),
-            "build_cache_count": len(build_cache),
-            "total_size_mb": round(total_size / (1024 * 1024), 2),
-            "total_reclaimable_mb": round(reclaimable / (1024 * 1024), 2),
+            "total_size_mb": round(total_disk / (1024 * 1024), 2),
+            "total_reclaimable_mb": round(total_reclaimable / (1024 * 1024), 2),
+            "reclaimable_mb": round(total_reclaimable / (1024 * 1024), 2),
+            "images": {"count": len(images), "size_mb": round(img_total / (1024 * 1024), 2), "reclaimable_mb": round(img_reclaim / (1024 * 1024), 2)},
+            "containers": {"count": len(containers), "size_mb": round(cont_total / (1024 * 1024), 2)},
+            "volumes": {"count": len(volumes), "size_mb": round(vol_total / (1024 * 1024), 2), "reclaimable_mb": round(vol_reclaim / (1024 * 1024), 2)},
         }
     except Exception as e:
-        logger.warning(f"Error querying docker df: {e}")
-        return {
-            "available": True,
-            "error": str(e),
-            "images_count": 0,
-            "containers_count": 0,
-            "volumes_count": 0,
-            "total_size_mb": 0.0,
-            "total_reclaimable_mb": 0.0,
-        }
+        logger.error(f"Error querying docker df: {e}")
+        return {"total_size_mb": 0.0, "reclaimable_mb": 0.0, "error": str(e)}
 
 
 def list_docker_images(store: Store) -> List[Dict[str, Any]]:
-    """Returns a list of local Docker images."""
     client = get_docker_client()
     if not client:
         return []
     try:
-        images = client.images.list()
-        res = []
-        for img in images:
-            attrs = getattr(img, "attrs", {}) or {}
-            size_bytes = attrs.get("Size", 0)
+        results = []
+        for img in client.images.list():
+            attrs = img.attrs
+            tags = img.tags or ["<none>:<none>"]
             created = attrs.get("Created", "")
-            tags = list(getattr(img, "tags", []) or [])
-            res.append({
-                "id": img.id[:19] if img.id else "",
-                "full_id": img.id,
+            size_mb = round(attrs.get("Size", 0) / (1024 * 1024), 1)
+            results.append({
+                "id": img.id[:19],
                 "tags": tags,
-                "primary_tag": tags[0] if tags else "<none>:<none>",
-                "size_mb": round(size_bytes / (1024 * 1024), 2),
                 "created": created,
+                "size_mb": size_mb,
             })
-        return res
+        return results
     except Exception as e:
         logger.error(f"Error listing docker images: {e}")
         return []
 
 
 def list_docker_volumes(store: Store) -> List[Dict[str, Any]]:
-    """Returns a list of local Docker volumes."""
     client = get_docker_client()
     if not client:
         return []
     try:
-        vols = client.volumes.list()
-        res = []
-        for v in vols:
-            attrs = getattr(v, "attrs", {}) or {}
-            res.append({
-                "name": v.name,
+        results = []
+        for vol in client.volumes.list():
+            attrs = vol.attrs
+            results.append({
+                "name": vol.name,
                 "driver": attrs.get("Driver", "local"),
                 "mountpoint": attrs.get("Mountpoint", ""),
-                "created": attrs.get("CreatedAt", ""),
-                "labels": attrs.get("Labels") or {},
+                "created_at": attrs.get("CreatedAt", ""),
             })
-        return res
+        return results
     except Exception as e:
         logger.error(f"Error listing docker volumes: {e}")
         return []
 
 
-def prune_docker_system(store: Store) -> Dict[str, Any]:
-    """Prunes stopped containers, dangling images, unused volumes, and unused networks."""
+def prune_docker_system(
+    store: Store,
+    prune_containers: bool = True,
+    prune_images: bool = True,
+    prune_volumes: bool = False,
+    prune_networks: bool = True,
+    actor: str = "system"
+) -> Dict[str, Any]:
+    """Prunes docker artifacts. Crucially, prune_volumes defaults to FALSE to prevent accidental data loss."""
     _check_safe_mode(store)
     client = get_docker_client()
     if not client:
         raise RuntimeError("Docker is not available.")
 
     total_reclaimed = 0
-    containers_pruned = client.containers.prune()
-    total_reclaimed += containers_pruned.get("SpaceReclaimed", 0) or 0
+    containers_deleted = []
+    images_deleted = []
+    volumes_deleted = []
+    networks_deleted = []
 
-    images_pruned = client.images.prune()
-    total_reclaimed += images_pruned.get("SpaceReclaimed", 0) or 0
+    if prune_containers:
+        res = client.containers.prune()
+        total_reclaimed += res.get("SpaceReclaimed", 0) or 0
+        containers_deleted = res.get("ContainersDeleted") or []
 
-    try:
-        volumes_pruned = client.volumes.prune()
-        total_reclaimed += volumes_pruned.get("SpaceReclaimed", 0) or 0
-    except Exception as ve:
-        logger.warning(f"Could not prune volumes: {ve}")
-        volumes_pruned = {}
+    if prune_images:
+        res = client.images.prune()
+        total_reclaimed += res.get("SpaceReclaimed", 0) or 0
+        raw_imgs = res.get("ImagesDeleted") or []
+        images_deleted = [i.get("Deleted") for i in raw_imgs if isinstance(i, dict) and i.get("Deleted")]
 
-    try:
-        networks_pruned = client.networks.prune()
-    except Exception:
-        networks_pruned = {}
+    if prune_volumes:
+        try:
+            res = client.volumes.prune()
+            total_reclaimed += res.get("SpaceReclaimed", 0) or 0
+            volumes_deleted = res.get("VolumesDeleted") or []
+        except Exception as ve:
+            logger.warning(f"Could not prune volumes: {ve}")
 
-    store.log_event("docker_prune", f"Pruned docker system, reclaimed {round(total_reclaimed / (1024*1024), 2)} MB")
+    if prune_networks:
+        try:
+            res = client.networks.prune()
+            networks_deleted = res.get("NetworksDeleted") or []
+        except Exception:
+            pass
+
+    store.log_event("docker_prune", f"Pruned docker system, reclaimed {round(total_reclaimed / (1024*1024), 2)} MB", actor=actor)
     return {
         "status": "success",
         "space_reclaimed_mb": round(total_reclaimed / (1024 * 1024), 2),
         "deleted": {
-            "containers": containers_pruned.get("ContainersDeleted") or [],
-            "images": [i.get("Deleted") for i in (images_pruned.get("ImagesDeleted") or []) if isinstance(i, dict)] if images_pruned.get("ImagesDeleted") else [],
-            "volumes": volumes_pruned.get("VolumesDeleted") or [],
-            "networks": networks_pruned.get("NetworksDeleted") or [],
+            "containers": containers_deleted,
+            "images": images_deleted,
+            "volumes": volumes_deleted,
+            "networks": networks_deleted,
         }
     }
 
 
-def manage_compose_stack(project_name: str, action: str, store: Store) -> Dict[str, Any]:
-    """Executes stack-wide action (restart, stop, start, down) on compose project containers."""
+def manage_compose_stack(project_name: str, action: str, store: Store, actor: str = "system") -> Dict[str, Any]:
+    """Executes stack-wide action on compose project containers, reporting accurate per-container results."""
     _check_safe_mode(store)
     client = get_docker_client()
     if not client:
         raise RuntimeError("Docker is not available.")
 
     act = action.lower().strip()
-    valid_actions = {"restart", "stop", "start", "down"}
-    if act not in valid_actions:
-        raise ValueError(f"Invalid compose action '{action}'. Valid actions: {', '.join(valid_actions)}")
-
-    matching = []
-    for c in client.containers.list(all=True):
-        labels = getattr(c, "labels", {}) or {}
-        if labels.get("com.docker.compose.project") == project_name:
-            matching.append(c)
-
-    if not matching:
-        raise ValueError(f"No containers found for compose project '{project_name}'")
+    if act not in ("restart", "stop", "start", "down"):
+        raise ValueError(f"Unsupported compose action: {action}")
 
     affected = []
-    for c in matching:
+    failures = []
+    containers = client.containers.list(all=True)
+    project_containers = []
+
+    for c in containers:
+        labels = getattr(c, "labels", None) or getattr(c, "attrs", {}).get("Config", {}).get("Labels") or {}
+        if labels.get("com.docker.compose.project") == project_name:
+            project_containers.append(c)
+
+    if not project_containers:
+        raise ValueError(f"No containers found for compose project '{project_name}'")
+
+    for c in project_containers:
         try:
             if act == "restart":
-                c.restart()
+                c.restart(timeout=10)
             elif act == "stop":
-                c.stop()
+                c.stop(timeout=10)
             elif act == "start":
                 c.start()
             elif act == "down":
-                c.stop()
+                c.stop(timeout=10)
                 c.remove(v=False)
             affected.append(c.name)
         except Exception as e:
-            logger.error(f"Error performing '{act}' on container {c.name}: {e}")
+            failures.append({"container": c.name, "error": str(e)})
 
-    store.log_event("compose_action", f"Executed {act} on compose project {project_name} ({len(affected)} containers)")
+    store.log_event("compose_action", f"Executed {act} on compose project {project_name} ({len(affected)} succeeded, {len(failures)} failed)", actor=actor)
     return {
-        "status": "ok",
+        "status": "ok" if not failures else ("partial" if affected else "failed"),
         "action": act,
         "project": project_name,
-        "affected_containers": affected
+        "affected": affected,
+        "affected_containers": affected,
+        "failures": failures,
     }
 
 
@@ -814,9 +1009,10 @@ def deploy_container(
     env: Dict[str, str],
     volumes: List[str],
     restart_policy: str,
-    store: Store
+    store: Store,
+    actor: str = "system"
 ) -> Dict[str, Any]:
-    """Deploys a new Docker container with port verification and safe mode check."""
+    """Deploys a new Docker container with strict validation, port verification, and safe mode check."""
     _check_safe_mode(store)
     client = get_docker_client()
     if not client:
@@ -827,9 +1023,24 @@ def deploy_container(
     if not name or not name.strip():
         raise ValueError("Container name is required.")
 
+    # Validate image and container name formats
+    clean_image = image.strip()
+    clean_name = name.strip()
+    if not re.match(r'^[a-zA-Z0-9_\.\-\/\:]+$', clean_image):
+        raise ValueError(f"Invalid image format '{clean_image}'")
+    if not re.match(r'^[a-zA-Z0-9_\.\-]+$', clean_name):
+        raise ValueError(f"Invalid container name '{clean_name}'. Only alphanumeric characters, dashes, dots, and underscores are allowed.")
+
+    # Guard against dangerous host volume binds
+    for v in volumes or []:
+        host_path = v.split(":")[0].strip()
+        lower_h = host_path.lower()
+        if lower_h in ("/", "/var/run/docker.sock", "/proc", "/sys", "/etc", "c:\\", "c:\\windows"):
+            raise PermissionError(f"Binding sensitive host path '{host_path}' is restricted in Portly.")
+
     # Validate ports
     formatted_ports = {}
-    for c_port, h_port in ports.items():
+    for c_port, h_port in (ports or {}).items():
         try:
             hp_int = int(h_port)
             chk = check_port_availability(hp_int, "0.0.0.0")
@@ -840,8 +1051,8 @@ def deploy_container(
             raise ValueError(f"Invalid port configuration: {e}")
 
     run_kwargs: Dict[str, Any] = {
-        "image": image.strip(),
-        "name": name.strip(),
+        "image": clean_image,
+        "name": clean_name,
         "detach": True,
         "ports": formatted_ports,
         "environment": env or {},
@@ -853,13 +1064,12 @@ def deploy_container(
 
     try:
         cont = client.containers.run(**run_kwargs)
-        store.log_event("container_deploy", f"Deployed new container '{name}' from image '{image}'")
+        store.log_event("container_deploy", f"Deployed new container '{clean_name}' from image '{clean_image}'", actor=actor)
         return {
             "status": "deployed",
             "container": cont.name,
             "id": cont.id[:12] if cont.id else "",
         }
     except Exception as e:
-        logger.error(f"Failed to deploy container {name}: {e}")
-        raise RuntimeError(f"Failed to deploy container {name}: {e}")
-
+        logger.error(f"Failed to deploy container {clean_name}: {e}")
+        raise RuntimeError(f"Failed to deploy container {clean_name}: {e}")

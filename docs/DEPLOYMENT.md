@@ -26,15 +26,19 @@ services:
       - PORTLY_PORT=5533
       - PORTLY_MODE=server
       - PORTLY_DATA_DIR=/app/data
+      - PORTLY_HOSTFS=/hostfs
+      - PORTLY_ALLOW_INSECURE_BIND=false
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./data:/app/data
+      - /:/hostfs:ro
 ```
 
-### Why `network_mode: host` and `pid: host`?
+### Why `network_mode: host`, `pid: host`, and `PORTLY_HOSTFS`?
 - **Host Socket Discovery:** In bridge network mode, containers only see network namespaces isolated to that bridge. `network_mode: host` allows `psutil` and `netstat` to monitor the physical host's listening ports.
 - **Process Inspection:** `pid: host` allows Portly to resolve process names, command lines, memory RSS, and CPU utilization for listening host processes.
 - **Docker Socket Mount:** `/var/run/docker.sock` allows Portly to query the Docker Engine API and receive real-time container lifecycle events.
+- **Host Filesystem Mount:** Mounts root filesystem at `/hostfs:ro` and sets `PORTLY_HOSTFS=/hostfs` so Portly can report accurate host disk utilization rather than overlay container storage.
 
 ---
 
@@ -124,6 +128,6 @@ ingress:
 ## 4. Security Checklist
 
 - [ ] Run with `--mode server` when exposed beyond `localhost` (`127.0.0.1`).
-- [ ] Create an initial admin password immediately upon first launch.
+- [ ] On first launch in server mode, copy the **Setup Token** printed to `stderr` and create the initial admin password.
 - [ ] Keep **Safe Mode** enabled by default in settings to guard against accidental container termination.
 - [ ] Set `PORTLY_CORS_ORIGINS` to trusted domains if accessing Portly via custom cross-origin web clients.

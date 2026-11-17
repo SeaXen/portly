@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { Category, Rule } from '../types';
+import { useToast } from './Toast';
 
 interface CustomizeDrawerProps {
   onClose: () => void;
@@ -39,6 +40,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
   visibleFields,
   onToggleField,
 }) => {
+  const { error } = useToast();
   const [showAddRule, setShowAddRule] = useState(false);
   const [newRuleField, setNewRuleField] = useState('image');
   const [newRuleOp, setNewRuleOp] = useState('contains');
@@ -111,7 +113,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
       setNewRuleVal('');
       onRulesUpdated();
     } catch (err: any) {
-      alert(`Error saving rule: ${err.message}`);
+      error(`Error saving rule: ${err.message}`);
     }
   };
 

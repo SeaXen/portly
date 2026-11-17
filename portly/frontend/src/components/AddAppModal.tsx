@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api';
-import { AppItem, Category } from '../types';
+import { AppItem, Category, PreflightResponse } from '../types';
+import { useToast } from './Toast';
 
 interface AddAppModalProps {
   onClose: () => void;
@@ -15,7 +16,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   availableApps,
   onAppAdded,
 }) => {
-  const [activeTab, setActiveTab] = useState<'custom' | 'docker' | 'process' | 'external' | 'deploy'>('custom');
+  const { success, error, warning } = useToast();
+  const [activeTab, setActiveTab] = useState<'custom' | 'docker' | 'process' | 'external' | 'deploy' | 'preflight'>('custom');
 
   // Custom Form fields
   const [name, setName] = useState('');
@@ -31,6 +33,12 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   const [logFile, setLogFile] = useState('');
   const [startOnBoot, setStartOnBoot] = useState(false);
   const [pin, setPin] = useState(true);
+
+  // Preflight check tab state (D-10, F-5)
+  const [preflightMode, setPreflightMode] = useState<'command' | 'compose' | 'ports'>('command');
+  const [preflightInput, setPreflightInput] = useState('docker run -d -p 8080:80 -p 3306:3306 nginx');
+  const [preflightResult, setPreflightResult] = useState<PreflightResponse | null>(null);
+  const [preflightChecking, setPreflightChecking] = useState(false);
 
   // External URL Form fields
   const [extName, setExtName] = useState('');
@@ -99,10 +107,49 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
     checkDeployPort(p.hostPort);
   };
 
+  const handleRunPreflight = async () => {
+    if (!preflightInput.trim()) {
+      warning('Please provide command, compose yaml, or ports to check.');
+      return;
+    }
+    setPreflightChecking(true);
+    setPreflightResult(null);
+    try {
+      const payload: any = {};
+      if (preflightMode === 'command') {
+        payload.raw_command = preflightInput.trim();
+      } else if (preflightMode === 'compose') {
+        payload.compose_yaml = preflightInput.trim();
+      } else {
+        const ports = preflightInput
+          .split(/[\s,]+/)
+          .map((p) => parseInt(p.trim()))
+          .filter((p) => !isNaN(p) && p > 0);
+        if (ports.length === 0) {
+          warning('Please enter valid port numbers.');
+          setPreflightChecking(false);
+          return;
+        }
+        payload.ports = ports;
+      }
+      const res = await api.checkPreflight(payload);
+      setPreflightResult(res);
+      if (res.has_collision) {
+        warning(`Preflight detected ${res.collisions.length} port collision(s)!`);
+      } else {
+        success('Preflight passed! All requested ports are free.');
+      }
+    } catch (e: any) {
+      error(`Preflight check failed: ${e.message}`);
+    } finally {
+      setPreflightChecking(false);
+    }
+  };
+
   const handleDeploySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!deployImage.trim() || !deployName.trim()) {
-      alert('Container image and name are required.');
+      warning('Container image and name are required.');
       return;
     }
     setDeploying(true);
@@ -121,11 +168,11 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         env: envObj,
         restart_policy: deployRestart,
       });
-      alert(`Container '${deployName}' deployed successfully!`);
+      success(`Container '${deployName}' deployed successfully!`);
       onAppAdded();
       onClose();
     } catch (e: any) {
-      alert(`Deployment failed: ${e.message}`);
+      error(`Deployment failed: ${e.message}`);
     } finally {
       setDeploying(false);
     }
@@ -152,7 +199,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      alert('Please enter an app name.');
+      warning('Please enter an app name.');
       return;
     }
     setSubmitting(true);
@@ -180,10 +227,11 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         pinned: pin,
       });
 
+      success(`App '${name}' saved successfully!`);
       onAppAdded();
       onClose();
     } catch (err: any) {
-      alert(`Failed to add app: ${err.message}`);
+      error(`Failed to add app: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -192,7 +240,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   const handleExternalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!extName.trim() || !extUrl.trim()) {
-      alert('Please enter both name and URL.');
+      warning('Please enter both name and URL.');
       return;
     }
     setSubmitting(true);
@@ -225,10 +273,11 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         pinned: true,
       });
 
+      success(`External URL '${extName}' added!`);
       onAppAdded();
       onClose();
     } catch (err: any) {
-      alert(`Failed to add external URL: ${err.message}`);
+      error(`Failed to add external URL: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -237,7 +286,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   const handleManualDockerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualDockerName.trim()) {
-      alert('Please enter container name.');
+      warning('Please enter container name.');
       return;
     }
     setName(manualDockerName.trim());
@@ -313,6 +362,13 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             onClick={() => setActiveTab('deploy')}
           >
             Deploy Container
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'preflight' ? 'c094' : 'c095'}
+            onClick={() => setActiveTab('preflight')}
+          >
+            ⚡ Preflight Collision Check
           </button>
         </div>
 
@@ -861,6 +917,124 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
               </button>
             </div>
           </form>
+        )}
+
+        {/* Tab 5: Preflight Collision Check (D-10, F-5) */}
+        {activeTab === 'preflight' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ fontSize: '13px', color: '#8D95A5', lineHeight: 1.5 }}>
+              Preflight checks validate whether ports declared in a <code style={{ color: '#8C9EFF' }}>docker run</code> command, a <code style={{ color: '#8C9EFF' }}>docker-compose.yml</code> file, or a list of ports are available before launching.
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {(['command', 'compose', 'ports'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setPreflightMode(m);
+                    setPreflightResult(null);
+                    if (m === 'command') setPreflightInput('docker run -d -p 8080:80 -p 5432:5432 postgres');
+                    else if (m === 'compose') setPreflightInput('version: "3.8"\nservices:\n  web:\n    image: nginx\n    ports:\n      - "8080:80"\n  db:\n    image: redis\n    ports:\n      - "6379:6379"');
+                    else setPreflightInput('3000, 5432, 6379, 8080');
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '7px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    background: preflightMode === m ? '#8C9EFF' : 'rgba(255,255,255,0.06)',
+                    color: preflightMode === m ? '#0B1220' : '#ECEEF3',
+                    border: 0,
+                  }}
+                >
+                  {m === 'command' ? 'Docker Run Command' : m === 'compose' ? 'Docker Compose YAML' : 'Port List'}
+                </button>
+              ))}
+            </div>
+
+            <div>
+              <label htmlFor="preflight-input" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
+                {preflightMode === 'command' ? 'Command Line Invocation' : preflightMode === 'compose' ? 'Compose YAML Definition' : 'Comma or Space-separated Ports'}
+              </label>
+              <textarea
+                id="preflight-input"
+                rows={6}
+                value={preflightInput}
+                onChange={(e) => setPreflightInput(e.target.value)}
+                className="c220"
+                style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px' }}
+                placeholder={preflightMode === 'command' ? 'docker run -p 8080:80 ...' : 'services:\n  ...'}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                className="c080"
+                disabled={preflightChecking}
+                onClick={handleRunPreflight}
+                style={{ background: '#8C9EFF', color: '#0B1220' }}
+              >
+                {preflightChecking ? 'Checking Collisions…' : 'Run Preflight Check'}
+              </button>
+            </div>
+
+            {/* Results */}
+            {preflightResult && (
+              <div
+                style={{
+                  background: '#101218',
+                  borderRadius: '10px',
+                  padding: '16px',
+                  border: `1px solid ${preflightResult.has_collision ? 'rgba(255, 138, 138, 0.3)' : 'rgba(94, 234, 212, 0.3)'}`,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '18px' }}>{preflightResult.has_collision ? '⚠️' : '✓'}</span>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: preflightResult.has_collision ? '#FF8A8A' : '#5EEAD4' }}>
+                    {preflightResult.has_collision
+                      ? `${preflightResult.collisions.length} Port Collision(s) Detected!`
+                      : 'All Requested Ports Available!'}
+                  </div>
+                </div>
+
+                {preflightResult.has_collision ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {preflightResult.collisions.map((col, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 12px',
+                          background: '#161B22',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                        }}
+                      >
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#FF8A8A', fontWeight: 600 }}>
+                          Port {col.port}/{col.proto || 'tcp'}
+                        </span>
+                        <span style={{ color: '#ECEEF3' }}>
+                          Bound by: <strong style={{ color: '#FBBF77' }}>{col.service_name || col.owner || 'Unknown Socket'}</strong>
+                        </span>
+                        <span style={{ color: '#8D95A5', fontSize: '11px' }}>
+                          Source: {col.source || 'host'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '12px', color: '#8D95A5' }}>
+                    Checked {preflightResult.checked_ports.length} port(s): {preflightResult.checked_ports.join(', ')}. No socket or container conflicts found.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -35,10 +35,10 @@ def _format_rate(bytes_per_sec: float) -> str:
 
 
 def _generate_sparkline_points(values: List[float], width: float = 60.0, height: float = 22.0) -> str:
-    """Generates an SVG polyline points string from a list of numbers."""
+    """Generates an SVG polyline points string from a list of real telemetry numbers."""
     if not values:
         return f"0.0,{height} {width},{height}"
-    
+
     n = len(values)
     if n == 1:
         return f"0.0,{height / 2} {width},{height / 2}"
@@ -76,9 +76,10 @@ def collect_snapshot(containers_running: int = 0, listening_count: int = 0, conf
     mem_total_gb = round(mem.total / (1024 ** 3), 1)
     mem_pct = mem.percent
 
-    # Disk
+    # Disk - inspect host root via PORTLY_HOSTFS if inside container
     try:
-        root_path = os.path.abspath(os.sep)
+        hostfs = os.getenv("PORTLY_HOSTFS")
+        root_path = hostfs if (hostfs and os.path.isdir(hostfs)) else os.path.abspath(os.sep)
         disk = psutil.disk_usage(root_path)
         disk_used_gb = round(disk.used / (1024 ** 3), 1)
         disk_total_gb = round(disk.total / (1024 ** 3), 1)
@@ -127,30 +128,16 @@ def get_current_stats(containers_running: int = 0, listening_count: int = 0, con
     with _lock:
         if not _history:
             collect_snapshot(containers_running, listening_count, conflict_count)
-        
-        # Take latest or freshly collected
+
         latest = _history[-1] if _history else collect_snapshot(containers_running, listening_count, conflict_count)
 
-        # Build sparkline lists
+        # Real telemetry history only
         cpu_hist = [h["cpu_pct"] for h in _history]
         mem_hist = [h["mem_pct"] for h in _history]
         disk_hist = [h["disk_pct"] for h in _history]
-        net_hist = [h["net_down_bps"] / (1024 ** 2) for h in _history]
+        net_hist = [round(h["net_down_bps"] / (1024 ** 2), 2) for h in _history]
         cont_hist = [float(h["containers_running"]) for h in _history]
         port_hist = [float(h["listening_count"]) for h in _history]
-
-    # Pre-pad sparklines with synthetic ramp if fewer than 10 points
-    if len(cpu_hist) < 5:
-        base_cpu = latest["cpu_pct"]
-        cpu_hist = [max(0, base_cpu - 2), max(0, base_cpu + 1), max(0, base_cpu - 1), base_cpu]
-        base_mem = latest["mem_pct"]
-        mem_hist = [base_mem, base_mem, base_mem, base_mem]
-        base_disk = latest["disk_pct"]
-        disk_hist = [base_disk, base_disk, base_disk, base_disk]
-        base_net = latest["net_down_bps"] / (1024 ** 2)
-        net_hist = [base_net * 0.8, base_net * 1.1, base_net * 0.9, base_net]
-        cont_hist = [float(containers_running)] * 4
-        port_hist = [float(listening_count)] * 4
 
     conflict_label = f"{conflict_count} conflict" if conflict_count == 1 else (f"{conflict_count} conflicts" if conflict_count > 1 else "no conflicts")
 
@@ -164,7 +151,7 @@ def get_current_stats(containers_running: int = 0, listening_count: int = 0, con
             "history": cpu_hist,
         },
         "memory": {
-            "label": "Memory",
+            "label": "RAM",
             "value": f"{latest['mem_used_gb']} GB",
             "context": f"of {latest['mem_total_gb']} GB",
             "percent": latest["mem_pct"],
@@ -181,22 +168,25 @@ def get_current_stats(containers_running: int = 0, listening_count: int = 0, con
         },
         "network": {
             "label": "Network",
-            "value": _format_rate(latest["net_down_bps"]),
-            "context": f"up {_format_rate(latest['net_up_bps'])}",
+            "value": f"↓ {_format_rate(latest['net_down_bps'])}",
+            "context": f"↑ {_format_rate(latest['net_up_bps'])}",
+            "percent": min(100.0, (latest["net_down_bps"] / (10 * 1024 * 1024)) * 100),
             "sparkline": _generate_sparkline_points(net_hist),
             "history": net_hist,
         },
         "containers": {
             "label": "Containers",
-            "value": str(containers_running),
+            "value": str(latest["containers_running"]),
             "context": "running",
+            "percent": min(100.0, float(latest["containers_running"]) * 10),
             "sparkline": _generate_sparkline_points(cont_hist),
             "history": cont_hist,
         },
         "listening": {
-            "label": "Listening",
-            "value": str(listening_count),
+            "label": "Listening Ports",
+            "value": str(latest["listening_count"]),
             "context": conflict_label,
+            "percent": min(100.0, float(latest["listening_count"]) * 5),
             "conflict_count": conflict_count,
             "sparkline": _generate_sparkline_points(port_hist),
             "history": port_hist,

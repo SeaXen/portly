@@ -6,12 +6,15 @@ import io
 import json
 import logging
 import os
+import re
 import time
+import uuid
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from fastapi import Cookie, Depends, FastAPI, HTTPException, Header, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -23,7 +26,7 @@ from portly.backend.discovery.host import discover_host_ports
 from portly.backend.discovery.merge import merge_discovered_apps
 from portly.backend.health import check_app_health
 from portly.backend.notifications import detect_changes, send_webhook_sync
-from portly.backend.ports import check_port_availability, plan_port_change, suggest_free_ports
+from portly.backend.ports import check_port_availability, check_preflight_collisions, plan_port_change, suggest_free_ports
 from portly.backend.stats import collect_snapshot, get_current_stats, get_detailed_system_stats
 from portly.backend.store import Store
 
@@ -31,6 +34,91 @@ logger = logging.getLogger("portly.app")
 _main_event_loop: Optional[asyncio.AbstractEventLoop] = None
 
 from contextlib import asynccontextmanager
+
+store = Store()
+
+# Cached discovery state
+_cached_apps: List[Dict[str, Any]] = []
+_cached_conflicts: List[Dict[str, Any]] = []
+_last_scan_time: float = 0.0
+_sse_subscribers: List[asyncio.Queue] = []
+_scan_lock = asyncio.Lock()
+
+
+async def refresh_discovery():
+    global _cached_apps, _cached_conflicts, _last_scan_time
+    async with _scan_lock:
+        public_host = store.get_setting("public_host", "")
+        loop = asyncio.get_event_loop()
+        apps, conflicts = await loop.run_in_executor(None, merge_discovered_apps, store, public_host)
+        events = await loop.run_in_executor(None, detect_changes, apps, conflicts, store)
+
+        _cached_apps = apps
+        _cached_conflicts = conflicts
+        _last_scan_time = time.time()
+
+        # Update stats
+        docker_running = sum(1 for a in apps if a.get("source") == "docker" and a.get("status") == "up")
+        collect_snapshot(containers_running=docker_running, listening_count=len(apps), conflict_count=len(conflicts))
+
+        # Push to SSE subscribers with bounded queues
+        if _sse_subscribers:
+            stats = get_current_stats(containers_running=docker_running, listening_count=len(apps), conflict_count=len(conflicts))
+            docker_avail, docker_err = is_docker_available()
+            
+            # Redact apps for general broadcast
+            safe_apps = [redact_app_for_summary(a) for a in _cached_apps]
+            msg = {
+                "type": "update",
+                "apps": safe_apps,
+                "conflicts": _cached_conflicts,
+                "stats": stats,
+                "docker_status": {
+                    "available": docker_avail,
+                    "message": docker_err,
+                },
+                "events": events,
+                "last_scan": _last_scan_time,
+            }
+            for q in list(_sse_subscribers):
+                try:
+                    if q.full():
+                        try:
+                            q.get_nowait()
+                        except asyncio.QueueEmpty:
+                            pass
+                    q.put_nowait(msg)
+                except Exception:
+                    pass
+
+
+def redact_app_for_summary(app_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip or redact sensitive execution info (env, start_cmd) for summary payloads."""
+    clean = dict(app_dict)
+    if "env" in clean:
+        clean["env_keys"] = list(clean["env"].keys()) if isinstance(clean["env"], dict) else []
+        clean.pop("env", None)
+    clean.pop("start_cmd", None)
+    clean.pop("stop_cmd", None)
+    clean.pop("update_cmd", None)
+    return clean
+
+
+def mask_sensitive_env(env_dict: Dict[str, Any]) -> Dict[str, str]:
+    """Mask sensitive environment variable values."""
+    if not isinstance(env_dict, dict):
+        return {}
+    sensitive_patterns = ("pass", "secret", "key", "token", "auth", "pwd", "credential")
+    masked = {}
+    for k, v in env_dict.items():
+        v_str = str(v)
+        k_lower = k.lower()
+        if any(p in k_lower for p in sensitive_patterns) or len(v_str) > 30:
+            masked[k] = "********"
+        else:
+            masked[k] = v_str
+    return masked
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,6 +135,14 @@ async def lifespan(app: FastAPI):
     # Initial scan
     await refresh_discovery()
 
+    # Auto-start on boot custom apps
+    for ca in store.get_custom_apps():
+        if ca.get("start_on_boot") and ca.get("start_cmd"):
+            try:
+                await asyncio.to_thread(process_actions.start_custom_app, f"custom:{ca['id']}", store)
+            except Exception as e:
+                logger.warning(f"Failed to auto-start custom app {ca['id']} on boot: {e}")
+
     # Background refresh loop
     async def background_poller():
         while True:
@@ -61,11 +157,23 @@ async def lifespan(app: FastAPI):
                 except Exception as e:
                     logger.warning(f"Error in background discovery refresh: {e}")
 
+    # Background session and health maintenance
+    async def background_maintenance():
+        while True:
+            await asyncio.sleep(300)  # Every 5 minutes
+            try:
+                await asyncio.to_thread(auth.prune_expired_sessions)
+            except Exception as e:
+                logger.warning(f"Error pruning expired sessions: {e}")
+
     poller_task = asyncio.create_task(background_poller())
+    maint_task = asyncio.create_task(background_maintenance())
     try:
         yield
     finally:
         poller_task.cancel()
+        maint_task.cancel()
+
 
 app = FastAPI(title="Portly API", version="1.0.0", lifespan=lifespan)
 
@@ -88,14 +196,87 @@ else:
         allow_headers=["*"],
     )
 
-store = Store()
 
-# Cached discovery state
-_cached_apps: List[Dict[str, Any]] = []
-_cached_conflicts: List[Dict[str, Any]] = []
-_last_scan_time: float = 0.0
-_sse_subscribers: List[asyncio.Queue] = []
-_scan_lock = asyncio.Lock()
+# Security Headers & CSRF / Host Validation Middleware
+@app.middleware("http")
+async def security_and_csrf_middleware(request: Request, call_next):
+    # 1. Host Validation
+    host_header = request.headers.get("host", "").split(":")[0].strip().lower()
+    allowed_hosts = {"127.0.0.1", "localhost", "::1", "testserver", "testclient"}
+    
+    env_allowed = os.getenv("PORTLY_ALLOWED_HOSTS", "")
+    if env_allowed:
+        for h in env_allowed.split(","):
+            if h.strip():
+                allowed_hosts.add(h.strip().lower())
+    
+    bind_host = os.getenv("PORTLY_HOST", "")
+    if bind_host and bind_host not in ("0.0.0.0", "::"):
+        allowed_hosts.add(bind_host.lower())
+
+    pub_host = store.get_setting("public_host", "").strip()
+    if pub_host:
+        pub_parsed = urlparse(f"//{pub_host}").hostname
+        if pub_parsed:
+            allowed_hosts.add(pub_parsed.lower())
+
+    if host_header and host_header not in allowed_hosts and not any(host_header.endswith(f".{ah}") for ah in allowed_hosts if "." in ah):
+        # Allow loopback/local networks if insecure bind allowed or testing
+        if os.getenv("PORTLY_ALLOW_INSECURE_BIND", "").lower() not in ("true", "1") and os.getenv("PORTLY_TESTING") != "1":
+            return JSONResponse(
+                status_code=400,
+                content={"code": "INVALID_HOST", "message": f"Host '{host_header}' is not in allowed hosts."}
+            )
+
+    # 2. CSRF Protection on Mutating Requests
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        # Explicit Portly client header bypasses browser CSRF
+        client_header = request.headers.get("x-portly-client")
+        origin = request.headers.get("origin")
+        referer = request.headers.get("referer")
+
+        if client_header != "1":
+            # Check Origin or Referer if provided by a web browser
+            if origin:
+                origin_host = urlparse(origin).hostname
+                if origin_host and origin_host.lower() not in allowed_hosts:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"code": "CSRF_DETECTED", "message": f"Origin '{origin}' is not authorized."}
+                    )
+            elif referer:
+                referer_host = urlparse(referer).hostname
+                if referer_host and referer_host.lower() not in allowed_hosts:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"code": "CSRF_DETECTED", "message": f"Referer '{referer}' is not authorized."}
+                    )
+
+    response = await call_next(request)
+
+    # 3. Security Headers
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self' ws: wss:; "
+        "font-src 'self' data:; "
+        "object-src 'none'; "
+        "frame-ancestors 'none';"
+    )
+    return response
+
+
+def get_client_ip(request: Request) -> str:
+    xf = request.headers.get("x-forwarded-for")
+    if xf:
+        return xf.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
 
 
 def get_current_user(
@@ -124,7 +305,7 @@ def get_current_user(
         client_host = request.client.host if request.client else "127.0.0.1"
         is_remote = client_host not in ("127.0.0.1", "::1", "localhost", "testclient")
 
-        # When binding to 0.0.0.0, in server mode, or accessed remotely, require setup of admin account
+        # When binding to 0.0.0.0, in server mode, or accessed remotely, require setup
         if (mode == "server" or host in ("0.0.0.0", "::") or is_remote) and not allow_insecure:
             return {"user_id": "setup", "username": "setup", "role": "setup"}
 
@@ -139,58 +320,21 @@ def require_auth(current_user: Optional[Dict[str, Any]] = Depends(get_current_us
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "UNAUTHORIZED", "message": "Authentication required", "hint": "Please log in"}
         )
+    if current_user.get("role") == "setup":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "SETUP_REQUIRED", "message": "Initial admin setup required before performing mutations.", "hint": "Create an admin account via /api/auth/setup"}
+        )
     return current_user
 
 
 def require_admin(current_user: Dict[str, Any] = Depends(require_auth)) -> Dict[str, Any]:
     if current_user.get("role") != "admin":
-        if current_user.get("role") == "setup":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={"code": "SETUP_REQUIRED", "message": "Initial admin setup required before performing mutations.", "hint": "Create an admin account via /api/auth/setup"}
-            )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={"code": "FORBIDDEN", "message": "Admin privileges required for this action", "hint": "Viewers cannot mutate apps"}
         )
     return current_user
-
-
-async def refresh_discovery():
-    global _cached_apps, _cached_conflicts, _last_scan_time
-    async with _scan_lock:
-        public_host = store.get_setting("public_host", "")
-        # Run synchronous merge in thread
-        loop = asyncio.get_event_loop()
-        apps, conflicts = await loop.run_in_executor(None, merge_discovered_apps, store, public_host)
-        
-        # Change detection & events
-        events = await loop.run_in_executor(None, detect_changes, apps, conflicts, store)
-        
-        _cached_apps = apps
-        _cached_conflicts = conflicts
-        _last_scan_time = time.time()
-
-        # Update stats
-        docker_running = sum(1 for a in apps if a.get("source") == "docker" and a.get("status") == "up")
-        collect_snapshot(containers_running=docker_running, listening_count=len(apps), conflict_count=len(conflicts))
-
-        # Push to SSE subscribers
-        if _sse_subscribers:
-            stats = get_current_stats(containers_running=docker_running, listening_count=len(apps), conflict_count=len(conflicts))
-            msg = {
-                "type": "update",
-                "apps": _cached_apps,
-                "conflicts": _cached_conflicts,
-                "stats": stats,
-                "events": events,
-                "last_scan": _last_scan_time,
-            }
-            for q in list(_sse_subscribers):
-                try:
-                    q.put_nowait(msg)
-                except Exception:
-                    pass
 
 
 # Connect docker event listener to refresh discovery
@@ -214,12 +358,8 @@ def on_docker_event():
 set_on_docker_event(on_docker_event)
 
 
+# ---------------- API MODELS ----------------
 
-
-
-# ---------------- API ROUTES ----------------
-
-# Pydantic Request Models
 class AppPatchModel(BaseModel):
     name: Optional[str] = None
     icon: Optional[str] = None
@@ -318,6 +458,27 @@ class LoginModel(BaseModel):
 class SetupModel(BaseModel):
     username: str
     password: str
+    setup_token: Optional[str] = None
+
+
+class UserCreateModel(BaseModel):
+    username: str
+    password: str
+    role: str = "viewer"
+
+
+class UserRoleModel(BaseModel):
+    role: str
+
+
+class UserPasswordModel(BaseModel):
+    new_password: str
+    current_password: Optional[str] = None
+
+
+class PreflightModel(BaseModel):
+    compose_content: Optional[str] = None
+    command: Optional[str] = None
 
 
 class ExecModel(BaseModel):
@@ -331,6 +492,14 @@ class WebhookTestModel(BaseModel):
     event: Optional[str] = "test"
 
 
+# ---------------- API ROUTES ----------------
+
+# Minimal Health Endpoint (P0-1 & Docker HEALTHCHECK)
+@app.get("/api/health")
+async def healthcheck_endpoint():
+    return {"status": "ok", "time": time.time()}
+
+
 # 1. Apps unified list & detail
 @app.get("/api/apps")
 async def get_apps(
@@ -341,7 +510,8 @@ async def get_apps(
     search: Optional[str] = None,
     include_hidden: bool = False,
     sort_by: str = "port",
-    sort_dir: str = "asc"
+    sort_dir: str = "asc",
+    user: Dict[str, Any] = Depends(require_auth)
 ):
     apps = list(_cached_apps)
 
@@ -388,11 +558,13 @@ async def get_apps(
     elif sort_by == "category":
         apps.sort(key=lambda a: a.get("category_id", ""), reverse=reverse)
 
+    # Redact sensitive execution params from list
+    safe_apps = [redact_app_for_summary(a) for a in apps]
     docker_avail, docker_err = is_docker_available()
 
     return {
-        "apps": apps,
-        "total": len(apps),
+        "apps": safe_apps,
+        "total": len(safe_apps),
         "conflicts": _cached_conflicts,
         "docker_status": {
             "available": docker_avail,
@@ -411,9 +583,9 @@ async def get_logs_endpoint(
 ):
     if app_id.startswith("docker:"):
         c_name = app_id.split(":")[1]
-        lines = docker_actions.get_container_logs(c_name, tail=tail, follow=False)
+        lines = await asyncio.to_thread(docker_actions.get_container_logs, c_name, tail=tail, follow=False)
     elif app_id.startswith("custom:"):
-        lines = process_actions.get_custom_app_logs(app_id, store, tail=tail)
+        lines = await asyncio.to_thread(process_actions.get_custom_app_logs, app_id, store, tail=tail)
     else:
         lines = [f"Direct log capture is not available for host process '{app_id}'."]
 
@@ -424,18 +596,14 @@ async def get_logs_endpoint(
 async def get_proxy_config_endpoint(
     app_id: str,
     format: Optional[str] = Query(None),
-    domain: Optional[str] = Query(None)
+    domain: Optional[str] = Query(None),
+    user: Dict[str, Any] = Depends(require_auth)
 ):
     target_app = None
     for a in _cached_apps:
         if a["id"] == app_id:
             target_app = a
             break
-    if not target_app:
-        target_app = store.get_app(app_id)
-
-    if not target_app:
-        target_app = store.get_app(app_id)
     if not target_app:
         target_app = store.get_app(app_id)
 
@@ -500,17 +668,12 @@ async def get_app_favicon_endpoint(app_id: str):
 
 
 @app.get("/api/apps/{app_id:path}/tls")
-async def get_app_tls_endpoint(app_id: str):
+async def get_app_tls_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_auth)):
     target_app = None
     for a in _cached_apps:
         if a["id"] == app_id:
             target_app = a
             break
-    if not target_app:
-        target_app = store.get_app(app_id)
-
-    if not target_app:
-        target_app = store.get_app(app_id)
     if not target_app:
         target_app = store.get_app(app_id)
 
@@ -547,7 +710,7 @@ async def exec_command_endpoint(
                 store=store,
                 timeout=data.timeout
             ),
-            timeout=float(data.timeout + 1.0)
+            timeout=float(data.timeout + 2.0)
         )
         return res
     except asyncio.TimeoutError:
@@ -573,7 +736,7 @@ async def exec_command_endpoint(
 
 
 @app.get("/api/apps/{app_id:path}/compose")
-async def get_app_compose_endpoint(app_id: str):
+async def get_app_compose_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_admin)):
     if not app_id.startswith("docker:"):
         raise HTTPException(
             status_code=400,
@@ -591,7 +754,7 @@ async def get_app_compose_endpoint(app_id: str):
 
 
 @app.get("/api/apps/{app_id:path}")
-async def get_app_detail(app_id: str):
+async def get_app_detail(app_id: str, user: Dict[str, Any] = Depends(require_auth)):
     target = None
     for a in _cached_apps:
         if a["id"] == app_id:
@@ -604,7 +767,7 @@ async def get_app_detail(app_id: str):
         health = await asyncio.to_thread(check_app_health, target)
         store.record_health(app_id, health["ok"], health["latency_ms"])
         history = store.get_health_history(app_id, limit=30)
-        
+
         # Inspect details if docker non-blocking
         docker_inspect = None
         if target.get("source") == "docker":
@@ -613,14 +776,41 @@ async def get_app_detail(app_id: str):
             except Exception:
                 pass
 
+        app_copy = dict(target)
+        # Redact/mask environment variables
+        is_admin = user.get("role") == "admin"
+        if "env" in app_copy and isinstance(app_copy["env"], dict):
+            app_copy["env"] = mask_sensitive_env(app_copy["env"])
+
+        if docker_inspect and isinstance(docker_inspect.get("env"), dict) and not is_admin:
+            docker_inspect["env"] = mask_sensitive_env(docker_inspect["env"])
+
         return {
-            "app": target,
+            "app": app_copy,
             "health": health,
             "health_history": history,
             "docker_inspect": docker_inspect,
         }
 
     raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"App '{app_id}' not found"})
+
+
+@app.get("/api/apps/{app_id:path}/inspect/reveal-env")
+async def reveal_env_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_admin)):
+    """Admin-only audit-logged endpoint to reveal unmasked environment variables."""
+    store.log_event("app.reveal_env", f"User '{user['username']}' revealed environment variables for {app_id}", actor=user.get("username", "admin"))
+    
+    if app_id.startswith("custom:"):
+        ca = store.get_custom_app(app_id.replace("custom:", ""))
+        if not ca:
+            raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Custom app not found"})
+        return {"env": ca.get("env", {})}
+    elif app_id.startswith("docker:"):
+        c_name = app_id.split(":")[1]
+        insp = await asyncio.to_thread(docker_actions.inspect_container, c_name)
+        return {"env": insp.get("env", {})}
+    
+    return {"env": {}}
 
 
 @app.patch("/api/apps/{app_id:path}")
@@ -636,10 +826,13 @@ async def patch_app(app_id: str, patch: AppPatchModel, user: Dict[str, Any] = De
 async def bulk_action(data: BulkActionModel, user: Dict[str, Any] = Depends(require_admin)):
     action = data.action.lower()
     ids = data.ids
+    succeeded = []
+    failed = []
 
     if action == "move" and data.category_id:
         for app_id in ids:
             store.upsert_app_override(app_id, category_id=data.category_id)
+            succeeded.append(app_id)
     elif action == "tag" and data.tag:
         for app_id in ids:
             app_meta = store.get_app(app_id) or {}
@@ -647,14 +840,16 @@ async def bulk_action(data: BulkActionModel, user: Dict[str, Any] = Depends(requ
             if data.tag not in tags:
                 tags.append(data.tag)
                 store.upsert_app_override(app_id, tags=tags)
+            succeeded.append(app_id)
     elif action == "pin":
         for app_id in ids:
             store.upsert_app_override(app_id, pinned=True)
+            succeeded.append(app_id)
     elif action == "hide":
         for app_id in ids:
             store.upsert_app_override(app_id, hidden=True)
+            succeeded.append(app_id)
     elif action in ("start", "stop", "restart"):
-        # Safe mode check
         if store.get_setting("safe_mode", "true").lower() == "true":
             raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": "Safe mode is active. Mutating actions are locked."})
         for app_id in ids:
@@ -662,34 +857,36 @@ async def bulk_action(data: BulkActionModel, user: Dict[str, Any] = Depends(requ
                 if app_id.startswith("docker:"):
                     c_name = app_id.split(":")[1]
                     if action == "start":
-                        docker_actions.start_container(c_name, store)
+                        await asyncio.to_thread(docker_actions.start_container, c_name, store)
                     elif action == "stop":
-                        docker_actions.stop_container(c_name, store)
+                        await asyncio.to_thread(docker_actions.stop_container, c_name, store)
                     elif action == "restart":
-                        docker_actions.restart_container(c_name, store)
+                        await asyncio.to_thread(docker_actions.restart_container, c_name, store)
                 elif app_id.startswith("custom:"):
                     if action == "start":
-                        process_actions.start_custom_app(app_id, store)
+                        await asyncio.to_thread(process_actions.start_custom_app, app_id, store)
                     elif action == "stop":
-                        process_actions.stop_custom_app(app_id, store)
+                        await asyncio.to_thread(process_actions.stop_custom_app, app_id, store)
                     elif action == "restart":
-                        process_actions.restart_custom_app(app_id, store)
+                        await asyncio.to_thread(process_actions.restart_custom_app, app_id, store)
+                succeeded.append(app_id)
             except Exception as e:
                 logger.warning(f"Error in bulk action for {app_id}: {e}")
+                failed.append({"id": app_id, "error": str(e)})
 
     await refresh_discovery()
-    return {"status": "ok", "count": len(ids)}
+    return {"status": "ok", "succeeded": succeeded, "failed": failed, "count": len(succeeded)}
 
 
-# 3. Actions: Start, Stop, Restart, Logs
+# 3. Actions: Start, Stop, Restart
 @app.post("/api/apps/{app_id:path}/start")
 async def start_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_admin)):
     try:
         if app_id.startswith("docker:"):
             c_name = app_id.split(":")[1]
-            res = docker_actions.start_container(c_name, store)
+            res = await asyncio.to_thread(docker_actions.start_container, c_name, store)
         elif app_id.startswith("custom:"):
-            res = process_actions.start_custom_app(app_id, store)
+            res = await asyncio.to_thread(process_actions.start_custom_app, app_id, store)
         else:
             raise HTTPException(status_code=400, detail={"code": "NOT_SUPPORTED", "message": "Starting unmanaged host processes is not supported."})
         await refresh_discovery()
@@ -707,14 +904,13 @@ async def stop_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_
     try:
         if app_id.startswith("docker:"):
             c_name = app_id.split(":")[1]
-            res = docker_actions.stop_container(c_name, store)
+            res = await asyncio.to_thread(docker_actions.stop_container, c_name, store)
         elif app_id.startswith("custom:"):
-            res = process_actions.stop_custom_app(app_id, store)
+            res = await asyncio.to_thread(process_actions.stop_custom_app, app_id, store)
         elif app_id.startswith("host:"):
-            # If user asks to kill a host process
             for a in _cached_apps:
                 if a["id"] == app_id and a.get("pid"):
-                    res = process_actions.kill_host_process(a["pid"], store)
+                    res = await asyncio.to_thread(process_actions.kill_host_process, a["pid"], store)
                     await refresh_discovery()
                     return res
             raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Process not found"})
@@ -735,9 +931,9 @@ async def restart_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(requi
     try:
         if app_id.startswith("docker:"):
             c_name = app_id.split(":")[1]
-            res = docker_actions.restart_container(c_name, store)
+            res = await asyncio.to_thread(docker_actions.restart_container, c_name, store)
         elif app_id.startswith("custom:"):
-            res = process_actions.restart_custom_app(app_id, store)
+            res = await asyncio.to_thread(process_actions.restart_custom_app, app_id, store)
         else:
             raise HTTPException(status_code=400, detail={"code": "NOT_SUPPORTED", "message": "Restart not supported for unmanaged host processes."})
         await refresh_discovery()
@@ -752,15 +948,25 @@ async def restart_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(requi
 
 # 4. Port checking and Change Port flow
 @app.get("/api/ports/check")
-async def check_port_endpoint(port: int = Query(...), bind: str = "0.0.0.0"):
+async def check_port_endpoint(port: int = Query(...), bind: str = "0.0.0.0", user: Dict[str, Any] = Depends(require_auth)):
     res = check_port_availability(port, bind)
     return res
 
 
 @app.get("/api/ports/suggest")
-async def suggest_ports_endpoint(start: int = 3000, count: int = 5, bind: str = "0.0.0.0"):
+async def suggest_ports_endpoint(start: int = 3000, count: int = 5, bind: str = "0.0.0.0", user: Dict[str, Any] = Depends(require_auth)):
     ports = suggest_free_ports(start_port=start, count=count, bind_ip=bind)
     return {"suggested": ports}
+
+
+@app.post("/api/ports/preflight")
+async def preflight_port_collisions_endpoint(data: PreflightModel, user: Dict[str, Any] = Depends(require_admin)):
+    """Preflight check Docker Compose YAML or docker run commands for port collisions."""
+    try:
+        res = check_preflight_collisions(compose_content=data.compose_content, command=data.command, store=store)
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=400, detail={"code": "PREFLIGHT_ERROR", "message": str(e)})
 
 
 @app.post("/api/apps/{app_id:path}/port")
@@ -774,7 +980,7 @@ async def change_port_endpoint(
     if rollback:
         try:
             if app_id.startswith("docker:"):
-                res = docker_actions.rollback_port_change_docker(app_id, store)
+                res = await asyncio.to_thread(docker_actions.rollback_port_change_docker, app_id, store)
                 await refresh_discovery()
                 return res
             else:
@@ -799,7 +1005,8 @@ async def change_port_endpoint(
     plan = plan_res["plan"]
     if plan["type"] == "docker":
         try:
-            res = docker_actions.apply_port_change_docker(
+            res = await asyncio.to_thread(
+                docker_actions.apply_port_change_docker,
                 plan["container_name"],
                 data.host_port,
                 plan["target_container_port"],
@@ -831,7 +1038,7 @@ async def change_port_endpoint(
             data.host_port,
             **kwargs
         )
-        process_actions.restart_custom_app(app_id, store)
+        await asyncio.to_thread(process_actions.restart_custom_app, app_id, store)
         await refresh_discovery()
         return {"status": "updated", "new_port": data.host_port}
     else:
@@ -854,7 +1061,7 @@ async def change_multi_ports_endpoint(
 
     mappings_dicts = [m.model_dump() for m in data.mappings]
     try:
-        res = docker_actions.apply_multi_port_change_docker(container_name, mappings_dicts, store)
+        res = await asyncio.to_thread(docker_actions.apply_multi_port_change_docker, container_name, mappings_dicts, store)
         await refresh_discovery()
         return res
     except PermissionError as e:
@@ -867,7 +1074,7 @@ async def change_multi_ports_endpoint(
 
 # 5. Image updates
 @app.post("/api/apps/{app_id:path}/update/check")
-async def check_update_endpoint(app_id: str):
+async def check_update_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_auth)):
     image_tag = ""
     for a in _cached_apps:
         if a["id"] == app_id:
@@ -875,42 +1082,47 @@ async def check_update_endpoint(app_id: str):
             break
     if not image_tag:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Container image not found"})
-    return docker_actions.check_image_update(image_tag)
+    return await asyncio.to_thread(docker_actions.check_image_update, image_tag)
 
 
 @app.post("/api/apps/{app_id:path}/update/apply")
 async def apply_update_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_admin)):
     if store.get_setting("safe_mode", "true").lower() == "true":
         raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": "Safe mode is active. Mutating actions are locked."})
-    return {"status": "ok", "message": "Image check complete. Image is latest."}
+    if not app_id.startswith("docker:"):
+        raise HTTPException(status_code=400, detail={"code": "NOT_DOCKER", "message": "Image updates are only supported for Docker containers."})
+    c_name = app_id.split(":")[1]
+    client = get_docker_client()
+    if not client:
+        return {"status": "ok", "message": "Docker is not available on this host. Image update skipped."}
+    try:
+        res = await asyncio.to_thread(docker_actions.apply_image_update, c_name, store)
+        await refresh_discovery()
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"code": "UPDATE_FAILED", "message": str(e)})
 
 
 # 5b. Docker System Hygiene & Storage endpoints
 @app.get("/api/docker/system")
-async def get_docker_system_endpoint(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
-    if store.get_user_count() > 0 and not user:
-        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Authentication required"})
-    return docker_actions.get_docker_system_df(store)
+async def get_docker_system_endpoint(user: Dict[str, Any] = Depends(require_auth)):
+    return await asyncio.to_thread(docker_actions.get_docker_system_df, store)
 
 
 @app.get("/api/docker/images")
-async def get_docker_images_endpoint(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
-    if store.get_user_count() > 0 and not user:
-        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Authentication required"})
-    return docker_actions.list_docker_images(store)
+async def get_docker_images_endpoint(user: Dict[str, Any] = Depends(require_auth)):
+    return await asyncio.to_thread(docker_actions.list_docker_images, store)
 
 
 @app.get("/api/docker/volumes")
-async def get_docker_volumes_endpoint(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
-    if store.get_user_count() > 0 and not user:
-        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Authentication required"})
-    return docker_actions.list_docker_volumes(store)
+async def get_docker_volumes_endpoint(user: Dict[str, Any] = Depends(require_auth)):
+    return await asyncio.to_thread(docker_actions.list_docker_volumes, store)
 
 
 @app.post("/api/docker/prune")
 async def prune_docker_endpoint(user: Dict[str, Any] = Depends(require_admin)):
     try:
-        return docker_actions.prune_docker_system(store)
+        return await asyncio.to_thread(docker_actions.prune_docker_system, store)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": str(e)})
     except Exception as e:
@@ -924,7 +1136,7 @@ async def execute_compose_action_endpoint(
     user: Dict[str, Any] = Depends(require_admin)
 ):
     try:
-        return docker_actions.manage_compose_stack(project, data.action, store)
+        return await asyncio.to_thread(docker_actions.manage_compose_stack, project, data.action, store)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": str(e)})
     except ValueError as e:
@@ -939,7 +1151,8 @@ async def deploy_container_endpoint(
     user: Dict[str, Any] = Depends(require_admin)
 ):
     try:
-        res = docker_actions.deploy_container(
+        res = await asyncio.to_thread(
+            docker_actions.deploy_container,
             image=data.image,
             name=data.name,
             ports=data.ports,
@@ -960,8 +1173,16 @@ async def deploy_container_endpoint(
 
 # 6. Custom apps CRUD
 @app.get("/api/custom-apps")
-async def list_custom_apps():
-    return store.get_custom_apps()
+async def list_custom_apps(user: Dict[str, Any] = Depends(require_auth)):
+    apps = store.get_custom_apps()
+    # Mask env variables
+    safe_apps = []
+    for ca in apps:
+        ca_copy = dict(ca)
+        if "env" in ca_copy and isinstance(ca_copy["env"], dict):
+            ca_copy["env"] = mask_sensitive_env(ca_copy["env"])
+        safe_apps.append(ca_copy)
+    return safe_apps
 
 
 @app.post("/api/custom-apps")
@@ -987,10 +1208,9 @@ async def create_or_update_custom_app(data: CustomAppModel, user: Dict[str, Any]
         env=data.env,
         update_cmd=data.update_cmd
     )
-    # Check start on boot
     if data.start_on_boot and data.start_cmd:
         try:
-            process_actions.start_custom_app(f"custom:{app_id}", store)
+            await asyncio.to_thread(process_actions.start_custom_app, f"custom:{app_id}", store)
         except Exception:
             pass
     await refresh_discovery()
@@ -1001,7 +1221,7 @@ async def create_or_update_custom_app(data: CustomAppModel, user: Dict[str, Any]
 async def delete_custom_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_admin)):
     clean_id = app_id.replace("custom:", "")
     try:
-        process_actions.stop_custom_app(f"custom:{clean_id}", store)
+        await asyncio.to_thread(process_actions.stop_custom_app, f"custom:{clean_id}", store)
     except Exception:
         pass
     store.delete_custom_app(clean_id)
@@ -1011,30 +1231,25 @@ async def delete_custom_app_endpoint(app_id: str, user: Dict[str, Any] = Depends
 
 # 7. Stats, System & Events
 @app.get("/api/stats")
-async def get_stats_endpoint():
+async def get_stats_endpoint(user: Dict[str, Any] = Depends(require_auth)):
     docker_running = sum(1 for a in _cached_apps if a.get("source") == "docker" and a.get("status") == "up")
     return get_current_stats(containers_running=docker_running, listening_count=len(_cached_apps), conflict_count=len(_cached_conflicts))
 
 
 @app.get("/api/system")
-async def get_system_endpoint(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
-    if store.get_user_count() > 0 and not user:
-        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Authentication required"})
-    return get_detailed_system_stats()
+async def get_system_endpoint(user: Dict[str, Any] = Depends(require_auth)):
+    return await asyncio.to_thread(get_detailed_system_stats)
 
 
 @app.get("/api/events")
-async def get_events_endpoint(limit: int = 100, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
-    if store.get_user_count() > 0 and not user:
-        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Authentication required"})
+async def get_events_endpoint(limit: int = 100, user: Dict[str, Any] = Depends(require_auth)):
     return store.get_events(limit=limit)
 
 
 # 8. Categories & Rules & Views
 @app.get("/api/categories")
-async def get_categories_endpoint():
+async def get_categories_endpoint(user: Dict[str, Any] = Depends(require_auth)):
     cats = store.get_categories()
-    # Add app counts
     counts = {}
     for a in _cached_apps:
         cid = a.get("category_id", "uncategorized")
@@ -1053,13 +1268,16 @@ async def save_category_endpoint(data: CategoryModel, user: Dict[str, Any] = Dep
 
 @app.delete("/api/categories/{cat_id}")
 async def delete_category_endpoint(cat_id: str, user: Dict[str, Any] = Depends(require_admin)):
-    store.delete_category(cat_id)
+    try:
+        store.delete_category(cat_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_CATEGORY", "message": str(e)})
     await refresh_discovery()
     return {"status": "deleted", "id": cat_id}
 
 
 @app.get("/api/rules")
-async def get_rules_endpoint():
+async def get_rules_endpoint(user: Dict[str, Any] = Depends(require_auth)):
     return store.get_rules()
 
 
@@ -1079,7 +1297,7 @@ async def delete_rule_endpoint(rule_id: str, user: Dict[str, Any] = Depends(requ
 
 
 @app.get("/api/views")
-async def get_views_endpoint():
+async def get_views_endpoint(user: Dict[str, Any] = Depends(require_auth)):
     return store.get_views()
 
 
@@ -1095,16 +1313,16 @@ async def delete_view_endpoint(view_id: str, user: Dict[str, Any] = Depends(requ
 
 
 # 9. Settings
+ALLOWED_SETTINGS_KEYS = {
+    "refresh_interval", "auto_refresh", "safe_mode", "auto_relock_seconds",
+    "public_host", "webhook_url", "webhook_type", "webhook_events",
+    "theme", "default_view"
+}
+
 @app.get("/api/settings")
-async def get_settings_endpoint(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
-    if store.get_user_count() > 0 and not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "UNAUTHORIZED", "message": "Authentication required to view settings"}
-        )
+async def get_settings_endpoint(user: Dict[str, Any] = Depends(require_auth)):
     settings = store.get_settings()
-    # Mask webhook secret URL if non-admin or unauthenticated
-    if (not user or user.get("role") != "admin") and settings.get("webhook_url"):
+    if user.get("role") != "admin" and settings.get("webhook_url"):
         url = settings["webhook_url"]
         if len(url) > 10:
             settings["webhook_url"] = url[:8] + "..." + url[-4:]
@@ -1112,9 +1330,39 @@ async def get_settings_endpoint(user: Optional[Dict[str, Any]] = Depends(get_cur
 
 
 @app.patch("/api/settings")
-async def update_settings_endpoint(settings_dict: Dict[str, str], user: Dict[str, Any] = Depends(require_admin)):
+async def update_settings_endpoint(settings_dict: Dict[str, Any], user: Dict[str, Any] = Depends(require_admin)):
+    # Validate keys and types
     for k, v in settings_dict.items():
-        store.set_setting(k, str(v))
+        if k not in ALLOWED_SETTINGS_KEYS:
+            raise HTTPException(status_code=400, detail={"code": "INVALID_SETTING_KEY", "message": f"Setting '{k}' is not recognized."})
+        
+        # Specific validations
+        if k == "refresh_interval":
+            try:
+                val = float(v)
+                if not (1.0 <= val <= 300.0):
+                    raise ValueError
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "refresh_interval must be a number between 1 and 300."})
+        elif k in ("auto_refresh", "safe_mode"):
+            if str(v).lower() not in ("true", "false", "1", "0"):
+                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": f"{k} must be 'true' or 'false'."})
+        elif k == "auto_relock_seconds":
+            try:
+                val = int(v)
+                if not (0 <= val <= 86400):
+                    raise ValueError
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "auto_relock_seconds must be between 0 and 86400."})
+        elif k == "webhook_type":
+            if str(v).lower() not in ("generic", "slack", "discord"):
+                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "webhook_type must be generic, slack, or discord."})
+        elif k == "theme":
+            if str(v).lower() not in ("dark", "light", "system"):
+                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "theme must be dark, light, or system."})
+
+    for k, v in settings_dict.items():
+        store.set_setting(k, str(v).lower() if k in ("auto_refresh", "safe_mode") else str(v))
     return store.get_settings()
 
 
@@ -1146,10 +1394,9 @@ async def test_webhook_endpoint(
     return {"status": "ok", "message": msg, "url": url, "type": w_type}
 
 
-
 # 10. Scan trigger
 @app.post("/api/scan")
-async def trigger_scan_endpoint():
+async def trigger_scan_endpoint(user: Dict[str, Any] = Depends(require_auth)):
     get_docker_client(force_retry=True)
     await refresh_discovery()
     return {"status": "ok", "apps_count": len(_cached_apps), "conflicts": len(_cached_conflicts)}
@@ -1157,13 +1404,7 @@ async def trigger_scan_endpoint():
 
 # 11. Export & Import
 @app.get("/api/export")
-async def export_data(format: str = "json", user: Optional[Dict[str, Any]] = Depends(get_current_user)):
-    if store.get_user_count() > 0 and not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "UNAUTHORIZED", "message": "Authentication required to export data"}
-        )
-
+async def export_data(format: str = "json", user: Dict[str, Any] = Depends(require_auth)):
     if format == "csv":
         out = io.StringIO()
         writer = csv.writer(out)
@@ -1185,7 +1426,6 @@ async def export_data(format: str = "json", user: Optional[Dict[str, Any]] = Dep
             lines.append(f"| `{a.get('port')}` | **{a.get('name')}** | {a.get('source')} | `{a.get('bind')}` | {a.get('status')} |")
         return Response(content="\n".join(lines), media_type="text/markdown", headers={"Content-Disposition": "attachment; filename=portly-ports.md"})
     else:
-        # Full backup json
         backup = {
             "categories": store.get_categories(),
             "rules": store.get_rules(),
@@ -1213,40 +1453,83 @@ async def import_data(backup: Dict[str, Any], user: Dict[str, Any] = Depends(req
     for app_id, ov in backup.get("app_overrides", {}).items():
         store.upsert_app_override(app_id, **ov)
     for k, v in backup.get("settings", {}).items():
-        store.set_setting(k, str(v))
+        if k in ALLOWED_SETTINGS_KEYS:
+            store.set_setting(k, str(v))
     await refresh_discovery()
     return {"status": "imported"}
 
 
-# 12. Authentication endpoints
+# 12. Authentication & User Management Endpoints
 @app.get("/api/auth/me")
 async def auth_me(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
     user_count = store.get_user_count()
     return {
-        "authenticated": user is not None and user.get("user_id") != "setup",
-        "user": user,
+        "authenticated": user is not None and user.get("role") != "setup",
+        "user": user if (user and user.get("role") != "setup") else None,
         "needs_setup": user_count == 0,
     }
 
 
 @app.post("/api/auth/setup")
-async def auth_setup(data: SetupModel, response: Response):
+async def auth_setup(data: SetupModel, request: Request, response: Response):
     if store.get_user_count() > 0:
         raise HTTPException(status_code=400, detail={"code": "SETUP_DONE", "message": "Admin account is already configured"})
+
+    # Setup token verification if in server mode or remote access
+    mode = os.getenv("PORTLY_MODE", "desktop").lower()
+    host = os.getenv("PORTLY_HOST", "127.0.0.1")
+    allow_insecure = os.getenv("PORTLY_ALLOW_INSECURE_BIND", "false").lower() in ("true", "1")
+    client_host = request.client.host if request.client else "127.0.0.1"
+    is_remote = client_host not in ("127.0.0.1", "::1", "localhost", "testclient")
+
+    if (mode == "server" or host in ("0.0.0.0", "::") or is_remote) and not allow_insecure:
+        if not data.setup_token or not auth.verify_setup_token(data.setup_token):
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "INVALID_SETUP_TOKEN", "message": "Valid setup token is required to initialize server mode."}
+            )
+
+    # Password validation (min 10 chars)
+    pw_ok, pw_err = auth.validate_password(data.password)
+    if not pw_ok:
+        raise HTTPException(status_code=400, detail={"code": "WEAK_PASSWORD", "message": pw_err})
+
     pw_hash = auth.hash_password(data.password)
-    user = store.create_user("u_admin", data.username, pw_hash, role="admin")
+    user_id = f"u_{uuid.uuid4().hex[:12]}"
+    user = store.create_user(user_id, data.username, pw_hash, role="admin")
     token = auth.create_session(user["id"], user["username"], role="admin")
-    response.set_cookie(key="portly_session", value=token, httponly=True, samesite="lax", max_age=86400 * 7)
+    
+    is_secure = request.url.scheme == "https" or os.getenv("PORTLY_COOKIE_SECURE", "").lower() in ("true", "1")
+    response.set_cookie(key="portly_session", value=token, httponly=True, samesite="lax", secure=is_secure, max_age=86400 * 7, path="/")
     return {"status": "ok", "token": token, "username": user["username"], "role": "admin"}
 
 
 @app.post("/api/auth/login")
-async def auth_login(data: LoginModel, response: Response):
+async def auth_login(data: LoginModel, request: Request, response: Response):
+    ip = get_client_ip(request)
+    
+    # Rate limit check (S-1)
+    if not auth.check_rate_limit(ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={"code": "RATE_LIMITED", "message": "Too many failed login attempts. Please wait 15 minutes."}
+        )
+
     user = store.get_user(data.username)
-    if not user or not auth.verify_password(data.password, user["password_hash"]):
+    if not user:
+        # Constant-time dummy verify to prevent user enumeration
+        auth.verify_dummy_password(data.password)
+        auth.record_failed_attempt(ip)
         raise HTTPException(status_code=401, detail={"code": "INVALID_CREDENTIALS", "message": "Invalid username or password"})
+
+    if not auth.verify_password(data.password, user["password_hash"]):
+        auth.record_failed_attempt(ip)
+        raise HTTPException(status_code=401, detail={"code": "INVALID_CREDENTIALS", "message": "Invalid username or password"})
+
+    auth.clear_failed_attempts(ip)
     token = auth.create_session(user["id"], user["username"], role=user.get("role", "admin"))
-    response.set_cookie(key="portly_session", value=token, httponly=True, samesite="lax", max_age=86400 * 7)
+    is_secure = request.url.scheme == "https" or os.getenv("PORTLY_COOKIE_SECURE", "").lower() in ("true", "1")
+    response.set_cookie(key="portly_session", value=token, httponly=True, samesite="lax", secure=is_secure, max_age=86400 * 7, path="/")
     return {"status": "ok", "token": token, "username": user["username"], "role": user.get("role", "admin")}
 
 
@@ -1254,24 +1537,127 @@ async def auth_login(data: LoginModel, response: Response):
 async def auth_logout(response: Response, session_token: Optional[str] = Cookie(None, alias="portly_session")):
     if session_token:
         auth.revoke_session(session_token)
-    response.delete_cookie(key="portly_session")
+    response.delete_cookie(key="portly_session", path="/")
     return {"status": "logged_out"}
+
+
+# User Management Endpoints (S-5)
+@app.get("/api/users")
+async def list_users_endpoint(user: Dict[str, Any] = Depends(require_admin)):
+    return store.list_users()
+
+
+@app.post("/api/users")
+async def create_user_endpoint(data: UserCreateModel, user: Dict[str, Any] = Depends(require_admin)):
+    pw_ok, pw_err = auth.validate_password(data.password)
+    if not pw_ok:
+        raise HTTPException(status_code=400, detail={"code": "WEAK_PASSWORD", "message": pw_err})
+
+    role = data.role.lower()
+    if role not in ("admin", "viewer"):
+        raise HTTPException(status_code=400, detail={"code": "INVALID_ROLE", "message": "Role must be 'admin' or 'viewer'"})
+
+    existing = store.get_user(data.username)
+    if existing:
+        raise HTTPException(status_code=400, detail={"code": "USER_EXISTS", "message": f"User '{data.username}' already exists."})
+
+    user_id = f"u_{uuid.uuid4().hex[:12]}"
+    pw_hash = auth.hash_password(data.password)
+    created = store.create_user(user_id, data.username, pw_hash, role=role)
+    store.log_event("user.create", f"Created user {data.username} with role {role}", actor=user["username"])
+    return {"status": "ok", "user": created}
+
+
+@app.delete("/api/users/{user_id}")
+async def delete_user_endpoint(user_id: str, user: Dict[str, Any] = Depends(require_admin)):
+    if user_id == user.get("user_id"):
+        raise HTTPException(status_code=400, detail={"code": "CANNOT_DELETE_SELF", "message": "You cannot delete your own account."})
+
+    target_user = store.get_user_by_id(user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "User not found."})
+
+    store.delete_user(user_id)
+    auth.revoke_all_sessions(user_id)
+    store.log_event("user.delete", f"Deleted user {target_user['username']} ({user_id})", actor=user["username"])
+    return {"status": "deleted", "id": user_id}
+
+
+@app.patch("/api/users/{user_id}/role")
+async def update_user_role_endpoint(user_id: str, data: UserRoleModel, user: Dict[str, Any] = Depends(require_admin)):
+    role = data.role.lower()
+    if role not in ("admin", "viewer"):
+        raise HTTPException(status_code=400, detail={"code": "INVALID_ROLE", "message": "Role must be 'admin' or 'viewer'"})
+
+    target_user = store.get_user_by_id(user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "User not found."})
+
+    store.update_user_role(user_id, role)
+    store.log_event("user.role_change", f"Changed role of user {target_user['username']} to {role}", actor=user["username"])
+    return {"status": "updated", "id": user_id, "role": role}
+
+
+@app.post("/api/users/{user_id}/password")
+async def update_user_password_endpoint(
+    user_id: str,
+    data: UserPasswordModel,
+    user: Dict[str, Any] = Depends(require_auth)
+):
+    is_admin = user.get("role") == "admin"
+    if not is_admin and user.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "You can only update your own password."})
+
+    target_user = store.get_user_by_id(user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "User not found."})
+
+    # If updating self, verify current password
+    if not is_admin:
+        if not data.current_password or not auth.verify_password(data.current_password, target_user["password_hash"]):
+            raise HTTPException(status_code=400, detail={"code": "INVALID_PASSWORD", "message": "Current password is incorrect."})
+
+    pw_ok, pw_err = auth.validate_password(data.new_password)
+    if not pw_ok:
+        raise HTTPException(status_code=400, detail={"code": "WEAK_PASSWORD", "message": pw_err})
+
+    pw_hash = auth.hash_password(data.new_password)
+    store.update_user_password(user_id, pw_hash)
+    auth.revoke_all_sessions(user_id)
+    store.log_event("user.password_change", f"Password changed for user {target_user['username']}", actor=user["username"])
+    return {"status": "updated"}
+
+
+# Audit Logs Endpoint (S-6)
+@app.get("/api/audit-logs")
+async def get_audit_logs_endpoint(
+    limit: int = 100,
+    event_type: Optional[str] = None,
+    user: Dict[str, Any] = Depends(require_admin)
+):
+    return store.get_events(limit=limit, event_type=event_type)
 
 
 # 13. Real-time SSE Stream
 @app.get("/api/stream")
 async def sse_stream(request: Request, user: Dict[str, Any] = Depends(require_auth)):
-    q = asyncio.Queue()
+    q = asyncio.Queue(maxsize=32)
     _sse_subscribers.append(q)
 
     # Initial snapshot
     docker_running = sum(1 for a in _cached_apps if a.get("source") == "docker" and a.get("status") == "up")
     initial_stats = get_current_stats(containers_running=docker_running, listening_count=len(_cached_apps), conflict_count=len(_cached_conflicts))
+    docker_avail, docker_err = is_docker_available()
+
     initial_payload = {
         "type": "snapshot",
-        "apps": _cached_apps,
+        "apps": [redact_app_for_summary(a) for a in _cached_apps],
         "conflicts": _cached_conflicts,
         "stats": initial_stats,
+        "docker_status": {
+            "available": docker_avail,
+            "message": docker_err,
+        },
         "last_scan": _last_scan_time,
     }
     q.put_nowait(initial_payload)
@@ -1288,7 +1674,6 @@ async def sse_stream(request: Request, user: Dict[str, Any] = Depends(require_au
                         "data": json.dumps(data)
                     }
                 except asyncio.TimeoutError:
-                    # Keep-alive heartbeat
                     yield {
                         "event": "ping",
                         "data": json.dumps({"ts": time.time()})
@@ -1343,14 +1728,12 @@ if os.path.isdir(FRONTEND_DIST):
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="Not Found")
 
-        # Disallow directory traversal markers
         clean_parts = [p for p in full_path.replace("\\", "/").split("/") if p]
         if ".." in clean_parts or "\0" in full_path:
             raise HTTPException(status_code=404, detail="Not Found")
-        
+
         real_frontend = os.path.abspath(FRONTEND_DIST)
         try:
-            # Canonicalize and verify that file_path stays strictly within FRONTEND_DIST
             file_path = os.path.abspath(os.path.join(real_frontend, full_path.lstrip("/\\")))
             if os.path.commonpath([real_frontend, file_path]) != real_frontend:
                 raise HTTPException(status_code=404, detail="Not Found")

@@ -8,6 +8,7 @@ import {
   ProxyConfigResponse,
   TlsCertInfo,
 } from '../types';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface AppDetailModalProps {
   app: AppItem;
@@ -95,6 +96,13 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   const [customCategory, setCustomCategory] = useState(app.category_id);
   const [tagsStr, setTagsStr] = useState(app.tags.join(', '));
   const [urlOverride, setUrlOverride] = useState(app.open_url || '');
+
+  // Modals & Confirmation dialogs (D-1, D-2, D-11)
+  const [showRollbackConfirm, setShowRollbackConfirm] = useState(false);
+  const [showComposeDownConfirm, setShowComposeDownConfirm] = useState(false);
+  const [showRevealEnvConfirm, setShowRevealEnvConfirm] = useState(false);
+  const [revealedEnv, setRevealedEnv] = useState<string[] | null>(null);
+  const [revealingEnv, setRevealingEnv] = useState(false);
 
   // In-modal Toast Notifications
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
@@ -198,12 +206,16 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
     }
   };
 
-  const handleRollback = async () => {
+  const handleRollback = () => {
     if (safeMode) {
       showNotification('Safe mode is ON. Unlock safe mode to execute rollback.', 'warning');
       return;
     }
-    if (!confirm('Are you sure you want to rollback this container to its previous port snapshot?')) return;
+    setShowRollbackConfirm(true);
+  };
+
+  const confirmRollback = async () => {
+    setShowRollbackConfirm(false);
     try {
       await api.rollbackPortChange(app.id);
       showNotification('Port mapping rolled back successfully!', 'success');
@@ -256,8 +268,16 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
     }
     const project = composeData?.project || app.compose_project;
     if (!project) return;
-    if (action === 'down' && !confirm(`Are you sure you want to run down on compose project '${project}'?`)) return;
+    if (action === 'down') {
+      setShowComposeDownConfirm(true);
+      return;
+    }
+    executeStackActionNow(action);
+  };
 
+  const executeStackActionNow = async (action: 'restart' | 'stop' | 'start' | 'down') => {
+    const project = composeData?.project || app.compose_project;
+    if (!project) return;
     setExecutingStackAction(action);
     try {
       const res = await api.executeComposeAction(project, action);
@@ -267,6 +287,21 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
       showNotification(`Stack action failed: ${e.message}`, 'error');
     } finally {
       setExecutingStackAction(null);
+    }
+  };
+
+  const handleRevealEnv = async () => {
+    setShowRevealEnvConfirm(false);
+    setRevealingEnv(true);
+    try {
+      const res = await api.revealEnv(app.id);
+      const envArray = Object.entries(res.env || {}).map(([k, v]) => `${k}=${v}`);
+      setRevealedEnv(envArray);
+      showNotification('Environment variables revealed.', 'success');
+    } catch (e: any) {
+      showNotification(`Failed to reveal environment variables: ${e.message}`, 'error');
+    } finally {
+      setRevealingEnv(false);
     }
   };
 
@@ -1360,10 +1395,31 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
 
             {activeTab === 'env' && (
               <div style={{ background: '#101218', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '20px' }}>
-                <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600 }}>Environment Variables</h3>
-                {inspectData?.env && inspectData.env.length > 0 ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Environment Variables</h3>
+                  {!revealedEnv && (
+                    <button
+                      type="button"
+                      onClick={() => setShowRevealEnvConfirm(true)}
+                      disabled={revealingEnv}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        background: 'rgba(140, 158, 255, 0.1)',
+                        border: '1px solid rgba(140, 158, 255, 0.3)',
+                        color: '#8C9EFF',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {revealingEnv ? 'Revealing…' : '👁️ Reveal Unmasked Values (Admin)'}
+                    </button>
+                  )}
+                </div>
+                {((revealedEnv || inspectData?.env) && (revealedEnv || inspectData?.env).length > 0) ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {inspectData.env.map((e: string, i: number) => {
+                    {(revealedEnv || inspectData.env).map((e: string, i: number) => {
                       const [k, v] = e.split('=', 2);
                       return (
                         <div key={i} style={{ display: 'flex', padding: '8px 12px', background: '#151821', borderRadius: '6px', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px' }}>
@@ -1559,6 +1615,40 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Confirm Dialogs (D-1, D-2, D-11) */}
+        <ConfirmDialog
+          isOpen={showRollbackConfirm}
+          title="Rollback Port Configuration?"
+          message="Are you sure you want to rollback this container's port mapping to its previous snapshot? The container will be restarted with original port bindings."
+          confirmLabel="Rollback Snapshot"
+          isDanger={true}
+          onConfirm={confirmRollback}
+          onCancel={() => setShowRollbackConfirm(false)}
+        />
+
+        <ConfirmDialog
+          isOpen={showComposeDownConfirm}
+          title="Stop & Remove Compose Stack?"
+          message={`Are you sure you want to run down on compose project '${composeData?.project || app.compose_project}'? All containers in this stack will be stopped and removed.`}
+          confirmLabel="Run Compose Down"
+          isDanger={true}
+          onConfirm={() => {
+            setShowComposeDownConfirm(false);
+            executeStackActionNow('down');
+          }}
+          onCancel={() => setShowComposeDownConfirm(false)}
+        />
+
+        <ConfirmDialog
+          isOpen={showRevealEnvConfirm}
+          title="Reveal Sensitive Environment Variables?"
+          message="Displaying unmasked environment variable values may expose API keys, database credentials, or secret tokens. This action will be recorded in the security audit log."
+          confirmLabel="Reveal Secrets"
+          isDanger={true}
+          onConfirm={handleRevealEnv}
+          onCancel={() => setShowRevealEnvConfirm(false)}
+        />
       </div>
     </div>
   );
