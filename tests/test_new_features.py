@@ -169,7 +169,13 @@ def test_safe_mode_exec_whitelisting():
     # Whitelisted command without operators passes
     _validate_safe_command("ps aux")
     _validate_safe_command("df -h")
-    _validate_safe_command("env")
+    _validate_safe_command("whoami")
+
+    # Command launchers and arbitrary file readers must be rejected in Safe Mode
+    with pytest.raises(PermissionError):
+        _validate_safe_command("env")
+    with pytest.raises(PermissionError):
+        _validate_safe_command("cat /etc/shadow")
 
 
 @patch("portly.backend.actions.docker_actions.get_docker_client")

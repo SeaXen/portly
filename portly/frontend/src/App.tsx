@@ -572,6 +572,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
     if (activeViewId === 'exposed') {
       list = list.filter((a) => a.bind === '0.0.0.0');
+    } else if (activeViewId === 'dev') {
+      list = list.filter((a) => a.category_id === 'development');
+    } else if (activeViewId === 'docker') {
+      list = list.filter((a) => a.source === 'docker');
     }
 
     if (selectedCategory) {

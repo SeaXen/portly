@@ -232,7 +232,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                   Active Accounts
                 </h3>
                 {loading ? (
-                  <div style={{ color: '#8D95A5', fontSize: 13 }}>Loading accounts...</div>
+                  <div style={{ color: '#8D95A5', fontSize: 13 }}>Loading accounts…</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {users.map((u) => {
@@ -333,6 +333,8 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                     <label style={{ fontSize: 12, color: '#8D95A5' }}>Username</label>
                     <input
                       type="text"
+                      name="new_username"
+                      autoComplete="username"
                       value={newUsername}
                       onChange={(e) => setNewUsername(e.target.value)}
                       placeholder="e.g. dev_operator"
@@ -353,6 +355,8 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                     <label style={{ fontSize: 12, color: '#8D95A5' }}>Password (min 10 characters)</label>
                     <input
                       type="password"
+                      name="new_password"
+                      autoComplete="new-password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="••••••••••••"
@@ -405,7 +409,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                       marginTop: 6,
                     }}
                   >
-                    {creating ? 'Creating...' : 'Create Account'}
+                    {creating ? 'Creating…' : 'Create Account'}
                   </button>
                 </form>
               </div>
@@ -416,7 +420,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                 Audit Trail (Last 100 Events)
               </h3>
               {loading ? (
-                <div style={{ color: '#8D95A5', fontSize: 13 }}>Loading audit logs...</div>
+                <div style={{ color: '#8D95A5', fontSize: 13 }}>Loading audit logs…</div>
               ) : auditLogs.length === 0 ? (
                 <div style={{ color: '#8D95A5', fontSize: 13 }}>No audit logs recorded yet.</div>
               ) : (
@@ -502,6 +506,8 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                 <label style={{ fontSize: 12, color: '#8D95A5' }}>New Password (min 10 chars)</label>
                 <input
                   type="password"
+                  name="reset_password"
+                  autoComplete="new-password"
                   value={newPwVal}
                   onChange={(e) => setNewPwVal(e.target.value)}
                   placeholder="••••••••••••"

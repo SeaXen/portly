@@ -1,4 +1,5 @@
 import React from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface KeyboardShortcutsModalProps {
   isOpen: boolean;
@@ -6,6 +7,7 @@ interface KeyboardShortcutsModalProps {
 }
 
 export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ isOpen, onClose }) => {
+  const containerRef = useFocusTrap<HTMLDivElement>(isOpen, onClose);
   if (!isOpen) return null;
 
   const shortcuts = [
@@ -23,6 +25,10 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ 
   return (
     <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 1400 }}>
       <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shortcuts-title"
         className="modal-content"
         style={{
           width: '460px',
@@ -35,7 +41,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ 
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', borderBottom: '1px solid rgba(255,255,255,0.07)', paddingBottom: '12px' }}>
-          <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#ECEEF3' }}>Keyboard Shortcuts</h3>
+          <h3 id="shortcuts-title" style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#ECEEF3' }}>Keyboard Shortcuts</h3>
           <button type="button" className="c077" onClick={onClose} aria-label="Close">✕</button>
         </div>
 

@@ -5,13 +5,11 @@ from playwright.sync_api import Page, expect
 
 
 @pytest.fixture
-def desktop_page(browser_instance, portly_server):
-    context = browser_instance.new_context(viewport={"width": 1440, "height": 900})
-    page = context.new_page()
+def desktop_page(authenticated_context, portly_server):
+    page = authenticated_context.new_page()
     page.goto(portly_server, wait_until="domcontentloaded")
     page.wait_for_selector(".portly-sidebar, .c068", timeout=12000)
     yield page
-    context.close()
 
 
 def test_deploy_container_tab_and_templates(desktop_page: Page):

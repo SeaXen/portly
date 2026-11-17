@@ -17,6 +17,7 @@ DEFAULT_DB_PATH = os.path.join(DEFAULT_DATA_DIR, "portly.db")
 
 _store_instances: Dict[str, "Store"] = {}
 _store_lock = threading.Lock()
+_local_db = threading.local()
 
 
 def _hash_token(token: str) -> str:
@@ -49,17 +50,23 @@ class Store:
 
     @contextmanager
     def _get_connection(self):
-        conn = sqlite3.connect(self.db_path, timeout=10.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA synchronous=NORMAL;")
-        conn.execute("PRAGMA foreign_keys=ON;")
-        conn.execute("PRAGMA busy_timeout=5000;")
-        try:
-            with conn:
-                yield conn
-        finally:
-            conn.close()
+        connections = getattr(_local_db, "connections", None)
+        if connections is None:
+            connections = {}
+            _local_db.connections = connections
+
+        conn = connections.get(self.db_path)
+        if conn is None:
+            conn = sqlite3.connect(self.db_path, timeout=10.0, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA synchronous=NORMAL;")
+            conn.execute("PRAGMA foreign_keys=ON;")
+            conn.execute("PRAGMA busy_timeout=5000;")
+            connections[self.db_path] = conn
+
+        with conn:
+            yield conn
 
     def _init_db(self):
         with self._get_connection() as conn:
@@ -286,7 +293,7 @@ class Store:
                 "notify_new_ports": "true",
                 "auto_refresh": "true",
                 "public_host": "",
-                "auto_relock_minutes": "0",
+                "auto_relock_seconds": "0",
                 "webhook_enabled": "false",
                 "webhook_url": "",
                 "webhook_type": "generic",
@@ -701,6 +708,21 @@ class Store:
             rows = [dict(r) for r in cur.fetchall()]
             rows.reverse()
             return rows
+
+    def get_latest_health(self, app_id: str) -> Optional[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            cur = conn.execute("""
+                SELECT ts, ok, latency_ms FROM health_history
+                WHERE app_id = ? ORDER BY ts DESC LIMIT 1
+            """, (app_id,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return {
+                "ts": row["ts"],
+                "ok": bool(row["ok"]),
+                "latency_ms": row["latency_ms"],
+            }
 
     # Port snapshots for rollback
     def save_port_snapshot(self, app_id: str, original_port: int, new_port: int, config: Dict[str, Any]):

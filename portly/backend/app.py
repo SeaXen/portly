@@ -44,6 +44,7 @@ _cached_conflicts: List[Dict[str, Any]] = []
 _last_scan_time: float = 0.0
 _sse_subscribers: List[asyncio.Queue] = []
 _scan_lock = asyncio.Lock()
+_safe_mode_unlocked_at: Optional[float] = None
 
 
 async def refresh_discovery():
@@ -158,21 +159,63 @@ async def lifespan(app: FastAPI):
                 except Exception as e:
                     logger.warning(f"Error in background discovery refresh: {e}")
 
-    # Background session and health maintenance
-    async def background_maintenance():
+    # Background custom app health poller
+    async def background_health_poller():
         while True:
-            await asyncio.sleep(300)  # Every 5 minutes
+            await asyncio.sleep(10.0)
             try:
-                await asyncio.to_thread(auth.prune_expired_sessions)
+                custom_apps = store.get_custom_apps()
+                for ca in custom_apps:
+                    res = await asyncio.to_thread(check_app_health, ca)
+                    if res:
+                        app_id = f"custom:{ca['id']}"
+                        store.record_health(app_id, bool(res.get("ok", False)), float(res.get("latency_ms", 0.0)))
             except Exception as e:
-                logger.warning(f"Error pruning expired sessions: {e}")
+                logger.debug(f"Error in background health poller: {e}")
+
+    # Background session and safe-mode auto-relock maintenance
+    async def background_maintenance():
+        maintenance_tick = 0
+        while True:
+            await asyncio.sleep(5)  # Check every 5 seconds for responsive auto-relock
+            maintenance_tick += 1
+
+            # Auto-relock check
+            global _safe_mode_unlocked_at
+            if _safe_mode_unlocked_at is not None:
+                current_mode = store.get_setting("safe_mode", "true").lower()
+                if current_mode == "false":
+                    try:
+                        relock_sec = int(store.get_setting("auto_relock_seconds", "900"))
+                    except (ValueError, TypeError):
+                        relock_sec = 900
+                    if relock_sec > 0 and (time.time() - _safe_mode_unlocked_at) >= relock_sec:
+                        store.set_setting("safe_mode", "true")
+                        _safe_mode_unlocked_at = None
+                        store.log_audit_event(
+                            user="system",
+                            action="auto_relock_safe_mode",
+                            target="Safe mode automatically re-locked after inactivity/timeout"
+                        )
+                        logger.info("Safe mode automatically re-locked.")
+                else:
+                    _safe_mode_unlocked_at = None
+
+            # Expired session pruning (every 5 minutes = 60 ticks * 5s)
+            if maintenance_tick % 60 == 0:
+                try:
+                    await asyncio.to_thread(auth.prune_expired_sessions)
+                except Exception as e:
+                    logger.warning(f"Error pruning expired sessions: {e}")
 
     poller_task = asyncio.create_task(background_poller())
+    health_task = asyncio.create_task(background_health_poller())
     maint_task = asyncio.create_task(background_maintenance())
     try:
         yield
     finally:
         poller_task.cancel()
+        health_task.cancel()
         maint_task.cancel()
 
 
@@ -235,19 +278,29 @@ async def security_and_csrf_middleware(request: Request, call_next):
         client_header = request.headers.get("x-portly-client")
         origin = request.headers.get("origin")
         referer = request.headers.get("referer")
+        sec_site = request.headers.get("sec-fetch-site")
 
         if client_header != "1":
-            # Check Origin or Referer if provided by a web browser
+            if sec_site and sec_site.lower() == "cross-site":
+                return JSONResponse(
+                    status_code=403,
+                    content={"code": "CSRF_DETECTED", "message": "Cross-site request blocked."}
+                )
             if origin:
+                if origin.lower().strip() == "null":
+                    return JSONResponse(
+                        status_code=403,
+                        content={"code": "CSRF_DETECTED", "message": "Origin 'null' is not authorized."}
+                    )
                 origin_host = urlparse(origin).hostname
-                if origin_host and origin_host.lower() not in allowed_hosts:
+                if not origin_host or (origin_host.lower() not in allowed_hosts and not any(origin_host.lower().endswith(f".{ah}") for ah in allowed_hosts if "." in ah)):
                     return JSONResponse(
                         status_code=403,
                         content={"code": "CSRF_DETECTED", "message": f"Origin '{origin}' is not authorized."}
                     )
             elif referer:
                 referer_host = urlparse(referer).hostname
-                if referer_host and referer_host.lower() not in allowed_hosts:
+                if not referer_host or (referer_host.lower() not in allowed_hosts and not any(referer_host.lower().endswith(f".{ah}") for ah in allowed_hosts if "." in ah)):
                     return JSONResponse(
                         status_code=403,
                         content={"code": "CSRF_DETECTED", "message": f"Referer '{referer}' is not authorized."}
@@ -674,7 +727,15 @@ async def get_app_favicon_endpoint(app_id: str):
 
     if not target_app:
         svg_data, mime = favicon_module.get_fallback_svg(app_id.split(":")[-1])
-        return Response(content=svg_data, media_type=mime)
+        return Response(
+            content=svg_data,
+            media_type=mime,
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+                "X-Content-Type-Options": "nosniff",
+            }
+        )
 
     icons_dir = os.path.join(
         os.getenv("PORTLY_DATA_DIR", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")),
@@ -684,7 +745,11 @@ async def get_app_favicon_endpoint(app_id: str):
     return Response(
         content=data,
         media_type=mime,
-        headers={"Cache-Control": "public, max-age=86400"}
+        headers={
+            "Cache-Control": "public, max-age=86400",
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            "X-Content-Type-Options": "nosniff",
+        }
     )
 
 
@@ -1218,7 +1283,11 @@ async def list_compose_stacks_endpoint(user: Dict[str, Any] = Depends(require_au
         ports_list = []
         if client:
             try:
-                conts = client.containers.list(all=True, filters={"label": f"com.docker.compose.project={s['name']}"})
+                conts = await asyncio.to_thread(
+                    client.containers.list,
+                    all=True,
+                    filters={"label": f"com.docker.compose.project={s['name']}"}
+                )
                 for c in conts:
                     if c.status == "running":
                         running_count += 1
@@ -1269,7 +1338,10 @@ async def delete_compose_stack_endpoint(name: str, user: Dict[str, Any] = Depend
     client = get_docker_client()
     if client:
         try:
-            conts = client.containers.list(filters={"label": f"com.docker.compose.project={name}"})
+            conts = await asyncio.to_thread(
+                client.containers.list,
+                filters={"label": f"com.docker.compose.project={name}"}
+            )
             if conts:
                 raise HTTPException(status_code=400, detail={"code": "STACK_RUNNING", "message": f"Stack '{name}' is running. Stop it before deleting."})
         except HTTPException:
@@ -1607,8 +1679,15 @@ async def update_settings_endpoint(settings_dict: Dict[str, Any], user: Dict[str
             if str(v).lower() not in ("dark", "light", "system"):
                 raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "theme must be dark, light, or system."})
 
+    global _safe_mode_unlocked_at
     for k, v in settings_dict.items():
-        store.set_setting(k, str(v).lower() if k in ("auto_refresh", "safe_mode") else str(v))
+        val_str = str(v).lower() if k in ("auto_refresh", "safe_mode") else str(v)
+        store.set_setting(k, val_str)
+        if k == "safe_mode":
+            if val_str in ("false", "0"):
+                _safe_mode_unlocked_at = time.time()
+            else:
+                _safe_mode_unlocked_at = None
     return store.get_settings()
 
 
@@ -1650,7 +1729,12 @@ async def trigger_scan_endpoint(user: Dict[str, Any] = Depends(require_auth)):
 
 # 11. Export & Import
 @app.get("/api/export")
-async def export_data(format: str = "json", user: Dict[str, Any] = Depends(require_auth)):
+async def export_data(
+    format: str = "json",
+    reveal_secrets: bool = False,
+    user: Dict[str, Any] = Depends(require_admin)
+):
+    actor = user.get("username", "admin")
     if format == "csv":
         out = io.StringIO()
         writer = csv.writer(out)
@@ -1665,20 +1749,38 @@ async def export_data(format: str = "json", user: Dict[str, Any] = Depends(requi
                 a.get("status"),
                 a.get("image") or a.get("process_name")
             ])
+        store.log_event("export_data", f"Exported ports configuration in CSV format", actor=actor)
         return Response(content=out.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=portly-ports.csv"})
     elif format == "markdown":
         lines = ["# Portly - Ports Cheat Sheet\n", "| Port | Name | Source | Bind | Status |", "|---|---|---|---|---|"]
         for a in _cached_apps:
             lines.append(f"| `{a.get('port')}` | **{a.get('name')}** | {a.get('source')} | `{a.get('bind')}` | {a.get('status')} |")
+        store.log_event("export_data", f"Exported ports configuration in Markdown format", actor=actor)
         return Response(content="\n".join(lines), media_type="text/markdown", headers={"Content-Disposition": "attachment; filename=portly-ports.md"})
     else:
+        custom_apps = store.get_custom_apps()
+        settings = store.get_settings()
+
+        if not reveal_secrets:
+            sanitized_apps = []
+            for ca in custom_apps:
+                item = dict(ca)
+                if "env" in item and isinstance(item["env"], dict):
+                    item["env"] = {k: "********" for k in item["env"]}
+                sanitized_apps.append(item)
+            custom_apps = sanitized_apps
+            if "webhook_url" in settings and settings["webhook_url"]:
+                settings["webhook_url"] = "https://********"
+
+        store.log_event("export_data", f"Exported full system backup (reveal_secrets={reveal_secrets})", actor=actor)
+
         backup = {
             "categories": store.get_categories(),
             "rules": store.get_rules(),
-            "custom_apps": store.get_custom_apps(),
+            "custom_apps": custom_apps,
             "views": store.get_views(),
             "app_overrides": store.get_all_app_overrides(),
-            "settings": store.get_settings(),
+            "settings": settings,
         }
         return JSONResponse(content=backup)
 

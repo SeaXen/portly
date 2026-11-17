@@ -231,6 +231,8 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Reservation Name</label>
                 <input
                   type="text"
+                  name="reservation_name"
+                  autoComplete="off"
                   required
                   placeholder="e.g. Staging PostgreSQL or Ollama LLM"
                   value={resName}
@@ -246,6 +248,8 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Target Service (optional)</label>
                 <input
                   type="text"
+                  name="target_service"
+                  autoComplete="off"
                   placeholder="e.g. postgres-staging"
                   value={resService}
                   onChange={(e) => setResService(e.target.value)}
@@ -257,6 +261,8 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Notes / Description</label>
                 <input
                   type="text"
+                  name="reservation_description"
+                  autoComplete="off"
                   placeholder="e.g. Reserved for Q4 analytics cluster"
                   value={resDesc}
                   onChange={(e) => setResDesc(e.target.value)}

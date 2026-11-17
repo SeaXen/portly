@@ -47,7 +47,7 @@ Unlike generic container dashboards (Portainer) or static bookmark launchpads (H
 
 ## Evidence on Hand
 
-- **Backend**: 136 automated unit and integration tests passing in pytest (`tests/`).
+- **Backend & E2E**: 170 automated tests (149 unit/integration + 21 Playwright E2E) passing in pytest (`tests/`).
 - **Frontend**: Production React 19 + TypeScript + Vite build with zero bundle warnings and zero external runtime calls.
 - **Security**: Timing-safe auth, SSRF-protected favicon & health checks, command execution allowlists, accessible dialog focus traps.
 

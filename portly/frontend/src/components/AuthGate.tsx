@@ -79,7 +79,7 @@ export function AuthGate({ children }: { children: (auth: AuthContextType) => Re
         }}
       >
         <div style={{ fontSize: 32, animation: 'spin 1.5s linear infinite' }}>⚓</div>
-        <div style={{ fontSize: 14 }}>Connecting to Portly...</div>
+        <div style={{ fontSize: 14 }}>Connecting to Portly…</div>
       </div>
     );
   }

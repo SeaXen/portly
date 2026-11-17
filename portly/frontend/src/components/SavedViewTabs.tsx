@@ -41,10 +41,22 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
     setShowSaveModal(false);
   };
 
+  const defaultViews: ViewItem[] = [
+    { id: 'all', name: 'All Ports', filters: {}, sort: {}, group_by: 'none', view_type: 'table', columns: [] },
+    { id: 'dev', name: 'Dev Only', filters: { category: 'development' }, sort: {}, group_by: 'none', view_type: 'table', columns: [] },
+    { id: 'exposed', name: 'Exposed', filters: { bind: '0.0.0.0' }, sort: {}, group_by: 'none', view_type: 'table', columns: [] },
+    { id: 'docker', name: 'Docker Only', filters: { source: 'docker' }, sort: {}, group_by: 'none', view_type: 'table', columns: [] },
+  ];
+
+  const allTabs = [
+    ...defaultViews,
+    ...views.filter((v) => !['all', 'dev', 'exposed', 'docker'].includes(v.id)),
+  ];
+
   return (
     <>
       <div className="c089" style={{ width: '100%', borderBottom: '1px solid rgba(255, 255, 255, 0.07)', paddingBottom: '0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        {views.map((v) => {
+        {allTabs.map((v) => {
           const isActive = activeViewId === v.id;
           const count = getCountForView(v.id);
 

@@ -10,6 +10,9 @@ services:
     # Required to discover host network sockets and processes
     network_mode: host
     pid: host
+    # Provide Docker socket group permissions for non-root portly user (defaults to 999/docker)
+    group_add:
+      - "${DOCKER_GID:-999}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./data:/app/data

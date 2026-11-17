@@ -306,6 +306,16 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
         "devices": host_config.get("Devices"),
         "extra_hosts": host_config.get("ExtraHosts"),
         "dns": host_config.get("Dns"),
+        "nano_cpus": host_config.get("NanoCPUs"),
+        "mem_limit": host_config.get("Memory"),
+        "memswap_limit": host_config.get("MemorySwap"),
+        "healthcheck": config.get("Healthcheck"),
+        "tmpfs": host_config.get("Tmpfs"),
+        "sysctls": host_config.get("Sysctls"),
+        "ipc_mode": host_config.get("IpcMode"),
+        "pid_mode": host_config.get("PidMode"),
+        "security_opt": host_config.get("SecurityOpt"),
+        "log_config": host_config.get("LogConfig"),
     }
     store.save_port_snapshot(app_id, old_port or 0, new_port, snapshot_config)
 
@@ -344,6 +354,26 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
         run_kwargs["dns"] = host_config.get("Dns")
     if host_config.get("ExtraHosts"):
         run_kwargs["extra_hosts"] = host_config.get("ExtraHosts")
+    if host_config.get("NanoCPUs"):
+        run_kwargs["nano_cpus"] = host_config.get("NanoCPUs")
+    if host_config.get("Memory"):
+        run_kwargs["mem_limit"] = host_config.get("Memory")
+    if host_config.get("MemorySwap"):
+        run_kwargs["memswap_limit"] = host_config.get("MemorySwap")
+    if config.get("Healthcheck"):
+        run_kwargs["healthcheck"] = config.get("Healthcheck")
+    if host_config.get("Tmpfs"):
+        run_kwargs["tmpfs"] = host_config.get("Tmpfs")
+    if host_config.get("Sysctls"):
+        run_kwargs["sysctls"] = host_config.get("Sysctls")
+    if host_config.get("IpcMode"):
+        run_kwargs["ipc_mode"] = host_config.get("IpcMode")
+    if host_config.get("PidMode"):
+        run_kwargs["pid_mode"] = host_config.get("PidMode")
+    if host_config.get("SecurityOpt"):
+        run_kwargs["security_opt"] = host_config.get("SecurityOpt")
+    if host_config.get("LogConfig"):
+        run_kwargs["log_config"] = host_config.get("LogConfig")
 
     # Non-destructive recreation: rename original container first
     backup_name = f"{container_name}_portly_bak_{int(time.time())}"
@@ -600,7 +630,7 @@ def rollback_port_change_docker(app_id: str, store: Store, actor: str = "system"
 
 
 FORBIDDEN_OPERATORS = [";", "&&", "||", "|", ">", ">>", "<", "`", "$(", "$", "\n", "\r", "&"]
-SAFE_COMMAND_BINARIES = {"ps", "top", "free", "df", "uptime", "uname", "whoami", "id", "hostname", "date", "pwd", "ss", "netstat", "ip", "ls", "env", "cat"}
+SAFE_COMMAND_BINARIES = {"ps", "free", "df", "uptime", "uname", "whoami", "id", "hostname", "date", "pwd", "ss", "netstat", "ip", "ls"}
 SAFE_COMMAND_ALLOWLIST = SAFE_COMMAND_BINARIES
 
 
@@ -634,7 +664,7 @@ def parse_and_validate_safe_command(command: str) -> List[str]:
         )
 
     # Allowed argv rules
-    if binary in ("ps", "uptime", "free", "df", "uname", "whoami", "id", "hostname", "date", "pwd", "top", "env", "cat"):
+    if binary in ("ps", "uptime", "free", "df", "uname", "whoami", "id", "hostname", "date", "pwd"):
         for arg in argv[1:]:
             if any(c in arg for c in (";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\\")):
                 raise PermissionError(f"Safe mode is active. Argument '{arg}' contains restricted shell operator.")

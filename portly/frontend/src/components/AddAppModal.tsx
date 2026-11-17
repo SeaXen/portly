@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api';
 import { AppItem, Category, PreflightResponse } from '../types';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useToast } from './Toast';
 
 interface AddAppModalProps {
@@ -332,10 +333,15 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   };
 
   const dockerApps = availableApps.filter((a) => a.source === 'docker');
+  const containerRef = useFocusTrap<HTMLDivElement>(true, onClose);
 
   return (
     <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 1200 }}>
       <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-app-title"
         className="modal-content"
         style={{
           width: '680px',
@@ -353,7 +359,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         {/* Header */}
         <div className="c226" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div>
-            <div className="c227" style={{ fontSize: '18px', fontWeight: 600, color: '#ECEEF3' }}>Add Custom App</div>
+            <h2 id="add-app-title" className="c227" style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#ECEEF3' }}>Add Custom App</h2>
             <div className="c228" style={{ fontSize: '13px', color: '#8D95A5', marginTop: '2px' }}>
               Track an app Portly can’t detect, adopt running services, or bookmark external web dashboards.
             </div>
@@ -730,6 +736,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 <input
                   id="custom-health-path"
                   name="customHealthPath"
+                  autoComplete="off"
                   type="text"
                   placeholder="/health or /"
                   value={healthPath}
@@ -743,6 +750,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 <input
                   id="custom-health-interval"
                   name="customHealthInterval"
+                  autoComplete="off"
                   type="number"
                   min={5}
                   max={3600}
@@ -759,6 +767,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 <input
                   id="custom-expected-status"
                   name="customExpectedStatus"
+                  autoComplete="off"
                   type="text"
                   placeholder="200,204,301,302"
                   value={expectedStatus}
@@ -772,6 +781,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 <input
                   id="custom-headers"
                   name="customHeaders"
+                  autoComplete="off"
                   type="text"
                   placeholder='Authorization: Bearer token123'
                   value={customHeaders}
@@ -917,6 +927,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 </label>
                 <input
                   id="deploy-image"
+                  name="deploy_image"
+                  autoComplete="off"
                   type="text"
                   required
                   placeholder="e.g. redis:7-alpine"
@@ -933,6 +945,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 </label>
                 <input
                   id="deploy-name"
+                  name="deploy_name"
+                  autoComplete="off"
                   type="text"
                   required
                   placeholder="e.g. my-redis"
@@ -951,6 +965,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 </label>
                 <input
                   id="deploy-host-port"
+                  name="deploy_host_port"
+                  autoComplete="off"
                   type="number"
                   required
                   value={deployHostPort}
@@ -975,6 +991,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 </label>
                 <input
                   id="deploy-container-port"
+                  name="deploy_container_port"
+                  autoComplete="off"
                   type="text"
                   required
                   placeholder="e.g. 80/tcp or 6379/tcp"
@@ -1087,7 +1105,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 onChange={(e) => setPreflightInput(e.target.value)}
                 className="c220"
                 style={{ width: '100%', boxSizing: 'border-box', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px' }}
-                placeholder={preflightMode === 'command' ? 'docker run -p 8080:80 ...' : 'services:\n  ...'}
+                placeholder={preflightMode === 'command' ? 'docker run -p 8080:80 …' : 'services:\n  …'}
               />
             </div>
 

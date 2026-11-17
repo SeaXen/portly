@@ -122,7 +122,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
       return;
     }
     setExecutingAction(action);
-    setExecutionOutput('Executing docker compose...');
+    setExecutionOutput('Executing docker compose…');
     try {
       const res = await api.executeStackAction(selectedStack.name, action);
       if (res.status === 'success') {
@@ -251,6 +251,8 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                 {isEditing ? (
                   <input
                     type="text"
+                    name="stack_name"
+                    autoComplete="off"
                     value={stackName}
                     onChange={(e) => setStackName(e.target.value)}
                     placeholder="Stack Name"

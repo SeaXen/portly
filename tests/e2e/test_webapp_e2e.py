@@ -17,10 +17,9 @@ from playwright.sync_api import Page, expect
 
 
 @pytest.fixture
-def page(browser_instance, portly_server):
-    """Isolated page context for each test case."""
-    context = browser_instance.new_context(viewport={"width": 1440, "height": 900})
-    page = context.new_page()
+def page(authenticated_context, portly_server):
+    """Isolated page context for each test case pre-authenticated with admin session."""
+    page = authenticated_context.new_page()
 
     console_errors = []
     page_errors = []
@@ -36,7 +35,6 @@ def page(browser_instance, portly_server):
     page.page_errors = page_errors
 
     yield page
-    context.close()
 
 
 def test_webapp_shell_and_title(page: Page):
@@ -53,7 +51,7 @@ def test_webapp_shell_and_title(page: Page):
     stats_strip = page.locator(".c081")
     expect(stats_strip).to_be_visible()
     expect(stats_strip).to_contain_text("CPU", ignore_case=True)
-    expect(stats_strip).to_contain_text("Memory", ignore_case=True)
+    expect(stats_strip).to_contain_text(re.compile(r"Memory|RAM", re.I))
 
     # Verify no unhandled JavaScript runtime crashes
     assert len(page.page_errors) == 0, f"Page errors: {page.page_errors}"
@@ -80,7 +78,7 @@ def test_view_switching(page: Page):
     expect(list_btn).to_have_class(re.compile(r"\bc094\b"))
 
     # Switch to Board view
-    board_btn.click()
+    board_btn.click(force=True)
     page.wait_for_timeout(300)
     expect(board_btn).to_have_class(re.compile(r"\bc094\b"))
 

@@ -71,11 +71,17 @@ def sanitize_svg(data: Union[bytes, str]) -> Union[bytes, str]:
     is_str = isinstance(data, str)
     try:
         text = data if is_str else data.decode("utf-8", errors="replace")
-        text = re.sub(r'<script.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'\bon[a-z]+\s*=\s*["\'][^"\']*["\']', '', text, flags=re.IGNORECASE)
-        text = re.sub(r'\bon[a-z]+\s*=\s*[^\s>]+', '', text, flags=re.IGNORECASE)
-        text = re.sub(r'<foreignObject.*?</foreignObject>', '', text, flags=re.DOTALL | re.IGNORECASE)
-        text = re.sub(r'href\s*=\s*["\']javascript:[^"\']*["\']', '', text, flags=re.IGNORECASE)
+        # Strip all script tags including self-closing (<script ... />)
+        text = re.sub(r'<script\b[^>]*(\/>|>.*?<\/script>)', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # Strip inline event handlers: on*="..." or on*=...
+        text = re.sub(r'\bon[a-z0-9_-]+\s*=\s*["\'][^"\']*["\']', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bon[a-z0-9_-]+\s*=\s*[^\s>]+', '', text, flags=re.IGNORECASE)
+        # Strip foreignObject tags
+        text = re.sub(r'<foreignObject\b[^>]*(\/>|>.*?<\/foreignObject>)', '', text, flags=re.DOTALL | re.IGNORECASE)
+        # Strip javascript: URLs from href and xlink:href
+        text = re.sub(r'(?:href|xlink:href)\s*=\s*["\']\s*javascript:[^"\']*["\']', '', text, flags=re.IGNORECASE)
+        # Strip animate elements that trigger script execution
+        text = re.sub(r'<animate\b[^>]*\bonbegin\s*=[^>]*>', '', text, flags=re.IGNORECASE)
         return text if is_str else text.encode("utf-8")
     except Exception:
         return data

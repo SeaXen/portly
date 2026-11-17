@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { parseAnsiToReact } from '../utils/ansi';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import {
   AppItem,
   Category,
@@ -461,10 +462,15 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   });
 
   const initial = (app.name || 'A').charAt(0).toUpperCase();
+  const containerRef = useFocusTrap<HTMLDivElement>(true, onClose);
 
   return (
     <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 1100 }}>
       <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="app-detail-title"
         className="modal-content"
         style={{
           width: '1180px',
@@ -505,7 +511,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
             </div>
             <div>
               <div className="c189" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <h1 className="c070" style={{ margin: 0, fontSize: '20px' }}>{app.name}</h1>
+                <h1 id="app-detail-title" className="c070" style={{ margin: 0, fontSize: '20px' }}>{app.name}</h1>
                 <span className={app.source === 'docker' ? 'c111' : 'c109'} style={{ textTransform: 'capitalize' }}>
                   {app.source}
                 </span>

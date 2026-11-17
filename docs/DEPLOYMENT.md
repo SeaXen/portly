@@ -21,6 +21,8 @@ services:
     restart: unless-stopped
     network_mode: host
     pid: host
+    group_add:
+      - "${DOCKER_GID:-999}"
     environment:
       - PORTLY_HOST=0.0.0.0
       - PORTLY_PORT=5533
@@ -33,6 +35,37 @@ services:
       - ./data:/app/data
       - /:/hostfs:ro
 ```
+
+### Non-Root User & Docker Socket Permissions (`DOCKER_GID`)
+Portly runs inside the container as the non-privileged user `portly` (UID/GID 1000/1000). On Linux hosts, `/var/run/docker.sock` is owned by `root:docker`.
+To allow Portly to read Docker metrics without running as root, find your host's docker group GID:
+```bash
+getent group docker | cut -d: -f3
+# e.g., 998 or 999
+```
+Then supply it in your `.env` or compose environment:
+```bash
+DOCKER_GID=998 docker compose up -d
+```
+
+### Hardened Socket Alternative (`docker-socket-proxy`)
+If you prefer not to mount `/var/run/docker.sock` directly into Portly, you can deploy Portly alongside `tecnativa/docker-socket-proxy`, exposing only the read-only endpoints:
+```yaml
+services:
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: docker-proxy
+    environment:
+      - CONTAINERS=1
+      - INFO=1
+      - NETWORKS=1
+      - POST=0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:2375:2375"
+```
+And point `DOCKER_HOST=tcp://127.0.0.1:2375` in Portly's environment.
 
 ### Why `network_mode: host`, `pid: host`, and `PORTLY_HOSTFS`?
 - **Host Socket Discovery:** In bridge network mode, containers only see network namespaces isolated to that bridge. `network_mode: host` allows `psutil` and `netstat` to monitor the physical host's listening ports.

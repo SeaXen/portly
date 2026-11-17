@@ -90,6 +90,14 @@ def test_auth_matrix_viewer_vs_admin_rbac(auth_client, monkeypatch):
     v_prune = auth_client.post("/api/docker/prune", cookies=viewer_cookies)
     assert v_prune.status_code == 403
 
+    # 6. /api/export (Admin only - secret protection)
+    v_export = auth_client.get("/api/export", cookies=viewer_cookies)
+    assert v_export.status_code == 403
+    assert v_export.json()["detail"]["code"] == "FORBIDDEN"
+
+    a_export = auth_client.get("/api/export", cookies=admin_cookies)
+    assert a_export.status_code == 200
+
     # Clean up sessions
     auth.revoke_session(viewer_token)
     auth.revoke_session(admin_token)

@@ -21,12 +21,13 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
     app_overrides = store.get_all_app_overrides()
     rules = store.get_rules()
 
-    # 1. Filter host apps: suppress docker-proxy wrapper processes so we don't double-count docker listeners,
-    # but KEEP host processes colliding with Docker ports so real port collisions are detected.
+    # 1. Filter host apps: suppress docker-proxy and container relay wrapper processes
+    # (e.g. wslrelay, com.docker.backend, vpnkit, rootlesskit) so we don't double-count docker listeners
+    # or generate false-positive conflicts against Docker relays on Windows/macOS.
     filtered_host: List[Dict[str, Any]] = []
     for h in host_apps:
         p_name = h.get("process_name", "").lower()
-        if "docker-proxy" in p_name:
+        if any(r in p_name for r in ("docker-proxy", "wslrelay", "com.docker.backend", "vpnkit", "rootlesskit")):
             continue
         filtered_host.append(h)
 
@@ -38,6 +39,15 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
         if not app_id.startswith("custom:"):
             app_id = f"custom:{app_id}"
 
+        # Resolve live status from background health poller if recorded
+        custom_status = "up"
+        latency_ms = 0.0
+        if store and hasattr(store, "get_latest_health"):
+            latest = store.get_latest_health(app_id)
+            if latest:
+                custom_status = "up" if latest.get("ok") else "down"
+                latency_ms = float(latest.get("latency_ms", 0.0))
+
         custom_apps.append({
             "id": app_id,
             "source": "custom",
@@ -47,7 +57,8 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
             "host": ca.get("host", "localhost"),
             "proto": "tcp",
             "bind": "127.0.0.1" if ca.get("host") in ("localhost", "127.0.0.1") else "0.0.0.0",
-            "status": "up",  # live poller updates this
+            "status": custom_status,
+            "latency_ms": latency_ms,
             "health_path": ca.get("health_path", "/health"),
             "health_interval": ca.get("health_interval", 30),
             "start_cmd": ca.get("start_cmd"),
@@ -153,7 +164,7 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
         else:
             if public_host:
                 open_url = f"http://{public_host}:{port}" if port > 0 else ""
-            elif bind == "127.0.0.1":
+            elif bind in ("127.0.0.1", "0.0.0.0", "::", "::1", None, ""):
                 open_url = f"http://localhost:{port}" if port > 0 else ""
             else:
                 open_url = f"http://{bind}:{port}" if port > 0 else ""

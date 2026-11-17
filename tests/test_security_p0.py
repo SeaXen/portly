@@ -36,13 +36,15 @@ def test_command_execution_boundaries_forbidden_operators():
 def test_command_execution_boundaries_allowlist():
     """Only sanctioned read-only diagnosis commands are executable (T-2)."""
     # Safe allowed commands pass
-    for cmd in ["ps aux", "df -h", "netstat -tuln", "uname -a", "cat /etc/hosts", "uptime"]:
+    for cmd in ["ps aux", "df -h", "netstat -tuln", "uname -a", "whoami", "uptime"]:
         parsed = parse_and_validate_safe_command(cmd)
         assert isinstance(parsed, list)
         assert len(parsed) >= 1
 
     # Disallowed binary executions fail
     disallowed = [
+        "cat /etc/shadow",
+        "env sh -c id",
         "nc -lvp 4444",
         "python -c 'import os; os.system(\"id\")'",
         "bash -i",

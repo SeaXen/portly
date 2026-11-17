@@ -100,6 +100,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             </label>
             <input
               id="login-username"
+              name="username"
               type="text"
               autoComplete="username"
               value={username}
@@ -125,6 +126,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             </label>
             <input
               id="login-password"
+              name="password"
               type="password"
               autoComplete="current-password"
               value={password}
@@ -161,7 +163,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               transition: 'opacity 0.15s ease',
             }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
       </div>

@@ -74,6 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <nav className="sidebar-nav">
           <button
             type="button"
+            aria-label="Overview"
             className={`sidebar-nav-btn ${activeNav === 'overview' ? 'active' : ''}`}
             onClick={() => { onSelectNav('overview'); onSelectCategory(null); }}
           >
@@ -88,6 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <button
             type="button"
+            aria-label="Ports"
             className={`sidebar-nav-btn ${activeNav === 'ports' && selectedCategory === null ? 'active' : ''}`}
             onClick={() => { onSelectNav('ports'); onSelectCategory(null); }}
           >
@@ -100,6 +102,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <button
             type="button"
+            aria-label="Docker"
             className={`sidebar-nav-btn ${activeNav === 'docker' ? 'active' : ''}`}
             onClick={() => { onSelectNav('docker'); onSelectCategory(null); }}
           >
@@ -112,6 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <button
             type="button"
+            aria-label="Stacks"
             className={`sidebar-nav-btn ${activeNav === 'stacks' ? 'active' : ''}`}
             onClick={() => { onSelectNav('stacks'); onSelectCategory(null); }}
           >
@@ -125,6 +129,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <button
             type="button"
+            aria-label="System"
             className={`sidebar-nav-btn ${activeNav === 'system' ? 'active' : ''}`}
             onClick={() => { onSelectNav('system'); }}
           >
@@ -136,6 +141,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <button
             type="button"
+            aria-label="Conflicts"
             className={`sidebar-nav-btn ${activeNav === 'conflicts' ? 'active' : ''}`}
             onClick={() => { onSelectNav('conflicts'); onSelectCategory(null); }}
           >
@@ -149,6 +155,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <button
             type="button"
+            aria-label="History"
             className={`sidebar-nav-btn ${activeNav === 'history' ? 'active' : ''}`}
             onClick={() => { onSelectNav('history'); }}
           >

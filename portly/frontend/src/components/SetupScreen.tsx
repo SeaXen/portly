@@ -117,6 +117,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
             </label>
             <input
               id="setup-username"
+              name="username"
               type="text"
               autoComplete="username"
               value={username}
@@ -147,6 +148,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
             </div>
             <input
               id="setup-password"
+              name="password"
               type="password"
               autoComplete="new-password"
               value={password}
@@ -172,6 +174,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
             </label>
             <input
               id="setup-confirm-password"
+              name="confirm_password"
               type="password"
               autoComplete="new-password"
               value={confirmPassword}
@@ -200,6 +203,8 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
             </div>
             <input
               id="setup-token"
+              name="setup_token"
+              autoComplete="off"
               type="text"
               value={setupToken}
               onChange={(e) => setSetupToken(e.target.value)}
@@ -236,7 +241,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
               transition: 'opacity 0.15s ease',
             }}
           >
-            {loading ? 'Setting up...' : 'Create Admin Account'}
+            {loading ? 'Setting up…' : 'Create Admin Account'}
           </button>
         </form>
       </div>

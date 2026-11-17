@@ -26,10 +26,9 @@ from playwright.sync_api import Page, expect
 
 
 @pytest.fixture
-def desktop_page(browser_instance, portly_server):
-    """Isolated page context for desktop browser testing."""
-    context = browser_instance.new_context(viewport={"width": 1440, "height": 900})
-    page = context.new_page()
+def desktop_page(authenticated_context, portly_server):
+    """Isolated page context for desktop browser testing pre-authenticated with admin session."""
+    page = authenticated_context.new_page()
 
     console_errors = []
     page_errors = []
@@ -43,7 +42,6 @@ def desktop_page(browser_instance, portly_server):
     page.page_errors = page_errors
 
     yield page
-    context.close()
 
 
 def test_desktop_viewports_and_non_wrapping_layout(desktop_page: Page):

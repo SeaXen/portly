@@ -6,10 +6,10 @@
 </p>
 
 <p align="center">
-  <a href="#-testing"><img src="https://img.shields.io/badge/tests-136%20passed-5EEAD4?style=flat-square&logo=pytest&logoColor=white" alt="Tests"></a>
+  <a href="#-testing"><img src="https://img.shields.io/badge/tests-170%20passed-5EEAD4?style=flat-square&logo=pytest&logoColor=white" alt="Tests"></a>
   <a href="#-quickstart"><img src="https://img.shields.io/badge/port-5533-8C9EFF?style=flat-square" alt="Default Port"></a>
   <a href="#-architecture"><img src="https://img.shields.io/badge/backend-FastAPI%20%7C%20SQLite%20WAL-009688?style=flat-square" alt="Backend"></a>
-  <a href="#-architecture"><img src="https://img.shields.io/badge/frontend-React%2019%20%7C%20Vite%20%7C%20Tailwind-61DAFB?style=flat-square" alt="Frontend"></a>
+  <a href="#-architecture"><img src="https://img.shields.io/badge/frontend-React%2019%20%7C%20Vite%20%7C%20CSS%20Tokens-61DAFB?style=flat-square" alt="Frontend"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-B6E36B?style=flat-square" alt="License"></a>
   <a href="DESIGN.md"><img src="https://img.shields.io/badge/design-Obsidian%20Harbor-151821?style=flat-square" alt="Design System"></a>
 </p>
@@ -162,11 +162,14 @@ portly logs <app_id> [--lines 100]
 ## 🧪 Testing
 
 ```bash
-# Run the complete test suite
-$env:PORTLY_TESTING="1"; python -m pytest tests -q --ignore=tests/e2e
+# Run unit & integration tests (149 passed)
+python -m pytest tests --ignore=tests/e2e -q
+
+# Run end-to-end Playwright tests (21 passed)
+python -m pytest tests/e2e -q
 ```
 
-**136 automated tests** verify:
+**170 automated tests** verify:
 - Host discovery and stable ID formatting across Linux/macOS/Windows.
 - Docker deduplication & multi-homed port conflict detection.
 - Multi-user RBAC, timing-safe authentication, and rate limiting.

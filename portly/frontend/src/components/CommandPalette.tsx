@@ -131,7 +131,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
   return (
     <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 1300, alignItems: 'flex-start', paddingTop: '12vh' }}>
-      <div className="command-palette" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="command-palette"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command Palette"
+        onClick={(e) => e.stopPropagation()}
+      >
         {confirmDisableSafeMode ? (
           <div style={{ padding: '28px 24px', textAlign: 'center' }}>
             <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
