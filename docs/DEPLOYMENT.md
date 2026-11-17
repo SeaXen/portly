@@ -15,8 +15,7 @@ version: '3.8'
 
 services:
   portly:
-    build: .
-    image: portly:latest
+    image: ghcr.io/seaxen/portly:latest
     container_name: portly
     restart: unless-stopped
     network_mode: host

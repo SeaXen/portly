@@ -30,7 +30,7 @@ Open **[http://localhost:5533](http://localhost:5533)**.
 ```yaml
 services:
   portly:
-    build: .
+    image: ghcr.io/seaxen/portly:latest
     container_name: portly
     network_mode: host
     pid: host
