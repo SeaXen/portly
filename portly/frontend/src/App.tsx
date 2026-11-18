@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { AddAppModal } from './components/AddAppModal';
 import { AppDetailModal } from './components/AppDetailModal';
@@ -37,7 +37,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const [activeNav, setActiveNav] = useState('ports');
   const [viewType, setViewType] = useState<'table' | 'grid' | 'list' | 'board'>('table');
   const [density, setDensity] = useState<'compact' | 'comfy'>('compact');
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState<'dark' | 'light' | 'oled' | 'system'>('dark');
   const [accent, setAccent] = useState('#8C9EFF');
   const [safeMode, setSafeMode] = useState(true);
   const [unlockCountdown, setUnlockCountdown] = useState<number | null>(null);
@@ -101,8 +101,19 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
   // Theme Sync
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => document.documentElement.setAttribute(
+      'data-theme', theme === 'system' ? (media.matches ? 'dark' : 'light') : theme,
+    );
+    apply();
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--accent', accent);
+    document.documentElement.style.setProperty('--app-accent', accent);
+  }, [accent]);
 
   // Safe Mode Auto-Relock Countdown Timer
   useEffect(() => {
@@ -312,7 +323,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       setViews(viewData);
 
       if (setts.safe_mode) setSafeMode(setts.safe_mode.toLowerCase() === 'true');
-      if (setts.theme) setTheme(setts.theme);
+      if (setts.theme) setTheme(setts.theme as any);
       if (setts.accent) setAccent(setts.accent);
       if (setts.density) setDensity(setts.density as any);
       if (setts.default_view) setViewType(setts.default_view as any);
@@ -360,11 +371,28 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     }
   };
 
-  // Theme Toggle
+  // Theme Toggle — serialize writes so rapid clicks land in order
+  const settingsQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const persistSetting = (patch: Record<string, string>) => {
+    settingsQueue.current = settingsQueue.current
+      .catch(() => {})
+      .then(() => api.updateSettings(patch));
+  };
+
   const handleToggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    const nextTheme = theme === 'dark' ? 'light' : theme === 'light' ? 'oled' : theme === 'oled' ? 'system' : 'dark';
     setTheme(nextTheme);
-    api.updateSettings({ theme: nextTheme });
+    persistSetting({ theme: nextTheme });
+  };
+
+  const handleSetTheme = (t: 'dark' | 'light' | 'oled' | 'system') => {
+    setTheme(t);
+    persistSetting({ theme: t });
+  };
+
+  const handleSetDensity = (d: 'compact' | 'comfy') => {
+    setDensity(d);
+    persistSetting({ density: d });
   };
 
   // Scan Trigger
@@ -858,7 +886,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               onToggleShowHidden={() => setShowHidden((prev) => !prev)}
               hiddenCount={hiddenCount}
               density={density}
-              onChangeDensity={setDensity}
+              onChangeDensity={handleSetDensity}
               onToggleCustomize={() => setShowCustomize(true)}
             />
 
@@ -969,8 +997,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
           onClose={() => setShowCustomize(false)}
           viewType={viewType}
           onChangeViewType={setViewType}
+          theme={theme}
+          onChangeTheme={handleSetTheme}
           density={density}
-          onChangeDensity={setDensity}
+          onChangeDensity={handleSetDensity}
           groupBy={groupBy}
           onChangeGroupBy={setGroupBy}
           sortBy={sortBy}
@@ -986,7 +1016,8 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
           onChangeAccent={(col) => {
             setAccent(col);
             document.documentElement.style.setProperty('--accent', col);
-            api.updateSettings({ accent: col });
+            document.documentElement.style.setProperty('--app-accent', col);
+            persistSetting({ accent: col });
           }}
           visibleFields={visibleFields}
           onToggleField={(field) =>

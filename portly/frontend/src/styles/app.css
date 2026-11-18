@@ -1,7 +1,7 @@
 /* App Custom Extensions, Theme support, Modal overlays, and Animations */
 
 :root {
-  --app-accent: #8C9EFF;
+  --app-accent: var(--accent);
 }
 
 [data-theme="light"] {
@@ -57,6 +57,63 @@
 [data-theme="light"] .c075,
 [data-theme="light"] .c198 {
   color: #0F172A;
+}
+
+[data-theme="oled"] {
+  --bg: #000000;
+  --surface-1: #050505;
+  --surface-2: #0A0A0C;
+  --surface-3: #141418;
+  --border: rgba(255, 255, 255, 0.10);
+  --text: #F5F6F8;
+  --muted: #949AA8;
+}
+
+[data-theme="oled"] body {
+  background: #000000;
+  color: #F5F6F8;
+}
+
+[data-theme="oled"] .c042,
+[data-theme="oled"] .c185,
+[data-theme="oled"] .portly-table-wrap {
+  background: #000000;
+  color: #F5F6F8;
+}
+
+[data-theme="oled"] .c043,
+[data-theme="oled"] .c081,
+[data-theme="oled"] .c093,
+[data-theme="oled"] .c098,
+[data-theme="oled"] .c149,
+[data-theme="oled"] .c153,
+[data-theme="oled"] .c164,
+[data-theme="oled"] .c209,
+[data-theme="oled"] .c225 {
+  background: #050505;
+  border-color: rgba(255, 255, 255, 0.10);
+  color: #F5F6F8;
+}
+
+[data-theme="oled"] .c063,
+[data-theme="oled"] .c074,
+[data-theme="oled"] .c077,
+[data-theme="oled"] .c078,
+[data-theme="oled"] .c102,
+[data-theme="oled"] .c120,
+[data-theme="oled"] .c200,
+[data-theme="oled"] .c218,
+[data-theme="oled"] .c220,
+[data-theme="oled"] .c231,
+[data-theme="oled"] .portly-table-header {
+  background: #0A0A0C;
+  border-color: rgba(255, 255, 255, 0.10);
+  color: #F5F6F8;
+}
+
+[data-theme="oled"] .c075,
+[data-theme="oled"] .c198 {
+  color: #F5F6F8;
 }
 
 /* Ensure single line never wraps */
@@ -166,7 +223,7 @@ button:active, [role="button"]:active {
 
 /* Accessibility & Interaction Guidelines */
 :focus-visible {
-  outline: 2px solid var(--app-accent, #8C9EFF) !important;
+  outline: 2px solid var(--app-accent, var(--accent)) !important;
   outline-offset: 2px !important;
 }
 
@@ -214,12 +271,12 @@ button, a, input, select, textarea {
 
 /* Browser Surface Theming */
 ::selection {
-  background: rgba(140, 158, 255, 0.35);
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
   color: #ECEEF3;
 }
 
 input, textarea {
-  caret-color: var(--app-accent, #8C9EFF);
+  caret-color: var(--app-accent, var(--accent));
 }
 
 /* Custom Scrollbars */
@@ -293,12 +350,12 @@ kbd,
 }
 
 .command-input-wrap:focus-within {
-  border-bottom-color: var(--app-accent, #8C9EFF);
+  border-bottom-color: var(--app-accent, var(--accent));
 }
 
 .c197:focus-within {
-  border-color: var(--app-accent, #8C9EFF) !important;
-  box-shadow: 0 0 0 1px var(--app-accent, #8C9EFF) !important;
+  border-color: var(--app-accent, var(--accent)) !important;
+  box-shadow: 0 0 0 1px var(--app-accent, var(--accent)) !important;
 }
 
 .command-input {
@@ -340,8 +397,8 @@ kbd,
 .command-badge {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
-  color: #8C9EFF;
-  background: rgba(140, 158, 255, 0.12);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   padding: 2px 8px;
   border-radius: 6px;
 }
@@ -357,8 +414,8 @@ kbd,
 }
 
 .drop-target {
-  border: 2px dashed #8C9EFF !important;
-  background: rgba(140, 158, 255, 0.06) !important;
+  border: 2px dashed var(--accent) !important;
+  background: color-mix(in srgb, var(--accent) 6%, transparent) !important;
 }
 
 /* Drawer */
@@ -450,12 +507,12 @@ kbd,
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  background: linear-gradient(135deg, #8C9EFF 0%, #6366F1 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, #6366F1 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #0A0D14;
-  box-shadow: 0 4px 12px rgba(140, 158, 255, 0.35);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .sidebar-nav {
@@ -490,13 +547,13 @@ kbd,
 
 .sidebar-nav-btn.active {
   color: #ECEEF3;
-  background: rgba(140, 158, 255, 0.14);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
   font-weight: 600;
-  box-shadow: inset 2.5px 0 0 #8C9EFF;
+  box-shadow: inset 2.5px 0 0 var(--accent);
 }
 
 .sidebar-nav-btn.active svg {
-  color: #8C9EFF;
+  color: var(--accent);
 }
 
 .sidebar-btn-label {
@@ -548,8 +605,8 @@ kbd,
 }
 
 .sidebar-add-cat-icon:hover {
-  color: #8C9EFF;
-  background: rgba(140, 158, 255, 0.12);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .sidebar-cat-list {
@@ -586,9 +643,9 @@ kbd,
 
 .sidebar-cat-btn.active {
   color: #ECEEF3;
-  background: rgba(140, 158, 255, 0.14) !important;
+  background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
   font-weight: 600;
-  box-shadow: inset 2.5px 0 0 #8C9EFF;
+  box-shadow: inset 2.5px 0 0 var(--accent);
 }
 
 .sidebar-cat-dot {
@@ -618,7 +675,7 @@ kbd,
 
 .sidebar-cat-btn.active .sidebar-cat-count {
   color: #ECEEF3;
-  background: rgba(140, 158, 255, 0.2);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .sidebar-cat-mode {
@@ -650,9 +707,9 @@ kbd,
 }
 
 .sidebar-new-cat-btn:hover {
-  border-color: rgba(140, 158, 255, 0.4);
-  color: #8C9EFF;
-  background: rgba(140, 158, 255, 0.06);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 .sidebar-safe-card {
@@ -737,7 +794,7 @@ kbd,
   border: 1px solid rgba(255, 255, 255, 0.07);
   background: #101218;
   scrollbar-width: thin;
-  scrollbar-color: rgba(140, 158, 255, 0.45) rgba(255, 255, 255, 0.04);
+  scrollbar-color: color-mix(in srgb, var(--accent) 45%, transparent) rgba(255, 255, 255, 0.04);
 }
 
 .portly-table-wrap::-webkit-scrollbar {
@@ -750,12 +807,12 @@ kbd,
 }
 
 .portly-table-wrap::-webkit-scrollbar-thumb {
-  background: rgba(140, 158, 255, 0.45);
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: 5px;
 }
 
 .portly-table-wrap::-webkit-scrollbar-thumb:hover {
-  background: rgba(140, 158, 255, 0.7);
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
 .portly-table-grid {
@@ -802,8 +859,8 @@ kbd,
 }
 
 .portly-table-row.selected {
-  background: rgba(140, 158, 255, 0.07);
-  box-shadow: inset 2.5px 0 0 #8C9EFF;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  box-shadow: inset 2.5px 0 0 var(--accent);
 }
 
 /* Cell Truncation Protection */

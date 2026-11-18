@@ -4,6 +4,15 @@ All notable changes to Portly are documented in this file.
 
 ## [Unreleased]
 
+### ⚡ Feature Enhancements
+- **Themes**: Added System (follows OS colour scheme) and OLED (true-black) themes alongside Dark/Light, with a theme selector in the Customize drawer.
+- **Custom Accent**: Added a custom accent colour picker; accent now recolours buttons, active states, rings and scrollbars instead of only the focus ring.
+- **Bundled Fonts**: Inter and JetBrains Mono are self-hosted, so the designed typography works offline.
+
+### 🩹 Fixes
+- Accent and density now persist in settings and apply on load instead of resetting on reload.
+- Serialized settings writes so rapid theme switching cannot save an older value last.
+
 ## [0.1.1] - 2026-11-18
 
 ### ⚡ Feature Enhancements

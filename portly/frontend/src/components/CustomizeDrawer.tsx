@@ -3,10 +3,14 @@ import { api } from '../api';
 import { Category, Rule } from '../types';
 import { useToast } from './Toast';
 
+export type Theme = 'dark' | 'light' | 'oled' | 'system';
+
 interface CustomizeDrawerProps {
   onClose: () => void;
   viewType: 'table' | 'grid' | 'list' | 'board';
   onChangeViewType: (vt: 'table' | 'grid' | 'list' | 'board') => void;
+  theme: Theme;
+  onChangeTheme: (t: Theme) => void;
   density: 'compact' | 'comfy';
   onChangeDensity: (d: 'compact' | 'comfy') => void;
   groupBy: string;
@@ -26,6 +30,8 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
   onClose,
   viewType,
   onChangeViewType,
+  theme,
+  onChangeTheme,
   density,
   onChangeDensity,
   groupBy,
@@ -165,6 +171,26 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
             ))}
           </div>
 
+          <div className="c169" style={{ fontSize: '12px', color: '#8D95A5', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '12px 0 8px' }}>
+            Theme
+          </div>
+          <div className="c093">
+            {(['dark', 'light', 'oled', 'system'] as Theme[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={theme === t ? 'c094' : 'c095'}
+                onClick={() => onChangeTheme(t)}
+                style={{ textTransform: 'capitalize' }}
+              >
+                {t === 'oled' ? 'OLED' : t}
+              </button>
+            ))}
+          </div>
+
+          <div className="c169" style={{ fontSize: '12px', color: '#8D95A5', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '12px 0 8px' }}>
+            Density
+          </div>
           <div className="c093">
             <button
               type="button"
@@ -274,6 +300,14 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                 }}
               />
             ))}
+            <input
+              type="color"
+              aria-label="Custom accent color"
+              title="Custom accent color"
+              value={/^#[0-9a-f]{6}$/i.test(accent) ? accent : '#8C9EFF'}
+              onChange={(e) => onChangeAccent(e.target.value)}
+              style={{ width: '28px', height: '28px', padding: 0, border: 'none', borderRadius: '50%', background: 'transparent', cursor: 'pointer' }}
+            />
           </div>
         </div>
 

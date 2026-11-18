@@ -1687,7 +1687,7 @@ async def delete_view_endpoint(view_id: str, user: Dict[str, Any] = Depends(requ
 ALLOWED_SETTINGS_KEYS = {
     "refresh_interval", "auto_refresh", "safe_mode", "auto_relock_seconds",
     "public_host", "webhook_url", "webhook_type", "webhook_events", "webhook_enabled",
-    "theme", "default_view"
+    "theme", "default_view", "accent", "density"
 }
 
 @app.get("/api/settings")
@@ -1732,8 +1732,14 @@ async def update_settings_endpoint(settings_dict: Dict[str, Any], user: Dict[str
             if str(v).lower() not in ("true", "false", "1", "0"):
                 raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "webhook_enabled must be 'true' or 'false'."})
         elif k == "theme":
-            if str(v).lower() not in ("dark", "light", "system"):
-                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "theme must be dark, light, or system."})
+            if str(v).lower() not in ("dark", "light", "oled", "system"):
+                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "theme must be dark, light, oled, or system."})
+        elif k == "accent":
+            if not re.fullmatch(r"#[0-9a-fA-F]{6}", str(v)):
+                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "accent must be a #RRGGBB color."})
+        elif k == "density":
+            if str(v) not in ("compact", "comfy"):
+                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "density must be compact or comfy."})
 
     global _safe_mode_unlocked_at
     for k, v in settings_dict.items():
