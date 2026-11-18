@@ -6,6 +6,7 @@ interface OverviewViewProps {
   categories: Category[];
   conflicts: ConflictItem[];
   stats: StatsData | null;
+  events: any[];
   onOpenDetail: (app: AppItem) => void;
   onSelectNav: (nav: string) => void;
 }
@@ -15,6 +16,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   categories,
   conflicts,
   stats,
+  events,
   onOpenDetail,
   onSelectNav,
 }) => {
@@ -23,6 +25,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   const customCount = apps.filter((a) => a.source === 'custom').length;
   const activeCount = apps.filter((a) => a.status === 'up').length;
   const pinnedApps = apps.filter((a) => a.pinned);
+  const topConsumers = [...apps]
+    .filter((a) => (a.ram_mb || 0) > 0)
+    .sort((a, b) => (b.ram_mb || 0) - (a.ram_mb || 0))
+    .slice(0, 5);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
@@ -94,6 +100,56 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         </div>
       </div>
 
+      {/* Activity & Consumers */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+        <div style={{ background: '#101218', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '20px' }}>
+          <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600, color: '#ECEEF3' }}>Top Memory Consumers</h3>
+          {topConsumers.length === 0 ? (
+            <div style={{ fontSize: '13px', color: '#8D95A5' }}>No memory data available.</div>
+          ) : (
+            topConsumers.map((app) => {
+              const max = topConsumers[0].ram_mb || 1;
+              return (
+                <div key={app.id} style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '4px' }}>
+                    <button type="button" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#ECEEF3', fontSize: '13px', textAlign: 'left' }} onClick={() => onOpenDetail(app)}>
+                      {app.name}
+                    </button>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: '#8C9EFF' }}>{app.ram_mb} MB</span>
+                  </div>
+                  <div style={{ height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.round(((app.ram_mb || 0) / max) * 100)}%`, height: '100%', background: 'var(--accent)' }} />
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div style={{ background: '#101218', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#ECEEF3' }}>Recent Activity</h3>
+            <button type="button" className="c078" style={{ height: '28px', fontSize: '12px' }} onClick={() => onSelectNav('history')}>
+              View History →
+            </button>
+          </div>
+          {events.length === 0 ? (
+            <div style={{ fontSize: '13px', color: '#8D95A5' }}>No activity recorded yet.</div>
+          ) : (
+            events.map((event) => (
+              <div key={event.id} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '10px', fontSize: '13px' }}>
+                <span style={{ color: '#8D95A5', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                  {new Date(event.ts * 1000).toLocaleTimeString()}
+                </span>
+                <span style={{ color: '#ECEEF3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={event.message}>
+                  {event.message}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
       {/* Favorites / Pinned Services */}
       {pinnedApps.length > 0 && (
         <div style={{ background: '#101218', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '20px' }}>
@@ -131,7 +187,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <div>
                   <div style={{ fontWeight: 600, color: '#ECEEF3' }}>{app.name}</div>
                   <div style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF', fontSize: '13px', marginTop: '2px' }}>
-                    :{app.port}
+                    {app.port}
                   </div>
                 </div>
                 <span

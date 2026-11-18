@@ -49,7 +49,9 @@ export const BoardView: React.FC<BoardViewProps> = ({
   return (
     <div className="c147" style={{ width: '100%', overflowX: 'auto', paddingBottom: '16px' }}>
       <div className="c148" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
-        {categories.map((cat) => {
+        {categories
+          .filter((cat) => draggedAppId || apps.some((a) => a.category_id === cat.id))
+          .map((cat) => {
           const categoryApps = apps.filter((a) => a.category_id === cat.id);
           const isTarget = activeDropCategory === cat.id;
 
@@ -149,7 +151,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
 
                   <div className="c155" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span className="c156" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF', fontWeight: 600, fontSize: '15px' }}>
-                      :{app.port}
+                      {app.port}
                     </span>
                     <span className={app.source === 'docker' ? 'c111' : 'c109'} style={{ textTransform: 'capitalize' }}>
                       {app.source}

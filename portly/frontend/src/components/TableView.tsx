@@ -195,7 +195,7 @@ export const TableView: React.FC<TableViewProps> = ({
 
                     {/* Port */}
                     <div className="table-cell" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, color: '#8C9EFF', fontSize: '13.5px' }}>
-                      :{app.port}
+                      {app.port}
                     </div>
 
                     {/* Source Badge */}

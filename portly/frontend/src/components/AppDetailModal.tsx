@@ -588,7 +588,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 </span>
                 {' · '}
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF', fontWeight: 600 }}>
-                  :{app.port}
+                  {app.port}
                 </span>
                 {' · '}
                 <span>{app.bind}</span>
@@ -1359,7 +1359,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 </div>
 
                 {loadingTls ? (
-                  <p style={{ color: '#8D95A5', fontSize: '13px' }}>Probing TLS handshake on :{app.port}…</p>
+                  <p style={{ color: '#8D95A5', fontSize: '13px' }}>Probing TLS handshake on {app.port}…</p>
                 ) : tlsData?.is_tls ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -1824,7 +1824,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
             <div className="c209">
               <div className="c210" style={{ fontWeight: 600, color: '#ECEEF3', marginBottom: '8px' }}>Port Configuration</div>
               <div style={{ fontSize: '13px', color: '#8D95A5', lineHeight: 1.6 }}>
-                <div>Host Port: <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF' }}>:{app.port}</span></div>
+                <div>Host Port: <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF' }}>{app.port}</span></div>
                 <div>Bind Address: <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#ECEEF3' }}>{app.bind}</span></div>
                 <div>Protocol: <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#ECEEF3', textTransform: 'uppercase' }}>{app.proto}</span></div>
               </div>

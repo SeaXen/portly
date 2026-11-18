@@ -67,7 +67,7 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
 
             {/* Middle row: Big Port */}
             <div className="c033">
-              <div className="c034">:{app.port}</div>
+              <div className="c034">{app.port}</div>
               <div className="c035">
                 {visibleFields.source !== false && (
                   <span className={app.source === 'docker' ? 'c040' : 'c036'} style={{ textTransform: 'capitalize' }}>

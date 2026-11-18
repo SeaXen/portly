@@ -53,6 +53,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const [views, setViews] = useState<ViewItem[]>([]);
   const [activeViewId, setActiveViewId] = useState('all');
   const [lastScanTime, setLastScanTime] = useState<number>(Date.now() / 1000);
+  const [events, setEvents] = useState<any[]>([]);
   const [dockerAvailable, setDockerAvailable] = useState(true);
   const [dockerMsg, setDockerMsg] = useState('');
   const [dockerBannerDismissed, setDockerBannerDismissed] = useState(false);
@@ -303,17 +304,19 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
   const loadInitialData = async () => {
     try {
-      const [appData, statData, catData, ruleData, viewData, setts] = await Promise.all([
+      const [appData, statData, catData, ruleData, viewData, setts, eventData] = await Promise.all([
         api.getApps({ include_hidden: true }),
         api.getStats(),
         api.getCategories(),
         api.getRules(),
         api.getViews(),
         api.getSettings(),
+        api.getEvents(),
       ]);
 
       setApps(appData.apps);
       setConflicts(appData.conflicts);
+      setEvents(eventData.slice(0, 8));
       setDockerAvailable(appData.docker_status.available);
       setDockerMsg(appData.docker_status.message);
       setLastScanTime(appData.last_scan);
@@ -867,6 +870,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
             categories={categories}
             conflicts={conflicts}
             stats={stats}
+            events={events}
             onOpenDetail={(app) => setDetailAppId(app.id)}
             onSelectNav={handleSelectNav}
           />

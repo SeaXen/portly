@@ -8,6 +8,8 @@ All notable changes to Portly are documented in this file.
 - **Themes**: Added System (follows OS colour scheme) and OLED (true-black) themes alongside Dark/Light, with a theme selector in the Customize drawer.
 - **Custom Accent**: Added a custom accent colour picker; accent now recolours buttons, active states, rings and scrollbars instead of only the focus ring.
 - **Bundled Fonts**: Inter and JetBrains Mono are self-hosted, so the designed typography works offline.
+- **Overview Insights**: Added Top Memory Consumers and Recent Activity panels so the overview page uses the available space.
+- **Cleaner Board & Ports**: Empty board columns are hidden until a drag starts, and port numbers no longer show a leading colon.
 
 ### 🩹 Fixes
 - Accent and density now persist in settings and apply on load instead of resetting on reload.

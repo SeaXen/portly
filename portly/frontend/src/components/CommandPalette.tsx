@@ -238,7 +238,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <span style={{ fontWeight: 600 }}>{a.name}</span>
-                          <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF' }}>:{a.port}</span>
+                          <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF' }}>{a.port}</span>
                           <span style={{ fontSize: '12px', color: '#8D95A5' }}>{a.source}</span>
                         </div>
                         <span className="command-badge" style={{ color: a.status === 'up' ? '#5EEAD4' : '#FF8A8A' }}>

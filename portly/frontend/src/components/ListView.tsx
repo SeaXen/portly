@@ -47,7 +47,7 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail, categori
             />
             <span style={{ fontWeight: 600, color: '#ECEEF3' }}>{app.name}</span>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF', fontWeight: 600 }}>
-              :{app.port}
+              {app.port}
             </span>
             <span style={{ fontSize: '12px', color: '#8D95A5' }}>
               {app.source === 'docker' ? app.image : app.process_name}
