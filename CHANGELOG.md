@@ -2,6 +2,27 @@
 
 All notable changes to Portly are documented in this file.
 
+## [Unreleased]
+
+## [0.1.1] - 2026-11-18
+
+### ⚡ Feature Enhancements
+- **Unhide Support**: Added a `Hidden (N)` toggle in the toolbar to reveal hidden ports, plus an `Unhide` bulk action (`{"action":"unhide"}` on `POST /api/apps/bulk`). The dashboard now fetches with `include_hidden=true` and filters client-side so the toggle is instant.
+- **Image Update Repair**: Image checks now compare registry digests with the image's `RepoDigests`, show an honest "Not checked"/"Unknown" state, and offer a working Apply button. Admin-configured `update_cmd` can now be run for custom apps via `POST /api/apps/{id}/update/custom`.
+- **Webhook Settings**: `webhook_enabled` and the Telegram webhook type can now be saved from the Alerts drawer.
+- **Backup Restore**: Added "Restore Backup" to the Export menu, wired to `POST /api/import`.
+- **Viewer Role Gating**: Viewer accounts no longer see bulk/quick mutation controls; mutating modal actions are disabled.
+- **Toolbar Filters & Sorting**: Added tag filtering and status, category and manual-order sorting.
+- **Bulk Feedback**: Bulk actions now report succeeded/failed items in toasts instead of silently discarding failures.
+- **Live Docker Status**: The Docker-unavailable banner now clears/updates from SSE events.
+
+### 🩹 Fixes
+- Corrected misleading "Tunnel URL" badges to use the app's actual URL override.
+- `start_on_boot` and save-time custom-app starts now bypass the interactive safe-mode gate.
+- Detail views read the last polled health snapshot instead of probing the network on every open; the poller honours per-app `health_interval` and checks due apps concurrently.
+- Bumped the service-worker cache version so updated UI assets are picked up.
+- Aligned `docs/API.md` with the implemented endpoints, exec allowlist and rate-limit window.
+
 ## [1.1.0] - 2026-11-17
 
 ### 🚨 Critical Fixes & Stability (P0)

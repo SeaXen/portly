@@ -185,8 +185,39 @@ def _read_output_stream(app_id: str, proc: subprocess.Popen, log_file: Optional[
                 pass
 
 
-def start_custom_app(app_id: str, store: Store, actor: str = "system") -> Dict[str, Any]:
+def run_custom_update(app_id: str, store: Store, actor: str = "system") -> Dict[str, Any]:
+    """Run the admin-configured update command for a custom app (no shell interpolation)."""
     _check_safe_mode(store)
+    clean_id = app_id.replace("custom:", "")
+    ca = store.get_custom_app(clean_id)
+    if not ca:
+        raise ValueError(f"Custom app '{clean_id}' not found")
+    cmd = (ca.get("update_cmd") or "").replace("{port}", str(ca.get("port", 3000))).strip()
+    if not cmd:
+        raise ValueError("No update command is configured for this app")
+    workdir = ca.get("workdir")
+    if not workdir or not os.path.isdir(workdir):
+        workdir = None
+    try:
+        parts = shlex.split(cmd)
+        proc = subprocess.run(parts, cwd=workdir, capture_output=True, text=True, timeout=180)
+    except Exception as e:
+        raise ValueError(f"Update command failed: {e}")
+    result = {
+        "status": "ok" if proc.returncode == 0 else "failed",
+        "returncode": proc.returncode,
+        "stdout": proc.stdout[-8000:],
+        "stderr": proc.stderr[-8000:],
+    }
+    log_app_id = app_id if app_id.startswith("custom:") else f"custom:{app_id}"
+    store.log_event("app.update", f"Custom update for {app_id}: {result['status']}", app_id=log_app_id, actor=actor)
+    return result
+
+
+def start_custom_app(app_id: str, store: Store, actor: str = "system", internal: bool = False) -> Dict[str, Any]:
+    # Boot/save-time starts are configured by an admin, so they bypass the interactive safe-mode gate.
+    if not internal:
+        _check_safe_mode(store)
     clean_id = app_id.replace("custom:", "")
     custom_app = store.get_custom_app(clean_id)
     if not custom_app:

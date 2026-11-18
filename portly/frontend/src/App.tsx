@@ -30,6 +30,7 @@ interface AppProps {
 }
 
 export const App: React.FC<AppProps> = ({ user, onLogout }) => {
+  const readOnly = user?.role === 'viewer';
   const { success, error, warning, info } = useToast();
 
   // Navigation & View
@@ -71,9 +72,11 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const [sourceFilter, setSourceFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
   const [sortBy, setSortBy] = useState('port');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [groupBy, setGroupBy] = useState('none');
+  const [showHidden, setShowHidden] = useState(false);
 
   // Selection
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -241,6 +244,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
             if (data.apps) setApps(data.apps);
             if (data.conflicts) setConflicts(data.conflicts);
             if (data.stats) setStats(data.stats);
+            if (data.docker_status) {
+              setDockerAvailable(data.docker_status.available);
+              setDockerMsg(data.docker_status.message || '');
+            }
             if (data.last_scan) setLastScanTime(data.last_scan);
           } catch {}
         };
@@ -286,7 +293,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const loadInitialData = async () => {
     try {
       const [appData, statData, catData, ruleData, viewData, setts] = await Promise.all([
-        api.getApps(),
+        api.getApps({ include_hidden: true }),
         api.getStats(),
         api.getCategories(),
         api.getRules(),
@@ -316,7 +323,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
   const fetchAppsAndStats = async () => {
     try {
-      const [appData, statData] = await Promise.all([api.getApps(), api.getStats()]);
+      const [appData, statData] = await Promise.all([api.getApps({ include_hidden: true }), api.getStats()]);
       setApps(appData.apps);
       setConflicts(appData.conflicts);
       setStats(statData);
@@ -444,53 +451,39 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   };
 
   // Bulk Actions
-  const handleBulkMove = async (catId: string) => {
-    await api.bulkAction({ ids: selectedIds, action: 'move', category_id: catId });
+  const runBulk = async (action: string, extra: { category_id?: string; tag?: string } = {}) => {
+    if (readOnly) {
+      warning('Viewer access is read-only.');
+      return;
+    }
+    try {
+      const res = await api.bulkAction({ ids: selectedIds, action, ...extra });
+      if (res.failed?.length) {
+        warning(`${res.failed.length} of ${selectedIds.length} apps failed: ${res.failed.map((f) => f.id).join(', ')}`);
+      } else if (res.count) {
+        success(`${res.count} app${res.count === 1 ? '' : 's'} updated`);
+      }
+    } catch (e: any) {
+      error(`Bulk ${action} failed: ${e.message}`);
+    }
     setSelectedIds([]);
     await fetchAppsAndStats();
   };
 
-  const handleBulkAddTag = async (tag: string) => {
-    await api.bulkAction({ ids: selectedIds, action: 'tag', tag });
-    setSelectedIds([]);
-    await fetchAppsAndStats();
-  };
-
-  const handleBulkPin = async () => {
-    await api.bulkAction({ ids: selectedIds, action: 'pin' });
-    setSelectedIds([]);
-    await fetchAppsAndStats();
-  };
-
-  const handleBulkHide = async () => {
-    await api.bulkAction({ ids: selectedIds, action: 'hide' });
-    setSelectedIds([]);
-    await fetchAppsAndStats();
-  };
-
-  const handleBulkStart = async () => {
-    await api.bulkAction({ ids: selectedIds, action: 'start' });
-    setSelectedIds([]);
-    await fetchAppsAndStats();
-  };
-
-  const handleBulkStop = async () => {
-    await api.bulkAction({ ids: selectedIds, action: 'stop' });
-    setSelectedIds([]);
-    await fetchAppsAndStats();
-  };
-
-  const handleBulkRestart = async () => {
-    await api.bulkAction({ ids: selectedIds, action: 'restart' });
-    setSelectedIds([]);
-    await fetchAppsAndStats();
-  };
+  const handleBulkMove = (catId: string) => runBulk('move', { category_id: catId });
+  const handleBulkAddTag = (tag: string) => runBulk('tag', { tag });
+  const handleBulkPin = () => runBulk('pin');
+  const handleBulkHide = () => runBulk('hide');
+  const handleBulkUnhide = () => runBulk('unhide');
+  const handleBulkStart = () => runBulk('start');
+  const handleBulkStop = () => runBulk('stop');
+  const handleBulkRestart = () => runBulk('restart');
 
   // Quick Row Actions
   const handleQuickStart = async (app: AppItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (safeMode) {
-      warning('Safe mode is ON. Mutations are locked. Disable safe mode to start apps.');
+    if (readOnly || safeMode) {
+      warning(readOnly ? 'Viewer access is read-only.' : 'Safe mode is ON. Mutations are locked. Disable safe mode to start apps.');
       return;
     }
     try {
@@ -504,8 +497,8 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
   const handleQuickStop = async (app: AppItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (safeMode) {
-      warning('Safe mode is ON. Mutations are locked. Disable safe mode to stop apps.');
+    if (readOnly || safeMode) {
+      warning(readOnly ? 'Viewer access is read-only.' : 'Safe mode is ON. Mutations are locked. Disable safe mode to stop apps.');
       return;
     }
     try {
@@ -560,9 +553,14 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     setActiveNav(nav);
   };
 
+  // Sidebar/view counts ignore hidden ports; the table can include them on demand.
+  const visibleApps = useMemo(() => apps.filter((a) => !a.hidden), [apps]);
+  const hiddenCount = apps.length - visibleApps.length;
+  const allTags = useMemo(() => [...new Set(visibleApps.flatMap((a) => a.tags || []))].sort(), [visibleApps]);
+
   // Filter & Sort Pipeline (D-4, P1-20: Pinned apps stay on top in all views)
   const displayedApps = useMemo(() => {
-    let list = apps.filter((a) => !a.hidden);
+    let list = showHidden ? apps : visibleApps;
 
     if (activeNav === 'docker') {
       list = list.filter((a) => a.source === 'docker');
@@ -594,6 +592,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       list = list.filter((a) => a.status.toLowerCase() === statusFilter.toLowerCase());
     }
 
+    if (tagFilter) {
+      list = list.filter((a) => (a.tags || []).includes(tagFilter));
+    }
+
     if (search) {
       const s = search.toLowerCase();
       list = list.filter(
@@ -613,6 +615,9 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       else if (sortBy === 'cpu') diff = (a.cpu_percent || 0) - (b.cpu_percent || 0);
       else if (sortBy === 'ram') diff = (a.ram_mb || 0) - (b.ram_mb || 0);
       else if (sortBy === 'uptime') diff = (a.uptime_sec || 0) - (b.uptime_sec || 0);
+      else if (sortBy === 'status') diff = a.status.localeCompare(b.status);
+      else if (sortBy === 'category') diff = (categories.find((c) => c.id === a.category_id)?.name || '').localeCompare(categories.find((c) => c.id === b.category_id)?.name || '');
+      else if (sortBy === 'order') diff = (a.sort_order || 0) - (b.sort_order || 0);
       return sortDir === 'asc' ? diff : -diff;
     };
 
@@ -621,10 +626,14 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     return [...pinned, ...unpinned];
   }, [
     apps,
+    visibleApps,
+    showHidden,
     activeNav,
     activeViewId,
     selectedCategory,
+    categories,
     categoryFilter,
+    tagFilter,
     sourceFilter,
     statusFilter,
     search,
@@ -820,10 +829,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               activeViewId={activeViewId}
               onSelectView={handleSelectView}
               onSaveCurrentView={handleSaveCurrentView}
-              appsCount={apps.length}
-              devCount={apps.filter((a) => a.category_id === 'development').length}
-              exposedCount={apps.filter((a) => a.bind === '0.0.0.0').length}
-              dockerCount={apps.filter((a) => a.source === 'docker').length}
+              appsCount={visibleApps.length}
+              devCount={visibleApps.filter((a) => a.category_id === 'development').length}
+              exposedCount={visibleApps.filter((a) => a.bind === '0.0.0.0').length}
+              dockerCount={visibleApps.filter((a) => a.source === 'docker').length}
             />
 
             {/* Single-Line Toolbar */}
@@ -836,12 +845,18 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               onChangeStatusFilter={setStatusFilter}
               categoryFilter={categoryFilter}
               onChangeCategoryFilter={setCategoryFilter}
+              tagFilter={tagFilter}
+              onChangeTagFilter={setTagFilter}
+              tags={allTags}
               categories={categories}
               sortBy={sortBy}
               sortDir={sortDir}
               onChangeSort={(by, dir) => { setSortBy(by); setSortDir(dir); }}
               groupBy={groupBy}
               onChangeGroupBy={setGroupBy}
+              showHidden={showHidden}
+              onToggleShowHidden={() => setShowHidden((prev) => !prev)}
+              hiddenCount={hiddenCount}
               density={density}
               onChangeDensity={setDensity}
               onToggleCustomize={() => setShowCustomize(true)}
@@ -863,6 +878,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                   onQuickLogs={handleQuickLogs}
                   onAdoptApp={handleAdoptApp}
                   safeMode={safeMode}
+                  readOnly={readOnly}
                   visibleFields={visibleFields}
                   groupBy={groupBy}
                 />
@@ -901,24 +917,25 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
         {/* Footer info strip */}
         <div className="c145" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#8D95A5', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '14px', marginTop: 'auto' }}>
-          <span>{displayedApps.length} of {apps.length} ports · Portly listening on port 5533</span>
+          <span>{displayedApps.length} of {visibleApps.length} ports · Portly listening on port {window.location.port || (window.location.protocol === 'https:' ? '443' : '80')}</span>
           <span>SSE Live updates active · Auto-refresh 3s · Press ? for shortcuts</span>
         </div>
       </main>
 
       {/* Floating Bulk Action Bar */}
-      <BulkActionBar
+      {!readOnly && <BulkActionBar
         selectedCount={selectedIds.length}
         categories={categories}
         onMoveToCategory={handleBulkMove}
         onAddTag={handleBulkAddTag}
         onPin={handleBulkPin}
         onHide={handleBulkHide}
+        onUnhide={handleBulkUnhide}
         onStart={handleBulkStart}
         onStop={handleBulkStop}
         onRestart={handleBulkRestart}
         onClear={() => setSelectedIds([])}
-      />
+      />}
 
       {/* Detail Modal */}
       {detailApp && (
@@ -927,6 +944,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
           onClose={() => setDetailApp(null)}
           categories={categories}
           safeMode={safeMode}
+          readOnly={readOnly}
           onRefreshApps={fetchAppsAndStats}
         />
       )}

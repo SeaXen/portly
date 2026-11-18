@@ -74,7 +74,7 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
                     {app.source}
                   </span>
                 )}
-                {(app.url_override || (app.open_url && !app.open_url.includes('localhost'))) && (
+                {app.url_override && (
                   <span
                     style={{
                       fontSize: '11px',

@@ -69,9 +69,9 @@
 
 .c073 {
   display: flex !important;
-  flex-wrap: nowrap !important;
-  overflow-x: auto !important;
-  scrollbar-width: thin;
+  flex-wrap: wrap !important;
+  overflow-x: visible !important;
+  row-gap: 8px;
 }
 
 .c089 {
@@ -190,6 +190,25 @@ button, a, input, select, textarea {
   .stat-sparkline polyline,
   .stat-sparkline path {
     transition: none !important;
+  }
+}
+
+/* Telemetry strip: keep values inside their cells when the window is narrow */
+.c082,
+.c088 {
+  overflow: hidden;
+}
+
+.c084,
+.c085,
+.c086 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1400px) {
+  .c087 {
+    display: none !important;
   }
 }
 
@@ -712,22 +731,46 @@ kbd,
 
 .portly-table-wrap {
   width: 100%;
-  overflow-x: auto;
+  max-height: calc(100vh - 320px);
+  overflow: auto;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background: #101218;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(140, 158, 255, 0.45) rgba(255, 255, 255, 0.04);
+}
+
+.portly-table-wrap::-webkit-scrollbar {
+  height: 10px;
+}
+
+.portly-table-wrap::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 0 0 14px 14px;
+}
+
+.portly-table-wrap::-webkit-scrollbar-thumb {
+  background: rgba(140, 158, 255, 0.45);
+  border-radius: 5px;
+}
+
+.portly-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 158, 255, 0.7);
 }
 
 .portly-table-grid {
-  min-width: 1140px;
+  min-width: 960px;
   width: 100%;
 }
 
 .portly-table-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: grid;
-  grid-template-columns: 32px 24px minmax(200px, 2.5fr) 85px 75px 150px 145px 85px 85px 85px 110px;
+  grid-template-columns: 32px 24px minmax(140px, 2.5fr) 85px 75px 110px 105px 70px 70px 70px 90px;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   padding: 0 16px;
   height: 40px;
   background: #151821;
@@ -742,9 +785,9 @@ kbd,
 
 .portly-table-row {
   display: grid;
-  grid-template-columns: 32px 24px minmax(200px, 2.5fr) 85px 75px 150px 145px 85px 85px 85px 110px;
+  grid-template-columns: 32px 24px minmax(140px, 2.5fr) 85px 75px 110px 105px 70px 70px 70px 90px;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   padding: 0 16px;
   height: 52px;
   border-top: 1px solid rgba(255, 255, 255, 0.04);
@@ -925,5 +968,64 @@ button.c088 {
   .c078, .c080, .c077 {
     min-height: 44px;
     padding: 0 14px;
+  }
+}
+
+/* Compact top bar: icon-only secondary actions so the single row always fits */
+.topbar-search-compact { display: none; }
+.topbar-scan-label,
+.topbar-users-label { display: none !important; }
+@media (max-width: 1400px) {
+  .topbar-kiosk,
+  .topbar-user-badge { display: none !important; }
+}
+@media (max-width: 1200px) {
+  .topbar-search-label { display: none !important; }
+  .topbar-search-compact { display: inline-flex !important; }
+  .topbar-user-badge { display: none !important; }
+}
+
+/* Mobile: sidebar becomes a single compact top nav row */
+@media (max-width: 720px) {
+  .portly-sidebar {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    min-height: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+  .portly-sidebar .sidebar-brand {
+    width: auto;
+    flex: none;
+    padding: 4px;
+  }
+  .portly-sidebar .sidebar-brand > div:last-child {
+    display: none;
+  }
+  .portly-sidebar .sidebar-nav {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    flex: none;
+  }
+  .portly-sidebar .sidebar-nav-btn {
+    width: auto;
+    padding: 8px;
+  }
+  .portly-sidebar .sidebar-btn-label {
+    display: none;
+  }
+  .portly-sidebar .sidebar-cat-section,
+  .portly-sidebar .sidebar-safe-card {
+    display: none !important;
+  }
+  .c067 {
+    flex: 1 1 auto;
   }
 }

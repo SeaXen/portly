@@ -141,7 +141,7 @@ async def lifespan(app: FastAPI):
     for ca in store.get_custom_apps():
         if ca.get("start_on_boot") and ca.get("start_cmd"):
             try:
-                await asyncio.to_thread(process_actions.start_custom_app, f"custom:{ca['id']}", store)
+                await asyncio.to_thread(process_actions.start_custom_app, f"custom:{ca['id']}", store, internal=True)
             except Exception as e:
                 logger.warning(f"Failed to auto-start custom app {ca['id']} on boot: {e}")
 
@@ -161,14 +161,24 @@ async def lifespan(app: FastAPI):
 
     # Background custom app health poller
     async def background_health_poller():
+        last_check: Dict[str, float] = {}
         while True:
             await asyncio.sleep(10.0)
             try:
-                custom_apps = store.get_custom_apps()
-                for ca in custom_apps:
-                    res = await asyncio.to_thread(check_app_health, ca)
+                now = time.time()
+                due_apps = []
+                for ca in store.get_custom_apps():
+                    try:
+                        interval = max(10, int(ca.get("health_interval", 30)))
+                    except (TypeError, ValueError):
+                        interval = 30
+                    app_id = f"custom:{ca['id']}"
+                    if now - last_check.get(app_id, 0) >= interval:
+                        due_apps.append((app_id, ca))
+                results = await asyncio.gather(*(asyncio.to_thread(check_app_health, ca) for _, ca in due_apps))
+                for (app_id, _), res in zip(due_apps, results):
+                    last_check[app_id] = now
                     if res:
-                        app_id = f"custom:{ca['id']}"
                         store.record_health(app_id, bool(res.get("ok", False)), float(res.get("latency_ms", 0.0)))
             except Exception as e:
                 logger.debug(f"Error in background health poller: {e}")
@@ -219,7 +229,7 @@ async def lifespan(app: FastAPI):
         maint_task.cancel()
 
 
-app = FastAPI(title="Portly API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Portly API", version="0.1.1", lifespan=lifespan)
 
 cors_origins_env = os.environ.get("PORTLY_CORS_ORIGINS", "")
 if cors_origins_env:
@@ -432,7 +442,7 @@ class AppPatchModel(BaseModel):
 
 class BulkActionModel(BaseModel):
     ids: List[str]
-    action: str  # move, tag, pin, hide, start, stop, restart
+    action: str  # move, tag, pin, hide, unhide, start, stop, restart
     category_id: Optional[str] = None
     tag: Optional[str] = None
 
@@ -854,9 +864,23 @@ async def get_app_detail(app_id: str, user: Dict[str, Any] = Depends(require_aut
     if not target:
         target = store.get_app(app_id)
     if target:
-        # Check live health non-blocking
-        health = await asyncio.to_thread(check_app_health, target)
-        store.record_health(app_id, health["ok"], health["latency_ms"])
+        # Read the last polled snapshot — opening the detail modal must not probe the network.
+        latest = store.get_latest_health(app_id)
+        health = (
+            {
+                "status": "up" if latest["ok"] else "down",
+                "ok": latest["ok"],
+                "latency_ms": latest["latency_ms"],
+                "code": 200 if latest["ok"] else 0,
+            }
+            if latest
+            else {
+                "status": target.get("health", "unknown"),
+                "ok": target.get("health") == "up",
+                "latency_ms": 0.0,
+                "code": 0,
+            }
+        )
         history = store.get_health_history(app_id, limit=30)
 
         # Inspect details if docker non-blocking
@@ -939,6 +963,10 @@ async def bulk_action(data: BulkActionModel, user: Dict[str, Any] = Depends(requ
     elif action == "hide":
         for app_id in ids:
             store.upsert_app_override(app_id, hidden=True)
+            succeeded.append(app_id)
+    elif action == "unhide":
+        for app_id in ids:
+            store.upsert_app_override(app_id, hidden=False)
             succeeded.append(app_id)
     elif action in ("start", "stop", "restart"):
         if store.get_setting("safe_mode", "true").lower() == "true":
@@ -1235,10 +1263,27 @@ async def apply_update_endpoint(app_id: str, user: Dict[str, Any] = Depends(requ
         raise HTTPException(status_code=500, detail={"code": "UPDATE_FAILED", "message": str(e)})
 
 
+@app.post("/api/apps/{app_id:path}/update/custom")
+async def update_custom_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_admin)):
+    if store.get_setting("safe_mode", "true").lower() == "true":
+        raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": "Safe mode is active. Mutating actions are locked."})
+    if not app_id.startswith("custom:"):
+        raise HTTPException(status_code=400, detail={"code": "NOT_CUSTOM", "message": "Custom update is only supported for custom apps."})
+    try:
+        return await asyncio.to_thread(process_actions.run_custom_update, app_id, store, user.get("username", "admin"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"code": "UPDATE_FAILED", "message": str(e)})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"code": "UPDATE_FAILED", "message": str(e)})
+
+
 # 5b. Docker System Hygiene & Storage endpoints
 @app.get("/api/docker/system")
 async def get_docker_system_endpoint(user: Dict[str, Any] = Depends(require_auth)):
-    return await asyncio.to_thread(docker_actions.get_docker_system_df, store)
+    try:
+        return await asyncio.to_thread(docker_actions.get_docker_system_df, store)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail={"code": "DOCKER_UNAVAILABLE", "message": str(e)})
 
 
 @app.get("/api/docker/images")
@@ -1440,7 +1485,7 @@ async def create_or_update_custom_app(data: CustomAppModel, user: Dict[str, Any]
     )
     if data.start_on_boot and data.start_cmd:
         try:
-            await asyncio.to_thread(process_actions.start_custom_app, f"custom:{app_id}", store)
+            await asyncio.to_thread(process_actions.start_custom_app, f"custom:{app_id}", store, internal=True)
         except Exception:
             pass
     await refresh_discovery()
@@ -1576,6 +1621,8 @@ async def get_categories_endpoint(user: Dict[str, Any] = Depends(require_auth)):
     cats = store.get_categories()
     counts = {}
     for a in _cached_apps:
+        if a.get("hidden"):
+            continue
         cid = a.get("category_id", "uncategorized")
         counts[cid] = counts.get(cid, 0) + 1
     for c in cats:
@@ -1639,7 +1686,7 @@ async def delete_view_endpoint(view_id: str, user: Dict[str, Any] = Depends(requ
 # 9. Settings
 ALLOWED_SETTINGS_KEYS = {
     "refresh_interval", "auto_refresh", "safe_mode", "auto_relock_seconds",
-    "public_host", "webhook_url", "webhook_type", "webhook_events",
+    "public_host", "webhook_url", "webhook_type", "webhook_events", "webhook_enabled",
     "theme", "default_view"
 }
 
@@ -1679,8 +1726,11 @@ async def update_settings_endpoint(settings_dict: Dict[str, Any], user: Dict[str
             except (ValueError, TypeError):
                 raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "auto_relock_seconds must be between 0 and 86400."})
         elif k == "webhook_type":
-            if str(v).lower() not in ("generic", "slack", "discord"):
-                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "webhook_type must be generic, slack, or discord."})
+            if str(v).lower() not in ("generic", "slack", "discord", "telegram"):
+                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "webhook_type must be generic, slack, discord, or telegram."})
+        elif k == "webhook_enabled":
+            if str(v).lower() not in ("true", "false", "1", "0"):
+                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "webhook_enabled must be 'true' or 'false'."})
         elif k == "theme":
             if str(v).lower() not in ("dark", "light", "system"):
                 raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "theme must be dark, light, or system."})

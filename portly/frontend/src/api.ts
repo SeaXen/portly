@@ -188,6 +188,10 @@ export const api = {
     return request(`/apps/${encodeURIComponent(appId)}/update/apply`, { method: 'POST' });
   },
 
+  async updateCustomApp(appId: string): Promise<any> {
+    return request(`/apps/${encodeURIComponent(appId)}/update/custom`, { method: 'POST' });
+  },
+
   // Custom apps
   async getCustomApps(): Promise<any[]> {
     return request('/custom-apps');
@@ -285,6 +289,10 @@ export const api = {
   // Export
   exportUrl(format: 'json' | 'csv' | 'markdown'): string {
     return `${API_BASE}/export?format=${format}`;
+  },
+
+  async importBackup(backup: any): Promise<any> {
+    return request('/import', { method: 'POST', body: JSON.stringify(backup) });
   },
 
   // Auth

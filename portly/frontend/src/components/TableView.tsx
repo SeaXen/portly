@@ -15,6 +15,7 @@ interface TableViewProps {
   onQuickLogs: (app: AppItem, e: React.MouseEvent) => void;
   onAdoptApp?: (app: AppItem) => void;
   safeMode: boolean;
+  readOnly?: boolean;
   visibleFields?: Record<string, boolean>;
   groupBy?: string;
 }
@@ -32,6 +33,7 @@ export const TableView: React.FC<TableViewProps> = ({
   onQuickLogs,
   onAdoptApp,
   safeMode,
+  readOnly = false,
   visibleFields = {},
   groupBy = 'none',
 }) => {
@@ -213,7 +215,7 @@ export const TableView: React.FC<TableViewProps> = ({
                       >
                         {app.source}
                       </span>
-                      {(app.url_override || (app.open_url && !app.open_url.includes('localhost'))) && (
+                      {app.url_override && (
                         <span
                           style={{
                             fontSize: '10.5px',
@@ -223,7 +225,7 @@ export const TableView: React.FC<TableViewProps> = ({
                             color: '#FBBF77',
                             border: '1px solid rgba(251, 191, 119, 0.25)',
                           }}
-                          title={`Tunnel URL: ${app.url_override || app.open_url}`}
+                          title={`Tunnel URL: ${app.url_override}`}
                         >
                           ☁ Tunnel
                         </span>
@@ -338,7 +340,7 @@ export const TableView: React.FC<TableViewProps> = ({
 
                     {/* Actions */}
                     <div className="table-cell" style={{ justifyContent: 'flex-end', gap: '6px' }} onClick={(e) => e.stopPropagation()}>
-                      {app.status === 'up' ? (
+                      {!readOnly && (app.status === 'up' ? (
                         <button
                           type="button"
                           className="row-action-btn"
@@ -362,7 +364,7 @@ export const TableView: React.FC<TableViewProps> = ({
                             <path d="M7 5v14l12-7z"></path>
                           </svg>
                         </button>
-                      )}
+                      ))}
 
                       <button
                         type="button"
@@ -376,7 +378,7 @@ export const TableView: React.FC<TableViewProps> = ({
                         </svg>
                       </button>
 
-                      {app.source === 'host' && onAdoptApp && (
+                      {!readOnly && app.source === 'host' && onAdoptApp && (
                         <button
                           type="button"
                           className="row-action-btn"

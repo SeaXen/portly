@@ -238,6 +238,31 @@ def test_settings_endpoints():
     assert res_patch.json()["refresh_interval"] == "5"
 
 
+def test_webhook_settings_accept_ui_values():
+    res = client.patch("/api/settings", json={
+        "webhook_enabled": "true",
+        "webhook_type": "telegram",
+        "webhook_url": "https://api.telegram.org/bot123/sendMessage?chat_id=42",
+    })
+    assert res.status_code == 200
+    assert res.json()["webhook_enabled"] == "true"
+    assert res.json()["webhook_type"] == "telegram"
+    assert client.patch("/api/settings", json={"webhook_type": "carrier-pigeon"}).status_code == 400
+    client.patch("/api/settings", json={"webhook_enabled": "false", "webhook_type": "generic", "webhook_url": ""})
+
+
+def test_custom_update_endpoint():
+    store.create_custom_app("update_probe", "Update Probe", 19991, update_cmd='python -c "print(42)"')
+    try:
+        res = client.post("/api/apps/custom:update_probe/update/custom")
+        assert res.status_code == 200, res.text
+        assert res.json()["status"] == "ok"
+        assert "42" in res.json()["stdout"]
+        assert client.post("/api/apps/docker:web:80/tcp/update/custom").status_code == 400
+    finally:
+        store.delete_custom_app("update_probe")
+
+
 def test_ports_endpoints():
     # Check port
     res_check = client.get("/api/ports/check?port=9999&bind=127.0.0.1")
@@ -377,6 +402,12 @@ def test_bulk_actions_and_safe_mode(monkeypatch):
 
     res_hide = client.post("/api/apps/bulk", json={"ids": ["custom:worker"], "action": "hide"})
     assert res_hide.status_code == 200
+    assert store.get_app("custom:worker")["hidden"] == 1
+
+    res_unhide = client.post("/api/apps/bulk", json={"ids": ["custom:worker"], "action": "unhide"})
+    assert res_unhide.status_code == 200
+    assert res_unhide.json()["succeeded"] == ["custom:worker"]
+    assert store.get_app("custom:worker")["hidden"] == 0
 
     res_tag = client.post("/api/apps/bulk", json={"ids": ["custom:worker"], "action": "tag", "tag": "testtag"})
     assert res_tag.status_code == 200

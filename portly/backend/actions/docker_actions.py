@@ -122,34 +122,30 @@ def check_image_update(image_tag: str) -> Dict[str, Any]:
 
     try:
         local_img = client.images.get(image_tag)
-        current_id = local_img.id[:19]
         local_digests = local_img.attrs.get("RepoDigests", [])
-        current_digest = local_digests[0].split("@")[-1][:19] if local_digests else current_id
-
-        # Query registry data if possible
-        try:
-            reg_data = client.images.get_registry_data(image_tag)
-            remote_id = getattr(reg_data, "id", "")[:19]
-            if remote_id and remote_id != current_id:
-                return {
-                    "has_update": True,
-                    "current_image": image_tag,
-                    "current_digest": current_digest,
-                    "latest_digest": remote_id,
-                    "message": f"Update available: {remote_id}"
-                }
-        except Exception:
-            pass
-
-        return {
-            "has_update": False,
-            "current_image": image_tag,
-            "current_digest": current_digest,
-            "latest_digest": current_digest,
-            "message": "Image is up to date"
-        }
+        current_digest = local_digests[0].split("@")[-1] if local_digests else ""
     except Exception as e:
-        return {"has_update": False, "message": str(e)}
+        return {"has_update": False, "known": False, "message": str(e)}
+
+    try:
+        remote_digest = getattr(client.images.get_registry_data(image_tag), "id", "")
+    except Exception as e:
+        return {"has_update": False, "known": False, "message": f"Registry check failed: {e}"}
+
+    if not remote_digest:
+        return {"has_update": False, "known": False, "message": "Registry did not return a digest"}
+    if not current_digest:
+        return {"has_update": False, "known": False, "message": "Local image has no registry digest (built locally)"}
+
+    has_update = remote_digest not in {d.split("@")[-1] for d in local_digests}
+    return {
+        "has_update": has_update,
+        "known": True,
+        "current_image": image_tag,
+        "current_digest": current_digest[:19],
+        "latest_digest": remote_digest[:19],
+        "message": f"Update available: {remote_digest[:19]}" if has_update else "Image is up to date",
+    }
 
 
 def apply_image_update(container_name: str, store: Store, actor: str = "system") -> Dict[str, Any]:

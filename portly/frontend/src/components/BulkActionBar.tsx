@@ -8,6 +8,7 @@ interface BulkActionBarProps {
   onAddTag: (tag: string) => void;
   onPin: () => void;
   onHide: () => void;
+  onUnhide: () => void;
   onStart: () => void;
   onStop: () => void;
   onRestart: () => void;
@@ -21,6 +22,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
   onAddTag,
   onPin,
   onHide,
+  onUnhide,
   onStart,
   onStop,
   onRestart,
@@ -134,6 +136,10 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
 
       <button type="button" className="c078" onClick={onHide}>
         Hide
+      </button>
+
+      <button type="button" className="c078" onClick={onUnhide} title="Show selected ports in the dashboard again">
+        Unhide
       </button>
 
       <button type="button" className="c078" onClick={onStart}>

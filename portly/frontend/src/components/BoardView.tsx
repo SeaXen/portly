@@ -43,7 +43,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
 
   return (
     <div className="c147" style={{ width: '100%', overflowX: 'auto', paddingBottom: '16px' }}>
-      <div className="c148" style={{ display: 'flex', gap: '16px', minWidth: 'min-content' }}>
+      <div className="c148" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
         {categories.map((cat) => {
           const categoryApps = apps.filter((a) => a.category_id === cat.id);
           const isTarget = activeDropCategory === cat.id;
@@ -53,8 +53,10 @@ export const BoardView: React.FC<BoardViewProps> = ({
               key={cat.id}
               className={`c149 ${isTarget ? 'drop-target' : ''}`}
               style={{
-                width: '280px',
-                flexShrink: 0,
+                flex: '1 1 260px',
+                minWidth: '260px',
+                maxWidth: '300px',
+                flexShrink: 1,
                 background: '#101218',
                 border: isTarget ? '2px dashed #8C9EFF' : '1px solid rgba(255,255,255,0.07)',
                 borderRadius: '14px',
@@ -180,7 +182,8 @@ export const BoardView: React.FC<BoardViewProps> = ({
           onClick={onNewCategoryClick}
           style={{
             width: '60px',
-            minHeight: '200px',
+            minHeight: '60px',
+            alignSelf: 'flex-start',
             borderRadius: '14px',
             border: '1px dashed rgba(255,255,255,0.15)',
             background: 'transparent',

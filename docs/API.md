@@ -37,7 +37,7 @@ Portly operates under two modes:
 |---|---|---|---|
 | `GET` | `/api/health` | Minimal public liveness/health check | None |
 | `POST` | `/api/auth/setup` | Create initial admin account via setup token | Only when user count == 0 |
-| `POST` | `/api/auth/login` | Authenticate and obtain session token (Rate limited to 5 attempts/15min) | None |
+| `POST` | `/api/auth/login` | Authenticate and obtain session token (Rate limited to 5 attempts/60s) | None |
 | `POST` | `/api/auth/logout` | Revoke active session | Yes |
 | `GET` | `/api/auth/me` | Fetch active user identity, role, and setup status | Optional |
 
@@ -97,12 +97,12 @@ Analyzes proposed `docker run` commands, `docker-compose.yml` declarations, or r
 Returns all discovered host listening sockets, Docker containers, and custom apps. Sensitive environment variables are masked with `***REDACTED***` for non-admin viewers.
 
 ### `GET /api/apps/{app_id}`
-Returns deep details for a single application including live HTTP/TCP health check, health history latency points, and Docker container inspection metadata.
+Returns deep details for a single application including the latest polled HTTP/TCP health snapshot, health history latency points, and Docker container inspection metadata. Health is sampled by the background poller, not on every read.
 
 ### `PATCH /api/apps/{app_id}`
 Updates custom metadata overrides for an app (name, category, tags, notes, pinned, hidden, url_override).
 
-### `POST /api/apps/{app_id}/inspect/reveal-env`
+### `GET /api/apps/{app_id}/inspect/reveal-env`
 **Admin Only**. Reveals unmasked environment variable values for a service. Audited in security logs.
 
 ---
@@ -117,7 +117,11 @@ All mutating actions require **Admin** privileges and require **Safe Mode** to b
 | `POST` | `/api/apps/{app_id}/stop` | Stops an active custom app or Docker container |
 | `POST` | `/api/apps/{app_id}/restart` | Restarts an application |
 | `GET` | `/api/apps/{app_id}/logs` | Tails live output logs (supports `tail=500`, validates log directory allowlist) |
-| `POST` | `/api/apps/{app_id}/exec` | Executes a safe allowlisted diagnostic command (`ps`, `df`, `top`, `env`, `cat`) with 256 KB output cap |
+| `POST` | `/api/apps/{app_id}/exec` | Executes a safe allowlisted diagnostic command (`ps`, `free`, `df`, `uptime`, `uname`, `whoami`, `id`, `hostname`, `date`, `pwd`, `ss`, `netstat`, `ip`) with 256 KB output cap |
+| `POST` | `/api/apps/{app_id}/update/check` | Checks the registry for a newer Docker image |
+| `POST` | `/api/apps/{app_id}/update/apply` | Pulls the new image and recreates the container (Admin, safe mode off) |
+| `POST` | `/api/apps/{app_id}/update/custom` | Runs a custom app's configured `update_cmd` (Admin, safe mode off) |
+| `POST` | `/api/apps/bulk` | Bulk `move`, `tag`, `pin`, `hide`, `unhide`, `start`, `stop`, `restart`; returns `succeeded` and `failed` |
 
 ---
 

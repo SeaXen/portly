@@ -17,6 +17,7 @@ interface AppDetailModalProps {
   onClose: () => void;
   categories: Category[];
   safeMode: boolean;
+  readOnly?: boolean;
   onRefreshApps: () => void;
 }
 
@@ -38,6 +39,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   onClose,
   categories,
   safeMode,
+  readOnly = false,
   onRefreshApps,
 }) => {
   const [activeTab, setActiveTab] = useState<DetailTab>('logs');
@@ -65,7 +67,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   const [loadingProxy, setLoadingProxy] = useState(false);
 
   // Cloudflare Tunnel & Remote URL state
-  const [tunnelUrl, setTunnelUrl] = useState(app.url_override || (app.open_url && !app.open_url.includes('localhost') ? app.open_url : ''));
+  const [tunnelUrl, setTunnelUrl] = useState(app.url_override || '');
   const [savingTunnel, setSavingTunnel] = useState(false);
 
   // Multi-Port Remapping state
@@ -91,6 +93,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   // Image update state
   const [updateInfo, setUpdateInfo] = useState<any>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [applyingUpdate, setApplyingUpdate] = useState(false);
 
   // Health state
   const [healthHistory, setHealthHistory] = useState<Array<{ ts: number; ok: boolean; latency_ms: number }>>([]);
@@ -420,6 +423,24 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
     }
   };
 
+  const handleApplyUpdate = async () => {
+    if (safeMode) {
+      showNotification('Safe mode is ON. Unlock safe mode to pull a new image.', 'warning');
+      return;
+    }
+    setApplyingUpdate(true);
+    try {
+      await api.applyImageUpdate(app.id);
+      showNotification('Image updated successfully!', 'success');
+      setUpdateInfo(null);
+      onRefreshApps();
+    } catch (e: any) {
+      showNotification(`Image update failed: ${e.message}`, 'error');
+    } finally {
+      setApplyingUpdate(false);
+    }
+  };
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -553,6 +574,8 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
             <button
               type="button"
               className="c078"
+              disabled={readOnly}
+              title={readOnly ? 'Viewer access is read-only' : undefined}
               onClick={async () => {
                 if (safeMode) {
                   showNotification('Safe mode is ON. Unlock safe mode in the sidebar to control apps.', 'warning');
@@ -573,6 +596,8 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
             <button
               type="button"
               className="c078"
+              disabled={readOnly}
+              title={readOnly ? 'Viewer access is read-only' : undefined}
               onClick={async () => {
                 if (safeMode) {
                   showNotification('Safe mode is ON. Unlock safe mode in the sidebar to control apps.', 'warning');
@@ -590,9 +615,34 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
               Stop
             </button>
 
+            {(app as any).update_cmd && app.id.startsWith('custom:') && (
+              <button
+                type="button"
+                className="c078"
+                disabled={readOnly}
+                title={readOnly ? 'Viewer access is read-only' : undefined}
+                onClick={async () => {
+                  if (safeMode) {
+                    showNotification('Safe mode is ON. Unlock safe mode in the sidebar to control apps.', 'warning');
+                    return;
+                  }
+                  try {
+                    const res = await api.updateCustomApp(app.id);
+                    showNotification(res.status === 'ok' ? 'Update command completed' : `Update failed: ${res.stderr || res.stdout || 'unknown error'}`, res.status === 'ok' ? 'success' : 'error');
+                  } catch (e: any) {
+                    showNotification(`Update failed: ${e.message}`, 'error');
+                  }
+                }}
+              >
+                Update
+              </button>
+            )}
+
             <button
               type="button"
               className="c078"
+              disabled={readOnly}
+              title={readOnly ? 'Viewer access is read-only' : undefined}
               onClick={async () => {
                 if (safeMode) {
                   showNotification('Safe mode is ON. Unlock safe mode in the sidebar to control apps.', 'warning');
@@ -1676,7 +1726,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                   />
                 </div>
 
-                <button type="submit" className="c080">Save Settings</button>
+                <button type="submit" className="c080" disabled={readOnly}>Save Settings</button>
               </form>
             )}
           </div>
@@ -1688,23 +1738,47 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
               <div className="c210" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <span className="c211" style={{ fontWeight: 600, color: '#ECEEF3' }}>Image Update</span>
                 <span className="c130" style={{ fontSize: '11px', background: 'rgba(251, 191, 119, 0.15)', color: '#FBBF77', padding: '2px 8px', borderRadius: '6px' }}>
-                  {updateInfo?.has_update ? 'Update Available' : 'Up to Date'}
+                  {app.id.startsWith('custom:') ? 'Custom app' : app.source !== 'docker' ? 'Docker only'
+                    : !updateInfo ? 'Not checked'
+                    : updateInfo.known === false ? 'Unknown'
+                    : updateInfo.has_update ? 'Update Available' : 'Up to Date'}
                 </span>
               </div>
-              <div className="c212" style={{ fontSize: '12px', color: '#8D95A5', lineHeight: 1.5, marginBottom: '12px' }}>
-                Running <span className="c213" style={{ color: '#ECEEF3', fontFamily: 'JetBrains Mono, monospace' }}>{app.image || app.name}</span>
-              </div>
-              <div className="c216" style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  className="c078"
-                  style={{ flex: 1 }}
-                  onClick={handleCheckUpdate}
-                  disabled={checkingUpdate}
-                >
-                  {checkingUpdate ? 'Checking…' : 'Check Now'}
-                </button>
-              </div>
+              {app.source === 'docker' ? (
+                <>
+                  <div className="c212" style={{ fontSize: '12px', color: '#8D95A5', lineHeight: 1.5, marginBottom: '12px' }}>
+                    Running <span className="c213" style={{ color: '#ECEEF3', fontFamily: 'JetBrains Mono, monospace' }}>{app.image || app.name}</span>
+                  </div>
+                  <div className="c216" style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="c078"
+                      style={{ flex: 1 }}
+                      onClick={handleCheckUpdate}
+                      disabled={checkingUpdate}
+                    >
+                      {checkingUpdate ? 'Checking…' : 'Check Now'}
+                    </button>
+                    {updateInfo?.has_update && (
+                      <button
+                        type="button"
+                        className="c080"
+                        style={{ flex: 1 }}
+                        onClick={handleApplyUpdate}
+                        disabled={applyingUpdate || readOnly}
+                      >
+                        {applyingUpdate ? 'Applying…' : 'Apply Update'}
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="c212" style={{ fontSize: '12px', color: '#8D95A5', lineHeight: 1.5 }}>
+                  {app.id.startsWith('custom:')
+                    ? 'Use the Update button in the header to run this app’s update command.'
+                    : 'Image updates apply to Docker containers only. This is a host process.'}
+                </div>
+              )}
             </div>
 
             {/* Quick Port Info */}

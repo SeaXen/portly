@@ -10,12 +10,18 @@ interface ToolbarProps {
   onChangeStatusFilter: (val: string) => void;
   categoryFilter: string;
   onChangeCategoryFilter: (val: string) => void;
+  tagFilter: string;
+  onChangeTagFilter: (val: string) => void;
+  tags: string[];
   categories: Category[];
   sortBy: string;
   sortDir: 'asc' | 'desc';
   onChangeSort: (by: string, dir: 'asc' | 'desc') => void;
   groupBy: string;
   onChangeGroupBy: (group: string) => void;
+  showHidden: boolean;
+  onToggleShowHidden: () => void;
+  hiddenCount: number;
   density: 'compact' | 'comfy';
   onChangeDensity: (d: 'compact' | 'comfy') => void;
   onToggleCustomize: () => void;
@@ -30,12 +36,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onChangeStatusFilter,
   categoryFilter,
   onChangeCategoryFilter,
+  tagFilter,
+  onChangeTagFilter,
+  tags,
   categories,
   sortBy,
   sortDir,
   onChangeSort,
   groupBy,
   onChangeGroupBy,
+  showHidden,
+  onToggleShowHidden,
+  hiddenCount,
   density,
   onChangeDensity,
   onToggleCustomize,
@@ -43,6 +55,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const [showSourceMenu, setShowSourceMenu] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
+  const [showTagMenu, setShowTagMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
 
@@ -228,6 +241,29 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         )}
       </div>
 
+      {/* Tag Filter */}
+      <div style={{ position: 'relative' }}>
+        <button
+          type="button"
+          className="c078"
+          onClick={() => setShowTagMenu(!showTagMenu)}
+          style={{ height: '34px', padding: '0 12px', fontSize: '13px' }}
+        >
+          Tag{tagFilter ? `: ${tagFilter}` : ''}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6"></path>
+          </svg>
+        </button>
+        {showTagMenu && (
+          <div style={{ ...dropdownMenuStyle, maxHeight: '280px', overflowY: 'auto' }} onMouseLeave={() => setShowTagMenu(false)}>
+            {renderDropdownItem('All Tags', () => { onChangeTagFilter(''); setShowTagMenu(false); }, tagFilter === '')}
+            {tags.map((tag) =>
+              renderDropdownItem(tag, () => { onChangeTagFilter(tag); setShowTagMenu(false); }, tagFilter === tag)
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Sort Selector */}
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
         <button
@@ -259,6 +295,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               { id: 'cpu', label: 'CPU Usage' },
               { id: 'ram', label: 'Memory RAM' },
               { id: 'uptime', label: 'Uptime' },
+              { id: 'status', label: 'Status' },
+              { id: 'category', label: 'Category' },
+              { id: 'order', label: 'Manual Order' },
             ].map((s) =>
               renderDropdownItem(s.label, () => { onChangeSort(s.id, sortDir); setShowSortMenu(false); }, sortBy === s.id)
             )}
@@ -288,6 +327,31 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           </div>
         )}
       </div>
+
+      {/* Hidden ports toggle — only shown when there is something to reveal */}
+      {(hiddenCount > 0 || showHidden) && (
+      <button
+        type="button"
+        className="c078"
+        aria-pressed={showHidden}
+        onClick={onToggleShowHidden}
+        title="Show ports hidden from the dashboard"
+        style={{
+          height: '34px',
+          padding: '0 12px',
+          fontSize: '13px',
+          background: showHidden ? 'rgba(140, 158, 255, 0.15)' : undefined,
+          color: showHidden ? '#8C9EFF' : undefined,
+          opacity: hiddenCount === 0 && !showHidden ? 0.5 : 1,
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+        Hidden ({hiddenCount})
+      </button>
+      )}
 
       {/* Columns / Customize Trigger */}
       <button

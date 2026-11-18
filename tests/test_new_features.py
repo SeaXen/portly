@@ -311,7 +311,7 @@ def test_endpoint_pwa_manifest_and_sw(test_app_client):
     sw_res = test_app_client.get("/sw.js")
     assert sw_res.status_code == 200
     assert "javascript" in sw_res.headers["content-type"]
-    assert "portly-v1" in sw_res.text
+    assert "portly-v" in sw_res.text
 
 
 def test_endpoint_test_webhook(test_app_client):

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { api } from '../api';
+import { useToast } from './Toast';
 
 interface TopBarProps {
   title: string;
@@ -36,6 +37,22 @@ export const TopBar: React.FC<TopBarProps> = ({
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { success, error } = useToast();
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const backup = JSON.parse(await file.text());
+      await api.importBackup(backup);
+      success('Backup restored successfully. Reloading…');
+      setTimeout(() => window.location.reload(), 600);
+    } catch (err: any) {
+      error(`Restore failed: ${err.message}`);
+    }
+  };
 
   const secondsAgo = lastScanTime > 0 ? Math.max(1, Math.round((Date.now() / 1000) - lastScanTime)) : 1;
 
@@ -61,7 +78,20 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Search & Actions */}
       <div className="c073" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <label className="c074" style={{ cursor: 'text' }}>
+        <button
+          type="button"
+          className="c077 topbar-search-compact"
+          aria-label="Search ports, apps, containers"
+          title="Search (Ctrl+K)"
+          onClick={onOpenCommandPalette}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"></circle>
+            <path d="m20 20-3.5-3.5"></path>
+          </svg>
+        </button>
+
+        <label className="c074 topbar-search-label" style={{ cursor: 'text' }}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#8D95A5' }}>
             <circle cx="11" cy="11" r="7"></circle>
             <path d="m20 20-3.5-3.5"></path>
@@ -121,7 +151,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         {onToggleKiosk && (
           <button
             type="button"
-            className="c077"
+            className="c077 topbar-kiosk"
             aria-label="Toggle Kiosk mode"
             onClick={onToggleKiosk}
             title={kioskMode ? 'Exit Kiosk Mode (Shift+K)' : 'Kiosk / Wall Display Mode (Shift+K)'}
@@ -237,6 +267,27 @@ export const TopBar: React.FC<TopBarProps> = ({
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#FBBF77' }}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Full JSON Backup
               </a>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={handleImport}
+                style={{ display: 'none' }}
+                aria-label="Restore backup file"
+              />
+              <button
+                type="button"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px',
+                  borderRadius: '6px', color: '#ECEEF3', fontSize: '13px',
+                  background: 'transparent', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                onClick={() => { setShowExportMenu(false); fileInputRef.current?.click(); }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#5EEAD4' }}><path d="M12 4v11M7 11l5 5 5-5M4 20h16"></path></svg> Restore Backup
+              </button>
             </div>
           )}
         </div>
@@ -287,7 +338,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <path d="M21 12a9 9 0 1 1-3-6.7"></path>
             <path d="M21 4v5h-5"></path>
           </svg>
-          {scanning ? 'Scanning…' : 'Scan Now'}
+          <span className="topbar-scan-label">{scanning ? 'Scanning…' : 'Scan Now'}</span>
         </button>
 
         {/* Users & Audit Button for Admins */}
@@ -317,7 +368,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
               <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
             </svg>
-            Users &amp; Audit
+            <span className="topbar-users-label">Users &amp; Audit</span>
           </button>
         )}
 
@@ -325,6 +376,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         {user && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '4px' }}>
             <span
+              className="topbar-user-badge"
               style={{
                 fontSize: '12px',
                 color: '#8D95A5',
