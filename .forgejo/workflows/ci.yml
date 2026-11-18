@@ -20,7 +20,11 @@ jobs:
       - name: Set up Python environment
         run: |
           set -e
-          python3 -m venv .venv
+          if ! python3 -m venv .venv 2>/dev/null; then
+            rm -rf .venv
+            apt-get update -qq && apt-get install -y -qq python3-venv python3-pip
+            python3 -m venv .venv
+          fi
           . .venv/bin/activate
           pip install --upgrade pip || true
           pip install ruff
