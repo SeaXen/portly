@@ -261,7 +261,7 @@ def test_desktop_app_detail_modal_tabs(desktop_page: Page):
             expect(name_input).to_be_visible()
 
         # Close Modal
-        close_btn = modal.locator('button:has-text("✕")')
+        close_btn = modal.locator('button[aria-label="Close dialog"]')
         close_btn.click()
         expect(modal).not_to_be_visible()
 

@@ -133,7 +133,6 @@ export const TopBar: React.FC<TopBarProps> = ({
             onClick={onOpenCommandPalette}
             style={{ cursor: 'pointer', background: 'transparent', color: '#8D95A5' }}
             title="Press Ctrl+K or Cmd+K"
-            aria-label="Open Command Palette (Ctrl+K)"
           >
             Ctrl&nbsp;K
           </button>

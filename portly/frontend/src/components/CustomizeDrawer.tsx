@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Icon } from './Icon';
 import { api } from '../api';
 import { Category, Rule } from '../types';
 import { useToast } from './Toast';
@@ -155,7 +156,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.07)', paddingBottom: '14px' }}>
           <span style={{ fontSize: '18px', fontWeight: 600, color: '#ECEEF3' }}>Customize Dashboard</span>
-          <button type="button" className="c077" onClick={onClose} aria-label="Close drawer">✕</button>
+          <button type="button" className="c077" onClick={onClose} aria-label="Close drawer"><Icon name="x" size={13} /></button>
         </div>
 
         {/* Layout */}
@@ -366,7 +367,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                         style={{ background: 'none', border: 0, color: '#8D95A5', cursor: 'pointer', padding: 0 }}
                         title="Delete rule"
                       >
-                        ✕
+                        <Icon name="x" size={13} />
                       </button>
                     )}
                   </div>

@@ -107,7 +107,7 @@ button{background:transparent;border:0;outline:none;cursor:pointer}
 .c100{display:flex;align-items:center;gap:4px}
 .c101{display:flex;align-items:center;gap:4px;color:var(--accent)}
 .c102{display:grid;grid-template-columns:28px 20px minmax(150px,2fr) 62px 74px minmax(120px,1.5fr) 84px 76px 92px 68px 114px;align-items:center;gap:10px;padding:0 16px;height:54px;border-top:1px solid rgba(255,255,255,.07);font-size:14px;background:transparent}
-.c103{accent-color:var(--accent);width:16px;height:16px;margin:0}
+.c103{accent-color:var(--accent);width:24px;height:24px;margin:0}
 .c104{color:#8D95A5;cursor:grab;display:flex}
 .c105{display:flex;align-items:center;gap:12px;min-width:0}
 .c106{width:32px;height:32px;border-radius:9px;background:color-mix(in srgb, var(--accent) 12%, transparent);border:1px solid color-mix(in srgb, var(--accent) 25%, transparent);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:15px;flex:none}

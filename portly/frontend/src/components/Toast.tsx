@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { ToastMessage } from '../types';
+import { Icon } from './Icon';
 
 interface ToastContextType {
   toast: (message: string, type?: ToastMessage['type'], duration?: number) => void;
@@ -57,7 +58,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           const isSucc = t.type === 'success';
 
           const borderColor = isErr ? '#FF8A8A' : isWarn ? '#FBBF77' : isSucc ? '#5EEAD4' : '#8C9EFF';
-          const icon = isErr ? '⚠️' : isWarn ? '⚡' : isSucc ? '✓' : 'ℹ️';
+          const iconName = isErr ? 'warning' : isWarn ? 'bolt' : isSucc ? 'check' : 'info';
 
           return (
             <div
@@ -78,7 +79,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 animation: 'fadeIn 0.2s ease-out',
               }}
             >
-              <span style={{ fontSize: 16 }}>{icon}</span>
+              <span style={{ display: 'inline-flex' }}><Icon name={iconName} size={16} color={borderColor} /></span>
               <span style={{ flex: 1, wordBreak: 'break-word', lineHeight: 1.4 }}>{t.message}</span>
               <button
                 onClick={() => removeToast(t.id)}
@@ -93,7 +94,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 }}
                 aria-label="Close notification"
               >
-                ✕
+                <Icon name="x" size={14} />
               </button>
             </div>
           );

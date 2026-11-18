@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Icon } from './Icon';
 import { api } from '../api';
 import { DockerSystemDf, SystemStats } from '../types';
 import { useToast } from './Toast';
@@ -86,7 +87,7 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose, defaultSect
               {stats?.hostname || 'Localhost'} · {stats?.platform || 'Host'}
             </div>
           </div>
-          <button type="button" className="c077" onClick={onClose} aria-label="Close">✕</button>
+          <button type="button" className="c077" onClick={onClose} aria-label="Close"><Icon name="x" size={13} /></button>
         </div>
 
         {loading && !stats ? (

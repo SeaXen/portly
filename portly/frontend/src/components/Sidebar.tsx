@@ -64,7 +64,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div style={{ fontSize: '17px', fontWeight: 700, color: '#ECEEF3', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
               Portly
             </div>
-            <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '10px', color: 'var(--muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
               Dashboard
             </span>
           </div>

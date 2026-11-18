@@ -38,7 +38,7 @@ export const StatsStrip: React.FC<StatsStripProps> = ({ stats, onOpenSystemDrawe
             key={key}
             className={cls}
             onClick={() => onOpenSystemDrawer(key)}
-            aria-label={`View detailed ${data?.label || key} telemetry`}
+            aria-label={`${data?.label || key.toUpperCase()}${data?.value || '-'}${data?.context || ''} telemetry`}
             style={{
               transition: 'background-color 0.15s ease',
             }}

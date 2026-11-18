@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { parseAnsiToReact } from '../utils/ansi';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { Icon } from './Icon';
 import {
   AppItem,
   Category,
@@ -697,7 +698,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
             </button>
 
             <button type="button" className="c077" onClick={onClose} aria-label="Close dialog">
-              ✕
+              <Icon name="x" size={13} />
             </button>
           </div>
         </div>
@@ -734,7 +735,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontWeight: 700, fontSize: '13px' }}>{toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : toast.type === 'warning' ? '!' : 'i'}</span>
+              <span style={{ display: 'inline-flex' }}><Icon name={toast.type === 'success' ? 'check' : toast.type === 'error' ? 'x' : toast.type === 'warning' ? 'warning' : 'info'} size={13} /></span>
               <span>{toast.message}</span>
             </div>
             <button
@@ -750,7 +751,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 opacity: 0.8,
               }}
             >
-              ✕
+              <Icon name="x" size={13} />
             </button>
           </div>
         )}
@@ -967,7 +968,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
 
                 {regexError && (
                   <div style={{ color: '#FF8A8A', fontSize: '11px', marginBottom: '8px', paddingLeft: '4px' }}>
-                    ⚠ Regex error: {regexError}
+                    <Icon name="warning" size={12} color="#FF8A8A" /> Regex error: {regexError}
                   </div>
                 )}
 
@@ -1110,7 +1111,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                       gap: '8px',
                     }}
                   >
-                    <span>{portAvail.free ? '✓' : '✗'}</span>
+                    <span style={{ display: 'inline-flex' }}><Icon name={portAvail.free ? 'check' : 'x'} size={13} color={portAvail.free ? '#5EEAD4' : '#FF8A8A'} /></span>
                     <span>{portAvail.free ? `Port ${targetPort} is available and free to bind.` : `Port ${targetPort} conflict: ${portAvail.used_by}`}</span>
                   </div>
                 )}
@@ -1256,7 +1257,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 </div>
 
                 <div style={{ background: '#090B10', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '16px', fontSize: '12.5px', color: '#8D95A5', lineHeight: 1.6 }}>
-                  <strong style={{ color: '#ECEEF3', display: 'block', marginBottom: '6px' }}>⚡ How to configure Cloudflare Tunnel:</strong>
+                  <strong style={{ color: '#ECEEF3', display: 'block', marginBottom: '6px' }}><Icon name="bolt" size={13} color="#FBBF77" /> How to configure Cloudflare Tunnel:</strong>
                   <ol style={{ margin: '0 0 0 18px', padding: 0 }}>
                     <li>Run Cloudflare Tunnel on your host or in Docker (<code>cloudflared tunnel run &lt;tunnel-name&gt;</code>).</li>
                     <li>In the <strong>Reverse Proxy</strong> tab above, select <strong>Cloudflare Tunnel</strong> to get your exact copy-paste <code>ingress:</code> rule.</li>
@@ -1389,7 +1390,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                       <div><strong style={{ color: '#8D95A5' }}>Subject:</strong> <span style={{ color: '#ECEEF3' }}>{tlsData.subject || 'Unknown'}</span></div>
                       <div><strong style={{ color: '#8D95A5' }}>Valid From:</strong> <span style={{ color: '#ECEEF3' }}>{tlsData.valid_from || 'N/A'}</span></div>
                       <div><strong style={{ color: '#8D95A5' }}>Valid Until:</strong> <span style={{ color: '#ECEEF3' }}>{tlsData.valid_until || 'N/A'}</span></div>
-                      {tlsData.self_signed && <div style={{ color: '#FBBF77', marginTop: '6px' }}>⚠️ Self-signed certificate</div>}
+                      {tlsData.self_signed && <div style={{ color: '#FBBF77', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="warning" size={12} /> Self-signed certificate</div>}
                     </div>
 
                     {tlsData.san && tlsData.san.length > 0 && (
@@ -1407,7 +1408,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                   </div>
                 ) : (
                   <div style={{ padding: '24px', textAlign: 'center', background: '#151821', borderRadius: '8px', color: '#8D95A5', fontSize: '13px' }}>
-                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>ℹ</div>
+                    <div style={{ marginBottom: '8px' }}><Icon name="info" size={24} color="#8C9EFF" /></div>
                     Port {app.port} is not responding over TLS/HTTPS (standard HTTP or TCP socket).
                     <div style={{ marginTop: '8px', fontSize: '12px', color: '#8C9EFF' }}>
                       Tip: Use the Reverse Proxy tab to put Caddy or Nginx in front of this service to add automatic HTTPS.

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Icon } from './Icon';
 import { Category } from '../types';
 
 interface BulkActionBarProps {
@@ -121,7 +122,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
             style={{ height: '32px' }}
             onClick={() => setShowTagPrompt(false)}
           >
-            ✕
+            <Icon name="x" size={13} />
           </button>
         </div>
       ) : (
@@ -165,7 +166,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
       </button>
 
       <button type="button" className="c077" aria-label="Clear selection" title="Clear selection" onClick={onClear}>
-        ✕
+        <Icon name="x" size={13} />
       </button>
     </div>
   );

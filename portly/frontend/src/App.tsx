@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Icon } from './components/Icon';
 import { api, resolveAppUrl } from './api';
 import { AddAppModal } from './components/AddAppModal';
 import { AppDetailModal } from './components/AppDetailModal';
@@ -769,7 +770,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '16px' }}>⚠️</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FBBF77" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
               <div>
                 <strong>Safe Mode Unlocked:</strong> Real mutations on host processes &amp; containers are enabled.
                 {unlockCountdown != null && (
@@ -857,7 +858,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                 onClick={() => setDockerBannerDismissed(true)}
                 title="Dismiss notice"
               >
-                ✕
+                <Icon name="x" size={13} />
               </button>
             </div>
           </div>
@@ -989,7 +990,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
         {/* Footer info strip */}
         <div className="c145" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#8D95A5', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '14px', marginTop: 'auto' }}>
           <span>{displayedApps.length} of {visibleApps.length} ports · Portly listening on port {window.location.port || (window.location.protocol === 'https:' ? '443' : '80')}</span>
-          <span>SSE Live updates active · Auto-refresh 3s · Press ? for shortcuts</span>
+          <span>SSE live · 4s polling fallback · Press ? for shortcuts</span>
         </div>
       </main>
 
@@ -1188,7 +1189,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
             }}
             title="Toggle 30s automatic view cycle (Overview → Ports → Conflicts)"
           >
-            <span>🔄</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
             {kioskAutoCycle ? 'Auto-Cycle ON (30s)' : 'Auto-Cycle (30s)'}
           </button>
           <button

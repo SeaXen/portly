@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Icon } from './Icon';
 import { api } from '../api';
 import { User } from '../types';
 import { useToast } from './Toast';
@@ -184,7 +185,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
             }}
             aria-label="Close user management drawer"
           >
-            ✕
+            <Icon name="x" size={13} />
           </button>
         </div>
 

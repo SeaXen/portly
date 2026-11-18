@@ -1,4 +1,5 @@
 import React from 'react';
+import { Icon } from './Icon';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface KeyboardShortcutsModalProps {
@@ -42,7 +43,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ 
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', borderBottom: '1px solid rgba(255,255,255,0.07)', paddingBottom: '12px' }}>
           <h3 id="shortcuts-title" style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#ECEEF3' }}>Keyboard Shortcuts</h3>
-          <button type="button" className="c077" onClick={onClose} aria-label="Close">✕</button>
+          <button type="button" className="c077" onClick={onClose} aria-label="Close"><Icon name="x" size={13} /></button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

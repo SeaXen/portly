@@ -118,14 +118,14 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
             alignItems: 'center',
             gap: '6px',
             padding: '8px 12px 10px 12px',
-            color: '#64748B',
+            color: 'var(--muted)',
             fontSize: '13px',
             fontWeight: 500,
             marginLeft: 'auto',
             transition: 'color 0.12s',
           }}
           onMouseEnter={(e) => (e.currentTarget.style.color = '#8C9EFF')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#64748B')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14"></path>

@@ -3,6 +3,7 @@ import { api } from '../api';
 import { ComposeStack, PreflightResponse } from '../types';
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ConfirmDialog';
+import { Icon } from './Icon';
 
 interface StacksViewProps {
   safeMode: boolean;
@@ -354,8 +355,8 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                 <div>
                   <span style={{ fontWeight: 600, color: preflightResult.has_collision ? '#FF8A8A' : '#5EEAD4' }}>
                     {preflightResult.has_collision
-                      ? `⚠️ ${preflightResult.collisions.length} Port Collision(s) Detected:`
-                      : '✓ All Declared Ports Available!'}
+                      ? <><Icon name="warning" size={13} color="#FF8A8A" /> {preflightResult.collisions.length} Port Collision(s) Detected:</>
+                      : <><Icon name="check" size={13} color="#5EEAD4" /> All Declared Ports Available!</>}
                   </span>
                   {preflightResult.has_collision && (
                     <div style={{ marginTop: '4px', color: '#ECEEF3', fontSize: '11.5px' }}>
@@ -403,7 +404,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '12px', color: '#8D95A5', fontWeight: 600 }}>Execution Terminal Output:</span>
-                  <button type="button" className="c077" onClick={() => setExecutionOutput(null)} style={{ fontSize: '11px' }}>✕ Clear</button>
+                  <button type="button" className="c077" onClick={() => setExecutionOutput(null)} style={{ fontSize: '11px' }}><Icon name="x" size={11} /> Clear</button>
                 </div>
                 <div
                   style={{

@@ -1,6 +1,7 @@
 import React from 'react';
 import { AppItem, Category } from '../types';
 import { AppIcon } from './AppIcon';
+import { Icon } from './Icon';
 
 interface GridViewProps {
   apps: AppItem[];
@@ -125,7 +126,7 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
                         : 'TLS / SSL Enabled'
                     }
                   >
-                    {app.tls_expired ? '❌ Expired' : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30) ? `⚠️ ${app.tls_days_remaining}d` : '🔒 TLS'}
+                    {app.tls_expired ? <><Icon name="x" size={12} color="#FF8A8A" /> Expired</> : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30) ? <><Icon name="warning" size={12} color="#FBBF77" /> {app.tls_days_remaining}d</> : <><Icon name="lock" size={12} /> TLS</>}
                   </span>
                 )}
                 {visibleFields.bind !== false && <span className="c037">{app.bind}</span>}

@@ -3,6 +3,7 @@ import { api } from '../api';
 import { AppItem, Category, PreflightResponse } from '../types';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useToast } from './Toast';
+import { Icon } from './Icon';
 
 interface AddAppModalProps {
   onClose: () => void;
@@ -364,7 +365,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
               Track an app Portly can’t detect, adopt running services, or bookmark external web dashboards.
             </div>
           </div>
-          <button type="button" className="c077" onClick={onClose} aria-label="Close">✕</button>
+          <button type="button" className="c077" onClick={onClose} aria-label="Close"><Icon name="x" size={13} /></button>
         </div>
 
         {/* Tabs */}
@@ -409,7 +410,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             className={activeTab === 'preflight' ? 'c094' : 'c095'}
             onClick={() => setActiveTab('preflight')}
           >
-            ⚡ Preflight Collision Check
+            <Icon name="bolt" size={13} /> Preflight Collision Check
           </button>
         </div>
 
@@ -685,7 +686,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 aria-live="polite"
                 style={{ fontSize: '12px', color: portStatus.free ? '#5EEAD4' : '#FF8A8A', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                <span>{portStatus.free ? '✓' : '✗'}</span>
+                <span style={{ display: 'inline-flex' }}><Icon name={portStatus.free ? 'check' : 'x'} size={13} color={portStatus.free ? '#5EEAD4' : '#FF8A8A'} /></span>
                 <span>
                   {portStatus.free
                     ? `Port ${port} is free · opens http://${host}:${port}`
@@ -980,7 +981,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 />
                 {deployPortStatus && (
                   <div style={{ fontSize: '11px', marginTop: '4px', color: deployPortStatus.free ? '#5EEAD4' : '#FF8A8A' }}>
-                    {deployPortStatus.free ? '✓ Port is free to bind' : `✗ Port conflict: ${deployPortStatus.used_by}`}
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Icon name={deployPortStatus.free ? 'check' : 'x'} size={13} /> {deployPortStatus.free ? 'Port is free to bind' : `Port conflict: ${deployPortStatus.used_by}`}</span>
                   </div>
                 )}
               </div>
@@ -1132,7 +1133,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                  <span style={{ fontSize: '18px' }}>{preflightResult.has_collision ? '⚠️' : '✓'}</span>
+                  <span style={{ display: 'inline-flex' }}><Icon name={preflightResult.has_collision ? 'warning' : 'check'} size={18} color={preflightResult.has_collision ? '#FBBF77' : '#5EEAD4'} /></span>
                   <div style={{ fontSize: '14px', fontWeight: 600, color: preflightResult.has_collision ? '#FF8A8A' : '#5EEAD4' }}>
                     {preflightResult.has_collision
                       ? `${preflightResult.collisions.length} Port Collision(s) Detected!`

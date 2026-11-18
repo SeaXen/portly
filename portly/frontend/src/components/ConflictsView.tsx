@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api';
 import { AppItem, ConflictItem, PortReservation } from '../types';
 import { useToast } from './Toast';
+import { Icon } from './Icon';
 
 interface ConflictsViewProps {
   conflicts: ConflictItem[];
@@ -91,7 +92,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
 
         {conflicts.length === 0 ? (
           <div style={{ padding: '40px 24px', textAlign: 'center' }}>
-            <div style={{ fontSize: '36px', marginBottom: '10px' }}>✓</div>
+            <div style={{ marginBottom: '10px' }}><Icon name="check" size={36} color="#5EEAD4" /></div>
             <div style={{ fontSize: '15px', fontWeight: 600, color: '#5EEAD4', marginBottom: '6px' }}>No Active Port Collisions</div>
             <div style={{ fontSize: '13px', color: '#8D95A5', maxWidth: '420px', margin: '0 auto 16px auto' }}>
               Every active listener on your system has a unique, uncontested port assignment.
@@ -181,7 +182,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
             style={{ fontSize: '13px', padding: '6px 14px' }}
             onClick={() => setShowAddRes(!showAddRes)}
           >
-            {showAddRes ? '✕ Close Form' : '+ New Reservation'}
+            {showAddRes ? <><Icon name="x" size={12} /> Close Form</> : '+ New Reservation'}
           </button>
         </div>
 
@@ -325,13 +326,13 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                     title="Delete reservation"
                     onClick={() => handleDeleteReservation(r.id, r.name)}
                   >
-                    ✕
+                    <Icon name="x" size={13} />
                   </button>
                 </div>
 
                 {r.is_colliding && (
                   <div style={{ fontSize: '11.5px', color: '#FF8A8A', background: 'rgba(255,92,92,0.1)', padding: '6px 8px', borderRadius: '6px' }}>
-                    ⚠️ In use by active app: <strong>{r.colliding_app || 'Active Listener'}</strong>
+                    <Icon name="warning" size={12} color="#FF8A8A" /> In use by active app: <strong>{r.colliding_app || 'Active Listener'}</strong>
                   </div>
                 )}
 

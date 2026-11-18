@@ -4,7 +4,7 @@
 
 ## Platform
 
-Web & Desktop Server (Linux, macOS, Windows)
+web
 
 ## Users
 
