@@ -18,7 +18,7 @@ All notable changes to Portly are documented in this file.
 - **Data safety**: Backup import validates every section and applies all changes in one transaction; `safe_mode` values are normalized; stack names are path-safe; port changes preserve health settings and run availability preflight.
 - **Frontend**: Live SSE no longer breaks Open links, detail modals track live app state, viewer controls are gated consistently, bulk actions respect safe mode, restore backup asks for confirmation, and log auto-follow resumes correctly.
 - **Docker**: Image updates preserve privileges, capabilities, devices, healthchecks and resource limits; exec streams with a real deadline and bounded output; Dockerfile honors `PORTLY_PORT`/`PORTLY_HOST`/`PORTLY_MODE` in CMD and healthcheck.
-- **Build**: CI uses `npm ci`; Docker `latest` is published only for GitHub Releases; service-worker cache bumped to v3.
+- **Build**: CI uses `npm ci`; Docker `latest` is published only for GitHub Releases; service-worker cache bumped to v3; frontend lockfile regenerated so `npm ci` no longer fails in CI.
 
 ## [0.1.1] - 2026-11-18
 
