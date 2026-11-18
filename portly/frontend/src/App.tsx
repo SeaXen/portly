@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { api } from './api';
+import { api, resolveAppUrl } from './api';
 import { AddAppModal } from './components/AddAppModal';
 import { AppDetailModal } from './components/AppDetailModal';
 import { BoardView } from './components/BoardView';
@@ -82,7 +82,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Modals & Drawers
-  const [detailApp, setDetailApp] = useState<AppItem | null>(null);
+  const [detailAppId, setDetailAppId] = useState<string | null>(null);
   const [showAddApp, setShowAddApp] = useState(false);
   const [adoptingApp, setAdoptingApp] = useState<AppItem | null>(null);
   const [showCustomize, setShowCustomize] = useState(false);
@@ -160,7 +160,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
         setShowSystemDrawer(false);
         setShowUserManagement(false);
         setShowNewCatModal(false);
-        setDetailApp(null);
+        setDetailAppId(null);
         return;
       }
 
@@ -252,7 +252,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
         es.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            if (data.apps) setApps(data.apps);
+            if (data.apps) setApps(data.apps.map(resolveAppUrl));
             if (data.conflicts) setConflicts(data.conflicts);
             if (data.stats) setStats(data.stats);
             if (data.docker_status) {
@@ -397,6 +397,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
   // Scan Trigger
   const handleTriggerScan = async () => {
+    if (readOnly) {
+      warning('Viewer access is read-only.');
+      return;
+    }
     await api.triggerScan();
     await fetchAppsAndStats();
   };
@@ -448,6 +452,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
   // Save Custom View
   const handleSaveCurrentView = async (name: string) => {
+    if (readOnly) {
+      warning('Viewer access is read-only.');
+      return;
+    }
     const vId = `v_${Date.now()}`;
     const newView: ViewItem = {
       id: vId,
@@ -471,10 +479,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   };
 
   const handleSelectAll = () => {
-    if (selectedIds.length === displayedApps.length) {
-      setSelectedIds([]);
+    if (displayedIds.length > 0 && selectedDisplayedIds.length === displayedIds.length) {
+      setSelectedIds((prev) => prev.filter((id) => !displayedIds.includes(id)));
     } else {
-      setSelectedIds(displayedApps.map((a) => a.id));
+      setSelectedIds((prev) => [...new Set([...prev, ...displayedIds])]);
     }
   };
 
@@ -482,6 +490,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const runBulk = async (action: string, extra: { category_id?: string; tag?: string } = {}) => {
     if (readOnly) {
       warning('Viewer access is read-only.');
+      return;
+    }
+    if (safeMode && ['start', 'stop', 'restart'].includes(action)) {
+      warning(`Safe mode is ON. Mutations are locked. Disable safe mode to ${action} apps.`);
       return;
     }
     try {
@@ -540,7 +552,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
   const handleQuickLogs = (app: AppItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    setDetailApp(app);
+    setDetailAppId(app.id);
   };
 
   const handleAdoptApp = (app: AppItem) => {
@@ -550,6 +562,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
   // Drag and Drop move category
   const handleMoveCategory = async (appId: string, newCatId: string) => {
+    if (readOnly) {
+      warning('Viewer access is read-only.');
+      return;
+    }
     await api.patchApp(appId, { category_id: newCatId });
     await fetchAppsAndStats();
   };
@@ -557,6 +573,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   // Create new category
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly) {
+      warning('Viewer access is read-only.');
+      return;
+    }
     if (!newCatName.trim()) return;
     const catId = newCatName.toLowerCase().replace(/[^a-z0-9]/g, '-');
     await api.saveCategory({
@@ -669,6 +689,23 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     sortDir,
   ]);
 
+  // Bind the detail modal to live app data so SSE/refresh updates reach it.
+  const detailApp = useMemo(() => apps.find((a) => a.id === detailAppId) || null, [apps, detailAppId]);
+
+  const displayedIds = useMemo(() => displayedApps.map((a) => a.id), [displayedApps]);
+  const selectedDisplayedIds = useMemo(
+    () => selectedIds.filter((id) => displayedIds.includes(id)),
+    [selectedIds, displayedIds],
+  );
+
+  // Prune ids whose app vanished from the stream or the current filtered view.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const next = prev.filter((id) => displayedIds.includes(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [displayedIds]);
+
   return (
     <div className="c042" style={{ display: 'flex', width: '100%', minHeight: '100vh', background: 'var(--bg)' }}>
       {/* Sidebar - hidden in kiosk mode */}
@@ -709,6 +746,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
           user={user}
           onOpenUserManagement={() => setShowUserManagement(true)}
           onLogout={onLogout}
+          readOnly={readOnly}
         />
 
         {/* Safe Mode Warning Banner when safe mode is off (D-7, D-8, F-10) */}
@@ -829,7 +867,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
             categories={categories}
             conflicts={conflicts}
             stats={stats}
-            onOpenDetail={setDetailApp}
+            onOpenDetail={(app) => setDetailAppId(app.id)}
             onSelectNav={handleSelectNav}
           />
         ) : activeNav === 'stacks' ? (
@@ -840,7 +878,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
           <ConflictsView
             conflicts={conflicts}
             apps={apps}
-            onOpenDetail={setDetailApp}
+            onOpenDetail={(app) => setDetailAppId(app.id)}
             onSelectNav={handleSelectNav}
           />
         ) : (
@@ -900,7 +938,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                   onSelectAll={handleSelectAll}
                   categories={categories}
                   density={density}
-                  onOpenDetail={setDetailApp}
+                  onOpenDetail={(app) => setDetailAppId(app.id)}
                   onQuickStart={handleQuickStart}
                   onQuickStop={handleQuickStop}
                   onQuickLogs={handleQuickLogs}
@@ -915,7 +953,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               {viewType === 'grid' && (
                 <GridView
                   apps={displayedApps}
-                  onOpenDetail={setDetailApp}
+                  onOpenDetail={(app) => setDetailAppId(app.id)}
                   categories={categories}
                   visibleFields={visibleFields}
                   onAdoptApp={handleAdoptApp}
@@ -925,7 +963,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               {viewType === 'list' && (
                 <ListView
                   apps={displayedApps}
-                  onOpenDetail={setDetailApp}
+                  onOpenDetail={(app) => setDetailAppId(app.id)}
                   categories={categories}
                 />
               )}
@@ -934,9 +972,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                 <BoardView
                   apps={displayedApps}
                   categories={categories}
-                  onOpenDetail={setDetailApp}
+                  onOpenDetail={(app) => setDetailAppId(app.id)}
                   onMoveAppCategory={handleMoveCategory}
                   onNewCategoryClick={() => setShowNewCatModal(true)}
+                  readOnly={readOnly}
                 />
               )}
             </div>
@@ -969,7 +1008,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       {detailApp && (
         <AppDetailModal
           app={detailApp}
-          onClose={() => setDetailApp(null)}
+          onClose={() => setDetailAppId(null)}
           categories={categories}
           safeMode={safeMode}
           readOnly={readOnly}
@@ -1023,6 +1062,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
           onToggleField={(field) =>
             setVisibleFields((prev) => ({ ...prev, [field]: !prev[field] }))
           }
+          readOnly={readOnly}
         />
       )}
 
@@ -1043,7 +1083,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
         apps={apps}
-        onSelectApp={setDetailApp}
+        onSelectApp={(app) => setDetailAppId(app.id)}
         onTriggerScan={handleTriggerScan}
         onSwitchView={setViewType}
         onOpenAddApp={() => setShowAddApp(true)}

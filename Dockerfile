@@ -2,7 +2,7 @@
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY portly/frontend/package*.json ./
-RUN npm ci || npm install
+RUN npm ci
 COPY portly/frontend/ ./
 RUN npm run build
 
@@ -41,6 +41,6 @@ VOLUME ["/app/data"]
 USER portly
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD curl -f http://127.0.0.1:5533/api/health || exit 1
+    CMD curl -f "http://127.0.0.1:${PORTLY_PORT}/api/health" || exit 1
 
-CMD ["python", "-m", "portly", "run", "--port", "5533", "--host", "0.0.0.0", "--mode", "server"]
+CMD ["sh", "-c", "python -m portly run --port \"${PORTLY_PORT}\" --host \"${PORTLY_HOST}\" --mode \"${PORTLY_MODE}\""]

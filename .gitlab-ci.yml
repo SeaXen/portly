@@ -25,7 +25,7 @@ frontend-build:
   image: node:20-alpine
   script:
     - cd portly/frontend
-    - npm install --no-audit || npm ci
+    - npm ci --no-audit
     - npm run build
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'

@@ -222,6 +222,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   };
 
   const handleApplyPortChange = async () => {
+    if (readOnly) {
+      showNotification('Viewer access is read-only.', 'warning');
+      return;
+    }
     if (safeMode) {
       showNotification('Safe mode is ON. Unlock safe mode to execute port changes.', 'warning');
       return;
@@ -240,6 +244,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   };
 
   const handleRollback = () => {
+    if (readOnly) {
+      showNotification('Viewer access is read-only.', 'warning');
+      return;
+    }
     if (safeMode) {
       showNotification('Safe mode is ON. Unlock safe mode to execute rollback.', 'warning');
       return;
@@ -260,6 +268,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   };
 
   const handleSaveTunnelUrl = async () => {
+    if (readOnly) {
+      showNotification('Viewer access is read-only.', 'warning');
+      return;
+    }
     setSavingTunnel(true);
     try {
       await api.patchApp(app.id, { url_override: tunnelUrl.trim() || undefined });
@@ -273,6 +285,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   };
 
   const handleApplyMultiPorts = async () => {
+    if (readOnly) {
+      showNotification('Viewer access is read-only.', 'warning');
+      return;
+    }
     if (safeMode) {
       showNotification('Safe mode is ON. Unlock safe mode to execute port changes.', 'warning');
       return;
@@ -295,6 +311,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   };
 
   const handleStackAction = async (action: 'restart' | 'stop' | 'start' | 'down') => {
+    if (readOnly) {
+      showNotification('Viewer access is read-only.', 'warning');
+      return;
+    }
     if (safeMode) {
       showNotification('Safe mode is ON. Unlock safe mode to execute compose stack actions.', 'warning');
       return;
@@ -324,6 +344,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   };
 
   const handleRevealEnv = async () => {
+    if (readOnly) {
+      showNotification('Viewer access is read-only.', 'warning');
+      return;
+    }
     setShowRevealEnvConfirm(false);
     setRevealingEnv(true);
     try {
@@ -378,6 +402,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   };
 
   const handleRunExec = async (cmdToRun?: string) => {
+    if (readOnly) {
+      showNotification('Viewer access is read-only.', 'warning');
+      return;
+    }
     const cmd = cmdToRun || execCmd;
     if (!cmd.trim()) return;
     setExecuting(true);
@@ -424,6 +452,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   };
 
   const handleApplyUpdate = async () => {
+    if (readOnly) {
+      showNotification('Viewer access is read-only.', 'warning');
+      return;
+    }
     if (safeMode) {
       showNotification('Safe mode is ON. Unlock safe mode to pull a new image.', 'warning');
       return;
@@ -443,6 +475,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly) {
+      showNotification('Viewer access is read-only.', 'warning');
+      return;
+    }
     try {
       const tags = tagsStr.split(',').map((t) => t.trim()).filter(Boolean);
       await api.patchApp(app.id, {
@@ -1086,7 +1122,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                   <button
                     type="button"
                     className="c080"
-                    disabled={portChanging || !portAvail?.free}
+                    disabled={readOnly || portChanging || !portAvail?.free}
                     onClick={handleApplyPortChange}
                   >
                     {portChanging ? 'Recreating…' : 'Apply and recreate'}
@@ -1096,6 +1132,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                       type="button"
                       className="c078"
                       style={{ color: '#FF8A8A', borderColor: 'rgba(255,138,138,0.3)', marginLeft: 'auto' }}
+                      disabled={readOnly}
                       onClick={handleRollback}
                     >
                       Rollback Snapshot
@@ -1156,7 +1193,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     <button
                       type="button"
                       className="c080"
-                      disabled={multiPortsChanging}
+                      disabled={readOnly || multiPortsChanging}
                       onClick={handleApplyMultiPorts}
                     >
                       {multiPortsChanging ? 'Recreating Container…' : 'Apply Multi-Port Changes'}
@@ -1199,7 +1236,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     <button
                       type="button"
                       className="c080"
-                      disabled={savingTunnel}
+                      disabled={readOnly || savingTunnel}
                       onClick={handleSaveTunnelUrl}
                     >
                       {savingTunnel ? 'Saving…' : 'Save URL'}
@@ -1398,6 +1435,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                       type="button"
                       className="c078"
                       style={{ height: '26px', fontSize: '11px', padding: '0 8px', fontFamily: 'JetBrains Mono, monospace' }}
+                      disabled={readOnly}
                       onClick={() => {
                         setExecCmd(preset);
                         handleRunExec(preset);
@@ -1421,13 +1459,14 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     aria-label="Command to execute"
                     value={execCmd}
                     onChange={(e) => setExecCmd(e.target.value)}
+                    disabled={readOnly}
                     placeholder="Enter command inside container…"
                     className="c220"
                     style={{ flex: 1, fontFamily: 'JetBrains Mono, monospace', fontSize: '13px' }}
                     autoComplete="off"
                     spellCheck={false}
                   />
-                  <button type="submit" className="c080" disabled={executing}>
+                  <button type="submit" className="c080" disabled={readOnly || executing}>
                     {executing ? 'Running…' : 'Execute'}
                   </button>
                 </form>
@@ -1493,7 +1532,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                           type="button"
                           className="c078"
                           style={{ height: '28px', fontSize: '11.5px' }}
-                          disabled={executingStackAction !== null}
+                          disabled={readOnly || executingStackAction !== null}
                           onClick={() => handleStackAction('restart')}
                         >
                           {executingStackAction === 'restart' ? 'Restarting…' : '↻ Restart Stack'}
@@ -1502,7 +1541,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                           type="button"
                           className="c078"
                           style={{ height: '28px', fontSize: '11.5px' }}
-                          disabled={executingStackAction !== null}
+                          disabled={readOnly || executingStackAction !== null}
                           onClick={() => handleStackAction('stop')}
                         >
                           {executingStackAction === 'stop' ? 'Stopping…' : '■ Stop Stack'}
@@ -1511,7 +1550,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                           type="button"
                           className="c078"
                           style={{ height: '28px', fontSize: '11.5px' }}
-                          disabled={executingStackAction !== null}
+                          disabled={readOnly || executingStackAction !== null}
                           onClick={() => handleStackAction('start')}
                         >
                           {executingStackAction === 'start' ? 'Starting…' : '▶ Start Stack'}
@@ -1520,7 +1559,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                           type="button"
                           className="c078"
                           style={{ height: '28px', fontSize: '11.5px', color: '#FF8A8A', borderColor: 'rgba(255,138,138,0.3)' }}
-                          disabled={executingStackAction !== null}
+                          disabled={readOnly || executingStackAction !== null}
                           onClick={() => handleStackAction('down')}
                         >
                           {executingStackAction === 'down' ? 'Downing…' : '▼ Down Stack'}
@@ -1575,7 +1614,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowRevealEnvConfirm(true)}
-                      disabled={revealingEnv}
+                      disabled={readOnly || revealingEnv}
                       style={{
                         padding: '6px 12px',
                         borderRadius: '6px',

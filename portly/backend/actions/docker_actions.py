@@ -197,11 +197,40 @@ def apply_image_update(container_name: str, store: Store, actor: str = "system")
     if config.get("WorkingDir"):
         run_kwargs["working_dir"] = config.get("WorkingDir")
 
+    # Carry over the remaining runtime settings so an image update does not
+    # silently recreate the container without them.
+    for hk, rk in (
+        ("Privileged", "privileged"), ("CapAdd", "cap_add"), ("CapDrop", "cap_drop"),
+        ("Devices", "devices"), ("Dns", "dns"), ("DnsSearch", "dns_search"),
+        ("ExtraHosts", "extra_hosts"), ("Sysctls", "sysctls"),
+        ("SecurityOpt", "security_opt"), ("ReadonlyRootfs", "read_only"),
+        ("Memory", "mem_limit"), ("NanoCpus", "nano_cpus"),
+        ("CpuShares", "cpu_shares"), ("ShmSize", "shm_size"),
+        ("PidMode", "pid_mode"), ("IpcMode", "ipc_mode"), ("UTSMode", "uts_mode"),
+        ("GroupAdd", "group_add"), ("Init", "init"), ("AutoRemove", "auto_remove"),
+    ):
+        val = host_config.get(hk)
+        if val not in (None, "", [], {}):
+            run_kwargs[rk] = val
+    if config.get("Healthcheck"):
+        run_kwargs["healthcheck"] = config["Healthcheck"]
+    if config.get("StopSignal"):
+        run_kwargs["stop_signal"] = config["StopSignal"]
+    if config.get("Hostname"):
+        run_kwargs["hostname"] = config["Hostname"]
+    if config.get("Domainname"):
+        run_kwargs["domainname"] = config["Domainname"]
+    net_mode = host_config.get("NetworkMode")
+    if net_mode and net_mode not in ("default", "bridge"):
+        run_kwargs["network_mode"] = net_mode
+    # shortcut: log driver config is not copied (SDK needs a typed LogConfig);
+    # upgrade when a Docker fixture is available to validate it.
+
     try:
         new_container = client.containers.run(**run_kwargs)
-        for net_name in networks:
+        for net_name, net_cfg in networks.items():
             try:
-                client.networks.get(net_name).connect(new_container)
+                client.networks.get(net_name).connect(new_container, aliases=(net_cfg or {}).get("Aliases") or [])
             except Exception:
                 pass
 
@@ -710,7 +739,7 @@ def exec_in_container(
     actor: str = "system"
 ) -> Dict[str, Any]:
     """Runs a command inside a Docker container enforcing argv allowlist, bounded timeout, and output cap."""
-    timeout = max(1, min(30, int(timeout or 10)))
+    timeout = max(1, min(60, int(timeout or 10)))
     if store and store.get_setting("safe_mode", "true").lower() == "true":
         cmd_exec = parse_and_validate_safe_command(command)
     else:
@@ -722,19 +751,52 @@ def exec_in_container(
 
     container = client.containers.get(container_name_or_id)
     t0 = time.perf_counter()
-    exec_res = container.exec_run(cmd_exec, stdout=True, stderr=True, demux=False)
+    deadline = t0 + timeout
+    # docker-py's exec_run has no timeout argument; stream and enforce the
+    # deadline here so the API thread cannot hang on a stuck command.
+    result = container.exec_run(
+        cmd_exec, stdout=True, stderr=True, demux=False, stream=True
+    )
+    output_cap = 262144
+    timed_out = False
+    if isinstance(result, tuple):
+        exit_code, chunks = result
+        collected = bytearray()
+        try:
+            for chunk in chunks:
+                if time.perf_counter() >= deadline:
+                    timed_out = True
+                    break
+                piece = chunk if isinstance(chunk, (bytes, bytearray)) else str(chunk).encode("utf-8", errors="replace")
+                remaining = output_cap - len(collected)
+                if remaining > 0:
+                    collected.extend(piece[:remaining])
+        finally:
+            close = getattr(chunks, "close", None)
+            if callable(close):
+                close()
+        output_str = collected.decode("utf-8", errors="replace")
+        if len(collected) >= output_cap:
+            output_str += "\n... [Output truncated at 256 KB]"
+    else:
+        # Legacy SDK / mocked ExecResult returning the whole output at once.
+        exit_code = result.exit_code
+        raw_output = result.output
+        output_str = raw_output.decode("utf-8", errors="replace") if isinstance(raw_output, (bytes, bytearray)) else str(raw_output or "")
+        if len(output_str) > output_cap:
+            output_str = output_str[:output_cap] + "\n... [Output truncated at 256 KB]"
+    # shortcut: docker-py cannot kill a single exec; the container-side process
+    # may outlive the HTTP request. Upgrade to low-level exec inspect/kill when
+    # a Docker fixture is available to validate it.
+    if timed_out:
+        output_str += f"\n... [Execution timed out after {timeout}s]"
     duration_ms = round((time.perf_counter() - t0) * 1000.0, 1)
-
-    raw_output = exec_res.output
-    output_str = raw_output.decode("utf-8", errors="replace") if isinstance(raw_output, (bytes, bytearray)) else str(raw_output or "")
-    if len(output_str) > 262144:  # Cap at 256 KB
-        output_str = output_str[:262144] + "\n... [Output truncated at 256 KB]"
 
     if store:
         store.log_event("container_exec", f"Executed '{command}' in container '{container.name}'", app_id=f"docker:{container.name}", actor=actor)
 
     return {
-        "exit_code": exec_res.exit_code,
+        "exit_code": exit_code,
         "output": output_str,
         "command": command,
         "duration_ms": duration_ms,
@@ -1105,6 +1167,10 @@ def execute_stack_file_action(project_name: str, compose_yaml: str, action: str,
     """Writes stack YAML to disk and invokes docker compose CLI with output capture."""
     import subprocess
     import shutil
+    import re
+
+    if not project_name or not re.fullmatch(r"[A-Za-z0-9_-]+", project_name):
+        raise ValueError("Stack name may only contain letters, digits, '-' and '_'.")
 
     stacks_dir = os.path.join(data_dir, "stacks", project_name)
     os.makedirs(stacks_dir, exist_ok=True)

@@ -1,5 +1,5 @@
 // Portly Progressive Web App Service Worker
-const CACHE_NAME = 'portly-v2';
+const CACHE_NAME = 'portly-v3';
 const PRECACHE_URLS = [
   '/',
   '/index.html',

@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { api } from '../api';
+import { ConfirmDialog } from './ConfirmDialog';
 import { useToast } from './Toast';
 
 interface TopBarProps {
@@ -17,6 +18,7 @@ interface TopBarProps {
   user?: any;
   onOpenUserManagement?: () => void;
   onLogout?: () => void;
+  readOnly?: boolean;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -34,18 +36,36 @@ export const TopBar: React.FC<TopBarProps> = ({
   user,
   onOpenUserManagement,
   onLogout,
+  readOnly = false,
 }) => {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [pendingBackup, setPendingBackup] = useState<any>(null);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { success, error } = useToast();
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    file.text().then((text) => {
+      setPendingBackup(JSON.parse(text));
+      setShowRestoreConfirm(true);
+    }).catch((err: any) => error(`Restore failed: Invalid backup file (${err.message})`));
+  };
+
+  const resetFileInput = () => {
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    setPendingBackup(null);
+    setShowRestoreConfirm(false);
+  };
+
+  const confirmRestore = async () => {
+    const backup = pendingBackup;
+    resetFileInput();
+    if (!backup) return;
     try {
-      const backup = JSON.parse(await file.text());
       await api.importBackup(backup);
       success('Backup restored successfully. Reloading…');
       setTimeout(() => window.location.reload(), 600);
@@ -175,6 +195,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         )}
 
         {/* Export Button with Dropdown */}
+        {!readOnly && (
         <div style={{ position: 'relative' }}>
           <button
             type="button"
@@ -291,8 +312,10 @@ export const TopBar: React.FC<TopBarProps> = ({
             </div>
           )}
         </div>
+        )}
 
         {/* Scan Now Button (Utility) */}
+        {!readOnly && (
         <button
           type="button"
           onClick={handleScan}
@@ -340,6 +363,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           </svg>
           <span className="topbar-scan-label">{scanning ? 'Scanning…' : 'Scan Now'}</span>
         </button>
+        )}
 
         {/* Users & Audit Button for Admins */}
         {user?.role === 'admin' && onOpenUserManagement && (
@@ -452,6 +476,16 @@ export const TopBar: React.FC<TopBarProps> = ({
           Add app
         </button>
       </div>
+
+      <ConfirmDialog
+        isOpen={showRestoreConfirm}
+        title="Restore Backup?"
+        message="Restoring will overwrite existing data with the selected backup. Sections applied: categories, rules, custom apps, views, app overrides, and settings."
+        confirmLabel="Restore Backup"
+        isDanger={true}
+        onConfirm={confirmRestore}
+        onCancel={resetFileInput}
+      />
     </div>
   );
 };

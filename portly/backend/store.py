@@ -364,6 +364,25 @@ class Store:
                 conn.execute("PRAGMA user_version = 2;")
                 conn.commit()
 
+            if current_ver < 3:
+                # Cross-worker login lockout and single-use setup token
+                conn.execute("""
+                CREATE TABLE IF NOT EXISTS login_attempts (
+                    key TEXT NOT NULL,
+                    ts REAL NOT NULL
+                );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_login_attempts_key_ts ON login_attempts(key, ts);")
+                conn.execute("""
+                CREATE TABLE IF NOT EXISTS setup_token (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    token_hash TEXT NOT NULL,
+                    token_plain TEXT NOT NULL
+                );
+                """)
+                conn.execute("PRAGMA user_version = 3;")
+                conn.commit()
+
     # App overrides
     def get_app(self, app_id: str) -> Optional[Dict[str, Any]]:
         with self._get_connection() as conn:
@@ -852,6 +871,49 @@ class Store:
             conn.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
             conn.commit()
 
+    # Login lockout (DB-backed so all workers share the counter)
+    def get_login_attempts(self, key: str, since: float) -> List[float]:
+        with self._get_connection() as conn:
+            cur = conn.execute("SELECT ts FROM login_attempts WHERE key = ? AND ts >= ?", (key, since))
+            return [r["ts"] for r in cur.fetchall()]
+
+    def add_login_attempt(self, key: str, ts: float):
+        with self._get_connection() as conn:
+            conn.execute("INSERT INTO login_attempts (key, ts) VALUES (?, ?)", (key, ts))
+            conn.execute("DELETE FROM login_attempts WHERE ts < ?", (ts - 86400,))
+            conn.commit()
+
+    def clear_login_attempts(self, key: str):
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM login_attempts WHERE key = ?", (key,))
+            conn.commit()
+
+    def clear_all_login_attempts(self):
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM login_attempts")
+            conn.commit()
+
+    # Single-use setup token (hash for verification, plaintext for CLI display)
+    def get_setup_token_record(self) -> Optional[Dict[str, str]]:
+        with self._get_connection() as conn:
+            cur = conn.execute("SELECT token_hash, token_plain FROM setup_token WHERE id = 1")
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+    def save_setup_token(self, token_hash: str, token_plain: str):
+        with self._get_connection() as conn:
+            conn.execute(
+                "INSERT INTO setup_token (id, token_hash, token_plain) VALUES (1, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET token_hash = excluded.token_hash, token_plain = excluded.token_plain",
+                (token_hash, token_plain),
+            )
+            conn.commit()
+
+    def delete_setup_token(self):
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM setup_token WHERE id = 1")
+            conn.commit()
+
     # Port Reservations
     def get_port_reservations(self) -> List[Dict[str, Any]]:
         with self._get_connection() as conn:
@@ -918,3 +980,94 @@ class Store:
             cur = conn.execute("DELETE FROM compose_stacks WHERE name = ?", (name,))
             conn.commit()
             return cur.rowcount > 0
+
+    def apply_import(self, data: Dict[str, Any]):
+        """Apply a fully-validated backup in a single transaction (all-or-nothing)."""
+        with self._get_connection() as conn:
+            now = time.time()
+            for c in data.get("categories", []):
+                conn.execute("""
+                    INSERT INTO categories (id, name, color, mode, sort_order) VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET name = excluded.name, color = excluded.color,
+                        mode = excluded.mode, sort_order = excluded.sort_order
+                """, (c["id"], c["name"], c["color"], c.get("mode", "manual"), c.get("sort_order", 0)))
+            for r in data.get("rules", []):
+                conn.execute("""
+                    INSERT INTO rules (id, category_id, field, operator, value, priority)
+                    VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
+                        category_id = excluded.category_id, field = excluded.field,
+                        operator = excluded.operator, value = excluded.value, priority = excluded.priority
+                """, (r["id"], r["category_id"], r["field"], r["operator"], r["value"], r.get("priority", 10)))
+            for ca in data.get("custom_apps", []):
+                env_json = json.dumps(ca.get("env") or {})
+                headers_json = json.dumps(ca.get("custom_headers") or {})
+                log_file = ca.get("log_file")
+                if log_file:
+                    from portly.backend.actions import process_actions
+                    if not process_actions._is_safe_log_path(log_file):
+                        log_file = None
+                conn.execute("""
+                    INSERT INTO custom_apps (
+                        id, name, host, port, health_path, health_interval, start_cmd, stop_cmd,
+                        workdir, log_file, start_on_boot, env_json, update_cmd, expected_status,
+                        custom_headers, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        name = excluded.name, host = excluded.host, port = excluded.port,
+                        health_path = excluded.health_path, health_interval = excluded.health_interval,
+                        start_cmd = excluded.start_cmd, stop_cmd = excluded.stop_cmd,
+                        workdir = excluded.workdir, log_file = excluded.log_file,
+                        start_on_boot = excluded.start_on_boot, env_json = excluded.env_json,
+                        update_cmd = excluded.update_cmd, expected_status = excluded.expected_status,
+                        custom_headers = excluded.custom_headers
+                """, (
+                    ca["id"], ca["name"], ca.get("host", "localhost"), int(ca["port"]),
+                    ca.get("health_path", "/health"), ca.get("health_interval", 30),
+                    ca.get("start_cmd"), ca.get("stop_cmd"), ca.get("workdir"), log_file,
+                    1 if ca.get("start_on_boot") else 0, env_json, ca.get("update_cmd"),
+                    ca.get("expected_status", "200,204,301,302"), headers_json, now,
+                ))
+            for v in data.get("views", []):
+                conn.execute("""
+                    INSERT INTO views (id, name, filters_json, sort_json, group_by, view_type, columns_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
+                        name = excluded.name, filters_json = excluded.filters_json,
+                        sort_json = excluded.sort_json, group_by = excluded.group_by,
+                        view_type = excluded.view_type, columns_json = excluded.columns_json
+                """, (v["id"], v["name"], json.dumps(v.get("filters") or {}),
+                      json.dumps(v.get("sort") or {}), v.get("group_by", "none"),
+                      v.get("view_type", "table"), json.dumps(v.get("columns") or [])))
+            for app_id, ov in data.get("app_overrides", {}).items():
+                cur = conn.execute("SELECT source FROM apps WHERE id = ?", (app_id,))
+                row = cur.fetchone()
+                if row:
+                    cur = conn.execute("SELECT * FROM apps WHERE id = ?", (app_id,))
+                    d = dict(cur.fetchone())
+                    d.update(ov)
+                    tags_str = json.dumps(d.get("tags") or []) if isinstance(d.get("tags"), list) else str(d.get("tags") or "[]")
+                    conn.execute("""
+                        UPDATE apps SET name = ?, icon = ?, category_id = ?, tags = ?, notes = ?,
+                            pinned = ?, hidden = ?, sort_order = ?, url_override = ? WHERE id = ?
+                    """, (d.get("name"), d.get("icon"), d.get("category_id"), tags_str,
+                          d.get("notes", ""),
+                          1 if d.get("pinned") is True else (0 if d.get("pinned") is False else None),
+                          1 if d.get("hidden") is True else (0 if d.get("hidden") is False else None),
+                          d.get("sort_order", 0), d.get("url_override"), app_id))
+                else:
+                    source = ov.get("source", "host" if app_id.startswith("host:") else ("docker" if app_id.startswith("docker:") else "custom"))
+                    tags = ov.get("tags", [])
+                    tags_str = json.dumps(tags) if isinstance(tags, list) else str(tags)
+                    conn.execute("""
+                        INSERT INTO apps (id, source, name, icon, category_id, tags, notes, pinned,
+                            hidden, sort_order, url_override, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (app_id, source, ov.get("name"), ov.get("icon"), ov.get("category_id"),
+                          tags_str, ov.get("notes", ""),
+                          1 if ov.get("pinned") is True else (0 if ov.get("pinned") is False else None),
+                          1 if ov.get("hidden") is True else (0 if ov.get("hidden") is False else None),
+                          ov.get("sort_order", 0), ov.get("url_override"), now))
+            for k, val in data.get("settings", {}).items():
+                conn.execute("""
+                    INSERT INTO settings (key, value) VALUES (?, ?)
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """, (k, val))

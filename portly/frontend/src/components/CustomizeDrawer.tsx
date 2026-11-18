@@ -24,6 +24,7 @@ interface CustomizeDrawerProps {
   onChangeAccent: (color: string) => void;
   visibleFields: Record<string, boolean>;
   onToggleField: (field: string) => void;
+  readOnly?: boolean;
 }
 
 export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
@@ -45,6 +46,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
   onChangeAccent,
   visibleFields,
   onToggleField,
+  readOnly = false,
 }) => {
   const { error } = useToast();
   const [showAddRule, setShowAddRule] = useState(false);
@@ -71,6 +73,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
   }, []);
 
   const handleSaveWebhook = async () => {
+    if (readOnly) return;
     try {
       await api.updateSettings({
         webhook_enabled: String(webhookEnabled),
@@ -86,6 +89,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
   };
 
   const handleTestWebhook = async () => {
+    if (readOnly) return;
     if (!webhookUrl) {
       setWebhookFeedback('Please enter a Webhook URL first.');
       return;
@@ -106,6 +110,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
 
   const handleCreateRule = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly) return;
     if (!newRuleVal.trim()) return;
     try {
       await api.saveRule({
@@ -124,6 +129,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
   };
 
   const handleDeleteRule = async (ruleId: string) => {
+    if (readOnly) return;
     try {
       await api.deleteRule(ruleId);
       onRulesUpdated();
@@ -317,14 +323,16 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
             <div className="c169" style={{ fontSize: '12px', color: '#8D95A5', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Auto-categorize Rules
             </div>
-            <button
-              type="button"
-              className="c078"
-              style={{ height: '24px', fontSize: '11px', padding: '0 8px' }}
-              onClick={() => setShowAddRule(true)}
-            >
-              + Add Rule
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                className="c078"
+                style={{ height: '24px', fontSize: '11px', padding: '0 8px' }}
+                onClick={() => setShowAddRule(true)}
+              >
+                + Add Rule
+              </button>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
@@ -350,15 +358,17 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                     <span style={{ color: cat?.color || '#8C9EFF', fontWeight: 600 }}>
                       → {cat?.name || r.category_id}
                     </span>
-                    <button
-                      type="button"
-                      aria-label="Delete rule"
-                      onClick={() => handleDeleteRule(r.id)}
-                      style={{ background: 'none', border: 0, color: '#8D95A5', cursor: 'pointer', padding: 0 }}
-                      title="Delete rule"
-                    >
-                      ✕
-                    </button>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        aria-label="Delete rule"
+                        onClick={() => handleDeleteRule(r.id)}
+                        style={{ background: 'none', border: 0, color: '#8D95A5', cursor: 'pointer', padding: 0 }}
+                        title="Delete rule"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -367,7 +377,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
         </div>
 
         {/* Add rule sub-dialog */}
-        {showAddRule && (
+        {showAddRule && !readOnly && (
           <form onSubmit={handleCreateRule} style={{ background: '#151821', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)' }}>
             <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginBottom: '10px' }}>Create Rule</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
@@ -442,6 +452,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                 name="webhookEnabled"
                 checked={webhookEnabled}
                 onChange={(e) => setWebhookEnabled(e.target.checked)}
+                disabled={readOnly}
               />
               Enabled
             </label>
@@ -455,6 +466,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                 name="webhookType"
                 value={webhookType}
                 onChange={(e) => setWebhookType(e.target.value)}
+                disabled={readOnly}
                 className="c215"
                 style={{ width: '100%' }}
               >
@@ -474,6 +486,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                 placeholder={webhookType === 'discord' ? 'https://discord.com/api/webhooks/…' : 'https://ntfy.sh/my-portly-alerts'}
                 value={webhookUrl}
                 onChange={(e) => setWebhookUrl(e.target.value)}
+                disabled={readOnly}
                 className="c220"
                 style={{ width: '100%', boxSizing: 'border-box', fontSize: '12px' }}
                 autoComplete="off"
@@ -493,7 +506,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                 className="c078"
                 style={{ flex: 1, fontSize: '12px' }}
                 onClick={handleTestWebhook}
-                disabled={testingWebhook}
+                disabled={readOnly || testingWebhook}
               >
                 {testingWebhook ? 'Sending…' : 'Test Alert'}
               </button>
@@ -502,6 +515,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                 className="c080"
                 style={{ flex: 1, fontSize: '12px' }}
                 onClick={handleSaveWebhook}
+                disabled={readOnly}
               >
                 Save Alerts
               </button>

@@ -26,7 +26,7 @@ const API_BASE = '/api';
 
 // Discovered ports live on the Portly host, but the backend emits localhost when
 // no public_host is configured. Point those links at the dashboard host instead.
-function resolveAppUrl<T extends { open_url?: string; url_override?: string }>(item: T): T {
+export function resolveAppUrl<T extends { open_url?: string; url_override?: string }>(item: T): T {
   if (!item.open_url || item.url_override || typeof window === 'undefined') return item;
   try {
     const url = new URL(item.open_url);

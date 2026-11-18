@@ -7,6 +7,7 @@ interface BoardViewProps {
   onOpenDetail: (app: AppItem) => void;
   onMoveAppCategory: (appId: string, newCategoryId: string) => void;
   onNewCategoryClick: () => void;
+  readOnly?: boolean;
 }
 
 export const BoardView: React.FC<BoardViewProps> = ({
@@ -15,16 +16,19 @@ export const BoardView: React.FC<BoardViewProps> = ({
   onOpenDetail,
   onMoveAppCategory,
   onNewCategoryClick,
+  readOnly = false,
 }) => {
   const [draggedAppId, setDraggedAppId] = useState<string | null>(null);
   const [activeDropCategory, setActiveDropCategory] = useState<string | null>(null);
 
   const handleDragStart = (e: React.DragEvent, appId: string) => {
+    if (readOnly) { e.preventDefault(); return; }
     e.dataTransfer.setData('text/plain', appId);
     setDraggedAppId(appId);
   };
 
   const handleDragOver = (e: React.DragEvent, categoryId: string) => {
+    if (readOnly) return;
     e.preventDefault();
     if (activeDropCategory !== categoryId) {
       setActiveDropCategory(categoryId);
@@ -32,6 +36,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
   };
 
   const handleDrop = (e: React.DragEvent, categoryId: string) => {
+    if (readOnly) return;
     e.preventDefault();
     const appId = e.dataTransfer.getData('text/plain') || draggedAppId;
     if (appId) {
@@ -97,7 +102,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
                   tabIndex={0}
                   aria-label={`View details for ${app.name}`}
                   className="c153 draggable-card"
-                  draggable
+                  draggable={!readOnly}
                   onDragStart={(e) => handleDragStart(e, app.id)}
                   onClick={() => onOpenDetail(app)}
                   onKeyDown={(e) => {
@@ -118,16 +123,18 @@ export const BoardView: React.FC<BoardViewProps> = ({
                 >
                   <div className="c110" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="c104" style={{ cursor: 'grab' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <circle cx="9" cy="6" r="1"></circle>
-                          <circle cx="15" cy="6" r="1"></circle>
-                          <circle cx="9" cy="12" r="1"></circle>
-                          <circle cx="15" cy="12" r="1"></circle>
-                          <circle cx="9" cy="18" r="1"></circle>
-                          <circle cx="15" cy="18" r="1"></circle>
-                        </svg>
-                      </span>
+                      {!readOnly && (
+                        <span className="c104" style={{ cursor: 'grab' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <circle cx="9" cy="6" r="1"></circle>
+                            <circle cx="15" cy="6" r="1"></circle>
+                            <circle cx="9" cy="12" r="1"></circle>
+                            <circle cx="15" cy="12" r="1"></circle>
+                            <circle cx="9" cy="18" r="1"></circle>
+                            <circle cx="15" cy="18" r="1"></circle>
+                          </svg>
+                        </span>
+                      )}
                       <span className="c154" style={{ fontWeight: 600, color: '#ECEEF3' }}>
                         {app.name}
                       </span>
@@ -156,49 +163,53 @@ export const BoardView: React.FC<BoardViewProps> = ({
               ))}
 
               {/* Drop target placeholder */}
-              <div
-                className="c160"
-                style={{
-                  border: '1px dashed rgba(255,255,255,0.1)',
-                  borderRadius: '8px',
-                  padding: '12px',
-                  textAlign: 'center',
-                  fontSize: '12px',
-                  color: '#8D95A5',
-                  backgroundColor: isTarget ? 'rgba(140, 158, 255, 0.08)' : 'transparent',
-                }}
-              >
-                Drop to move here
-              </div>
+              {!readOnly && (
+                <div
+                  className="c160"
+                  style={{
+                    border: '1px dashed rgba(255,255,255,0.1)',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    textAlign: 'center',
+                    fontSize: '12px',
+                    color: '#8D95A5',
+                    backgroundColor: isTarget ? 'rgba(140, 158, 255, 0.08)' : 'transparent',
+                  }}
+                >
+                  Drop to move here
+                </div>
+              )}
             </div>
           );
         })}
 
         {/* Add category button at the end of the board */}
-        <button
-          type="button"
-          aria-label="Add category"
-          className="c163"
-          onClick={onNewCategoryClick}
-          style={{
-            width: '60px',
-            minHeight: '60px',
-            alignSelf: 'flex-start',
-            borderRadius: '14px',
-            border: '1px dashed rgba(255,255,255,0.15)',
-            background: 'transparent',
-            color: '#8D95A5',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-          title="Create a new category"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 5v14M5 12h14"></path>
-          </svg>
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            aria-label="Add category"
+            className="c163"
+            onClick={onNewCategoryClick}
+            style={{
+              width: '60px',
+              minHeight: '60px',
+              alignSelf: 'flex-start',
+              borderRadius: '14px',
+              border: '1px dashed rgba(255,255,255,0.15)',
+              background: 'transparent',
+              color: '#8D95A5',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            title="Create a new category"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14"></path>
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );

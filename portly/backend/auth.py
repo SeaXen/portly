@@ -1,5 +1,6 @@
 """Authentication, role management, session validation, and security rate limiting."""
 
+import hashlib
 import hmac
 import logging
 import os
@@ -14,22 +15,29 @@ from portly.backend.store import Store
 
 logger = logging.getLogger("portly.auth")
 
-# Active sessions cache: token -> session dict
+# Active sessions cache: token -> session dict (authoritative state lives in the DB)
 _sessions: Dict[str, Dict[str, Any]] = {}
 _store: Optional[Store] = None
 _auth_lock = threading.Lock()
 
-# Rate limiting for logins: key (e.g. IP or username) -> list of failed timestamp floats
-_failed_attempts: Dict[str, List[float]] = {}
+# Kept for callers/tests that reset the legacy in-process counter; the real,
+# shared counter lives in the DB so all workers see the same failures.
+class _FailedAttempts(dict):
+    def clear(self):
+        super().clear()
+        try:
+            _get_store().clear_all_login_attempts()
+        except Exception:
+            pass
+
+_failed_attempts = _FailedAttempts()
 _next_rate_cleanup: float = 0.0
 _RATE_CLEANUP_INTERVAL = 60.0
+LOGIN_LOCKOUT_SEC = 900.0  # 15 minutes, matching SECURITY.md
 
 # Precomputed valid bcrypt hash for constant-time evaluation on non-existent users
 # (prevents timing side-channel user enumeration)
 DUMMY_BCRYPT_HASH = "$2b$10$wT0lhK0GkHwD0YQxX9b7u.4g7z3q8n1v7j5e2r0t9y8u7i6o5p4a3"
-
-# Setup token for first-run remote admin initialization
-_setup_token: Optional[str] = None
 
 
 def _get_store() -> Store:
@@ -39,31 +47,52 @@ def _get_store() -> Store:
     return _store
 
 
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
 def get_setup_token() -> str:
-    """Returns the single-use setup token required for first-run setup in server mode."""
-    global _setup_token
+    """Returns the single-use setup token, persisted across restarts and workers."""
+    env_token = os.environ.get("PORTLY_SETUP_TOKEN", "").strip()
+    if env_token:
+        return env_token
     with _auth_lock:
-        if _setup_token is None:
-            env_token = os.environ.get("PORTLY_SETUP_TOKEN", "").strip()
-            _setup_token = env_token if env_token else secrets.token_hex(16)
-        return _setup_token
+        record = _get_store().get_setup_token_record()
+        if record and record.get("token_plain"):
+            return record["token_plain"]
+        token = secrets.token_hex(16)
+        _get_store().save_setup_token(_token_hash(token), token)
+        return token
 
 
 def verify_setup_token(provided_token: str) -> bool:
-    """Validates the setup token using constant-time comparison."""
-    expected = get_setup_token()
-    if not provided_token or not expected:
+    """Validates the setup token using constant-time hash comparison."""
+    if not provided_token:
         return False
-    return hmac.compare_digest(provided_token.strip(), expected.strip())
+    provided = provided_token.strip()
+    env_token = os.environ.get("PORTLY_SETUP_TOKEN", "").strip()
+    if env_token:
+        return hmac.compare_digest(provided, env_token)
+    record = _get_store().get_setup_token_record()
+    if not record or not record.get("token_hash"):
+        return False
+    return hmac.compare_digest(_token_hash(provided), record["token_hash"])
 
 
-def check_rate_limit(key: str, max_attempts: int = 5, window_sec: float = 60.0) -> bool:
+def consume_setup_token():
+    """Invalidates the setup token after the first admin is created."""
+    if os.environ.get("PORTLY_SETUP_TOKEN", "").strip():
+        return  # env override cannot be consumed
+    with _auth_lock:
+        _get_store().delete_setup_token()
+
+
+def check_rate_limit(key: str, max_attempts: int = 5, window_sec: float = LOGIN_LOCKOUT_SEC) -> bool:
     """Returns True if the key is allowed to attempt login, False if rate limited."""
     global _next_rate_cleanup
     now = time.time()
     with _auth_lock:
-        # Sweep all stale keys periodically; pruning only the requested key lets
-        # an attacker grow this dict forever with unique IPs/usernames.
+        # Sweep the legacy dict so it cannot grow forever with unique keys.
         if now >= _next_rate_cleanup:
             for k in list(_failed_attempts):
                 live = [t for t in _failed_attempts[k] if now - t < window_sec]
@@ -72,26 +101,35 @@ def check_rate_limit(key: str, max_attempts: int = 5, window_sec: float = 60.0) 
                 else:
                     del _failed_attempts[k]
             _next_rate_cleanup = now + _RATE_CLEANUP_INTERVAL
-        attempts = _failed_attempts.get(key, [])
-        # Prune old attempts outside window
-        valid_attempts = [t for t in attempts if now - t < window_sec]
-        _failed_attempts[key] = valid_attempts
-        return len(valid_attempts) < max_attempts
+    # The shared DB counter is authoritative across workers.
+    since = now - window_sec
+    try:
+        db_attempts = _get_store().get_login_attempts(key, since)
+    except Exception:
+        db_attempts = []
+    local = [t for t in _failed_attempts.get(key, []) if now - t < window_sec]
+    return len(set(db_attempts) | set(local)) < max_attempts
 
 
 def record_failed_attempt(key: str):
-    """Records a failed authentication attempt."""
+    """Records a failed authentication attempt in the shared store."""
     now = time.time()
     with _auth_lock:
-        if key not in _failed_attempts:
-            _failed_attempts[key] = []
-        _failed_attempts[key].append(now)
+        _failed_attempts.setdefault(key, []).append(now)
+    try:
+        _get_store().add_login_attempt(key, now)
+    except Exception:
+        pass
 
 
 def clear_failed_attempts(key: str):
     """Clears failed attempts upon successful login."""
     with _auth_lock:
         _failed_attempts.pop(key, None)
+    try:
+        _get_store().clear_login_attempts(key)
+    except Exception:
+        pass
 
 
 def validate_password(password: str) -> Tuple[bool, str]:
@@ -143,20 +181,22 @@ def create_session(user_id: str, username: str, role: str) -> str:
 def validate_session(token: Optional[str]) -> Optional[Dict[str, Any]]:
     if not token:
         return None
+    # The DB is authoritative: logout, demotion or deletion on any worker is
+    # visible immediately. The in-memory dict is only a local expiry override.
+    try:
+        db_sess = _get_store().get_session(token)
+    except Exception:
+        db_sess = None
     with _auth_lock:
-        sess = _sessions.get(token)
-    if not sess:
-        try:
-            db_sess = _get_store().get_session(token)
-            if db_sess:
-                sess = dict(db_sess)
-                with _auth_lock:
-                    _sessions[token] = sess
-        except Exception:
-            pass
-    if not sess:
+        local = _sessions.get(token)
+    if not db_sess:
+        if local:
+            with _auth_lock:
+                _sessions.pop(token, None)
         return None
-    if time.time() > sess["expires_at"]:
+    sess = dict(db_sess)
+    now = time.time()
+    if (local and now > local["expires_at"]) or now > sess["expires_at"]:
         with _auth_lock:
             _sessions.pop(token, None)
         try:
@@ -164,6 +204,16 @@ def validate_session(token: Optional[str]) -> Optional[Dict[str, Any]]:
         except Exception:
             pass
         return None
+    # Reflect the current role in case the users table changed.
+    try:
+        user = _get_store().get_user_by_id(sess.get("user_id", ""))
+        if user:
+            sess["role"] = user["role"]
+            sess["username"] = user["username"]
+    except Exception:
+        pass
+    with _auth_lock:
+        _sessions[token] = sess
     return sess
 
 

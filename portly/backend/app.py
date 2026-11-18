@@ -231,12 +231,43 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Portly API", version="0.1.1", lifespan=lifespan)
 
-cors_origins_env = os.environ.get("PORTLY_CORS_ORIGINS", "")
-if cors_origins_env:
-    allowed_origins = [orig.strip() for orig in cors_origins_env.split(",") if orig.strip()]
+def _dashboard_origins() -> set:
+    """Origins allowed to call the dashboard: explicit config or the app's own host/port."""
+    explicit = os.environ.get("PORTLY_CORS_ORIGINS", "").strip()
+    if explicit:
+        return {o.strip().rstrip("/") for o in explicit.split(",") if o.strip()}
+    port = os.environ.get("PORTLY_PORT", "5533")
+    hosts = {"localhost", "127.0.0.1"}
+    for h in os.environ.get("PORTLY_ALLOWED_HOSTS", "").split(","):
+        if h.strip():
+            hosts.add(h.strip().lower())
+    bind = os.environ.get("PORTLY_HOST", "").lower()
+    if bind and bind not in ("0.0.0.0", "::"):
+        hosts.add(bind)
+    pub = store.get_setting("public_host", "").strip()
+    if pub:
+        parsed = urlparse(f"//{pub}").hostname
+        if parsed:
+            hosts.add(parsed.lower())
+    origins = set()
+    for h in hosts:
+        for scheme in ("http", "https"):
+            origins.add(f"{scheme}://{h}:{port}")
+            origins.add(f"{scheme}://{h}")
+            if h in ("localhost", "127.0.0.1"):
+                origins.add(f"{scheme}://{h}:5173")  # Vite dev server (proxied to the API)
+    if pub:
+        origins.add(f"https://{pub}")
+        origins.add(f"http://{pub}")
+    return origins
+
+
+_cors_origins = _dashboard_origins()
+if os.getenv("PORTLY_TESTING") == "1":
+    # Test clients preflight from arbitrary localhost ports.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allowed_origins,
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -244,7 +275,7 @@ if cors_origins_env:
 else:
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+        allow_origins=sorted(_cors_origins),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -282,39 +313,52 @@ async def security_and_csrf_middleware(request: Request, call_next):
                 content={"code": "INVALID_HOST", "message": f"Host '{host_header}' is not in allowed hosts."}
             )
 
-    # 2. CSRF Protection on Mutating Requests
+    # 2. CSRF Protection on Mutating Requests.
+    # The public X-Portly-Client header is kept for same-origin fetch
+    # compatibility but is NOT a trust signal: cross-origin requests are always
+    # validated from Origin/Referer, even when the header is present.
     if request.method in ("POST", "PUT", "PATCH", "DELETE"):
-        # Explicit Portly client header bypasses browser CSRF
-        client_header = request.headers.get("x-portly-client")
         origin = request.headers.get("origin")
         referer = request.headers.get("referer")
-        sec_site = request.headers.get("sec-fetch-site")
+        sec_site = (request.headers.get("sec-fetch-site") or "").lower()
 
-        if client_header != "1":
-            if sec_site and sec_site.lower() == "cross-site":
+        if sec_site == "cross-site":
+            return JSONResponse(
+                status_code=403,
+                content={"code": "CSRF_DETECTED", "message": "Cross-site request blocked."}
+            )
+        # Same-origin is always valid, even when the bound port or public host
+        # differs from what was known at import time (reverse proxy, CLI port).
+        own_origin = f"{request.url.scheme}://{request.headers.get('host', '')}".rstrip("/")
+        own_host = request.headers.get("host", "").strip().lower()
+
+        def _same_host(value: str) -> bool:
+            parsed = urlparse(value)
+            return bool(parsed.netloc) and parsed.netloc.lower() == own_host
+
+        if origin:
+            if origin.strip().lower() == "null":
                 return JSONResponse(
                     status_code=403,
-                    content={"code": "CSRF_DETECTED", "message": "Cross-site request blocked."}
+                    content={"code": "CSRF_DETECTED", "message": "Origin 'null' is not authorized."}
                 )
-            if origin:
-                if origin.lower().strip() == "null":
-                    return JSONResponse(
-                        status_code=403,
-                        content={"code": "CSRF_DETECTED", "message": "Origin 'null' is not authorized."}
-                    )
-                origin_host = urlparse(origin).hostname
-                if not origin_host or (origin_host.lower() not in allowed_hosts and not any(origin_host.lower().endswith(f".{ah}") for ah in allowed_hosts if "." in ah)):
-                    return JSONResponse(
-                        status_code=403,
-                        content={"code": "CSRF_DETECTED", "message": f"Origin '{origin}' is not authorized."}
-                    )
-            elif referer:
-                referer_host = urlparse(referer).hostname
-                if not referer_host or (referer_host.lower() not in allowed_hosts and not any(referer_host.lower().endswith(f".{ah}") for ah in allowed_hosts if "." in ah)):
-                    return JSONResponse(
-                        status_code=403,
-                        content={"code": "CSRF_DETECTED", "message": f"Referer '{referer}' is not authorized."}
-                    )
+            if (origin.rstrip("/") not in _cors_origins
+                    and origin.rstrip("/") != own_origin
+                    and not _same_host(origin)):
+                return JSONResponse(
+                    status_code=403,
+                    content={"code": "CSRF_DETECTED", "message": f"Origin '{origin}' is not authorized."}
+                )
+        elif referer:
+            ref = urlparse(referer)
+            ref_origin = f"{ref.scheme}://{ref.netloc}".rstrip("/")
+            if (ref_origin not in _cors_origins
+                    and ref_origin != own_origin
+                    and not _same_host(ref_origin)):
+                return JSONResponse(
+                    status_code=403,
+                    content={"code": "CSRF_DETECTED", "message": f"Referer '{referer}' is not authorized."}
+                )
 
     response = await call_next(request)
 
@@ -336,14 +380,29 @@ async def security_and_csrf_middleware(request: Request, call_next):
     return response
 
 
+def _trusted_proxy_ips() -> set:
+    return {p.strip().lower() for p in os.getenv("PORTLY_TRUSTED_PROXIES", "").split(",") if p.strip()}
+
+
 def get_client_ip(request: Request) -> str:
     peer = request.client.host if request.client else "127.0.0.1"
-    # Only trust X-Forwarded-For from a reverse proxy on this host; otherwise a
-    # remote client can spoof it to bypass the login rate limit.
-    if peer in ("127.0.0.1", "::1", "localhost"):
-        xf = request.headers.get("x-forwarded-for")
-        if xf:
-            return xf.split(",")[0].strip()
+    xf = request.headers.get("x-forwarded-for")
+    if not xf:
+        return peer
+    trusted = _trusted_proxy_ips()
+    if trusted:
+        # Only configured proxies may set X-Forwarded-For; walk right-to-left
+        # so an attacker cannot inject a fake leftmost entry.
+        if peer.lower() not in trusted:
+            return peer
+        for candidate in reversed([p.strip() for p in xf.split(",") if p.strip()]):
+            if candidate.lower() not in trusted:
+                return candidate
+        return peer
+    # Legacy default: trust X-Forwarded-For from a loopback peer (local proxy).
+    # Remote peers are always treated as remote, so they cannot spoof their IP.
+    if peer in ("127.0.0.1", "::1", "localhost", "testclient"):
+        return xf.split(",")[0].strip()
     return peer
 
 
@@ -370,7 +429,7 @@ def get_current_user(
         mode = os.getenv("PORTLY_MODE", "desktop").lower()
         host = os.getenv("PORTLY_HOST", "127.0.0.1")
         allow_insecure = os.getenv("PORTLY_ALLOW_INSECURE_BIND", "false").lower() in ("true", "1")
-        client_host = request.client.host if request.client else "127.0.0.1"
+        client_host = get_client_ip(request)
         is_remote = client_host not in ("127.0.0.1", "::1", "localhost", "testclient")
 
         # When binding to 0.0.0.0, in server mode, or accessed remotely, require setup
@@ -1190,6 +1249,8 @@ async def change_port_endpoint(
             "start_on_boot": existing.get("start_on_boot", False),
             "env": existing.get("env", {}),
             "update_cmd": existing.get("update_cmd"),
+            "expected_status": existing.get("expected_status", "200,204,301,302"),
+            "custom_headers": existing.get("custom_headers", {}),
         }
         store.upsert_custom_app(
             clean_id,
@@ -1218,6 +1279,42 @@ async def change_multi_ports_endpoint(
     container_name = parts[1] if len(parts) > 1 else ""
     if not container_name:
         raise HTTPException(status_code=400, detail={"code": "INVALID_ID", "message": "Invalid container app id"})
+
+    if store.get_setting("safe_mode", "true").lower() == "true":
+        raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": "Safe mode is ON. Unlock safe mode to change ports."})
+
+    # Same availability preflight as the single-port path. Ports already owned
+    # by this container are not conflicts.
+    owned_ports = set()
+    try:
+        c = get_docker_client().containers.get(container_name)
+        for maps in (c.attrs.get("HostConfig", {}).get("PortBindings") or {}).values():
+            for entry in maps or []:
+                try:
+                    owned_ports.add(int(entry.get("HostPort", 0)))
+                except (ValueError, TypeError):
+                    pass
+    except Exception:
+        pass
+    conflicts = []
+    for m in data.mappings:
+        try:
+            port = int(m.host_port)
+        except (ValueError, TypeError):
+            continue
+        if port in owned_ports:
+            continue
+        try:
+            avail = check_port_availability(port, "0.0.0.0", store=store)
+        except TypeError:
+            avail = check_port_availability(port, "0.0.0.0")
+        if not avail.get("free", False):
+            conflicts.append({"port": port, "reason": avail.get("used_by", "")})
+    if conflicts:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "PORT_CONFLICT", "message": "Requested ports are not available.", "conflicts": conflicts}
+        )
 
     mappings_dicts = [m.model_dump() for m in data.mappings]
     try:
@@ -1354,8 +1451,20 @@ async def list_compose_stacks_endpoint(user: Dict[str, Any] = Depends(require_au
     return {"stacks": stacks}
 
 
+_STACK_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _require_valid_stack_name(name: str):
+    if not name or not _STACK_NAME_RE.fullmatch(name):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_STACK_NAME", "message": "Stack name may only contain letters, digits, '-' and '_'."}
+        )
+
+
 @app.get("/api/stacks/{name}")
 async def get_compose_stack_endpoint(name: str, user: Dict[str, Any] = Depends(require_auth)):
+    _require_valid_stack_name(name)
     stack = store.get_compose_stack(name)
     if not stack:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"Stack '{name}' not found"})
@@ -1364,6 +1473,7 @@ async def get_compose_stack_endpoint(name: str, user: Dict[str, Any] = Depends(r
 
 @app.post("/api/stacks")
 async def save_compose_stack_endpoint(data: ComposeStackModel, user: Dict[str, Any] = Depends(require_admin)):
+    _require_valid_stack_name(data.name)
     preflight = check_preflight_collisions(compose_content=data.compose_yaml, store=store)
     if preflight.get("has_conflicts") and not data.force:
         return JSONResponse(
@@ -1381,6 +1491,7 @@ async def save_compose_stack_endpoint(data: ComposeStackModel, user: Dict[str, A
 
 @app.delete("/api/stacks/{name}")
 async def delete_compose_stack_endpoint(name: str, user: Dict[str, Any] = Depends(require_admin)):
+    _require_valid_stack_name(name)
     stack = store.get_compose_stack(name)
     if not stack:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"Stack '{name}' not found"})
@@ -1404,6 +1515,7 @@ async def delete_compose_stack_endpoint(name: str, user: Dict[str, Any] = Depend
 
 @app.post("/api/stacks/{name}/action")
 async def execute_stack_action_endpoint(name: str, data: StackActionModel, user: Dict[str, Any] = Depends(require_admin)):
+    _require_valid_stack_name(name)
     action = data.action.lower().strip()
     stack = store.get_compose_stack(name)
     if not stack:
@@ -1690,6 +1802,65 @@ ALLOWED_SETTINGS_KEYS = {
     "theme", "default_view", "accent", "density"
 }
 
+BOOL_SETTINGS_KEYS = {"auto_refresh", "safe_mode", "webhook_enabled"}
+
+
+def _normalize_bool(value: Any) -> str:
+    s = str(value).strip().lower()
+    if s in ("true", "1", "yes", "on"):
+        return "true"
+    if s in ("false", "0", "no", "off"):
+        return "false"
+    raise ValueError("must be 'true' or 'false'.")
+
+
+def _normalize_settings(raw: Dict[str, Any]) -> Dict[str, str]:
+    """Validate and canonicalize settings values; raises ValueError on bad input."""
+    out: Dict[str, str] = {}
+    for k, v in raw.items():
+        if k not in ALLOWED_SETTINGS_KEYS:
+            raise ValueError(f"Setting '{k}' is not recognized.")
+        if k in BOOL_SETTINGS_KEYS:
+            out[k] = _normalize_bool(v)
+        elif k == "refresh_interval":
+            try:
+                val = float(v)
+                if not (1.0 <= val <= 300.0):
+                    raise ValueError
+            except (ValueError, TypeError):
+                raise ValueError("refresh_interval must be a number between 1 and 300.")
+            out[k] = str(v)
+        elif k == "auto_relock_seconds":
+            try:
+                val = int(v)
+                if not (0 <= val <= 86400):
+                    raise ValueError
+            except (ValueError, TypeError):
+                raise ValueError("auto_relock_seconds must be between 0 and 86400.")
+            out[k] = str(val)
+        elif k == "webhook_type":
+            s = str(v).lower()
+            if s not in ("generic", "slack", "discord", "telegram"):
+                raise ValueError("webhook_type must be generic, slack, discord, or telegram.")
+            out[k] = str(v)
+        elif k == "theme":
+            s = str(v).lower()
+            if s not in ("dark", "light", "oled", "system"):
+                raise ValueError("theme must be dark, light, oled, or system.")
+            out[k] = str(v)
+        elif k == "accent":
+            if not re.fullmatch(r"#[0-9a-fA-F]{6}", str(v)):
+                raise ValueError("accent must be a #RRGGBB color.")
+            out[k] = str(v)
+        elif k == "density":
+            if str(v) not in ("compact", "comfy"):
+                raise ValueError("density must be compact or comfy.")
+            out[k] = str(v)
+        else:
+            out[k] = str(v)
+    return out
+
+
 @app.get("/api/settings")
 async def get_settings_endpoint(user: Dict[str, Any] = Depends(require_auth)):
     settings = store.get_settings()
@@ -1702,54 +1873,21 @@ async def get_settings_endpoint(user: Dict[str, Any] = Depends(require_auth)):
 
 @app.patch("/api/settings")
 async def update_settings_endpoint(settings_dict: Dict[str, Any], user: Dict[str, Any] = Depends(require_admin)):
-    # Validate keys and types
-    for k, v in settings_dict.items():
-        if k not in ALLOWED_SETTINGS_KEYS:
-            raise HTTPException(status_code=400, detail={"code": "INVALID_SETTING_KEY", "message": f"Setting '{k}' is not recognized."})
-        
-        # Specific validations
-        if k == "refresh_interval":
-            try:
-                val = float(v)
-                if not (1.0 <= val <= 300.0):
-                    raise ValueError
-            except (ValueError, TypeError):
-                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "refresh_interval must be a number between 1 and 300."})
-        elif k in ("auto_refresh", "safe_mode"):
-            if str(v).lower() not in ("true", "false", "1", "0"):
-                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": f"{k} must be 'true' or 'false'."})
-        elif k == "auto_relock_seconds":
-            try:
-                val = int(v)
-                if not (0 <= val <= 86400):
-                    raise ValueError
-            except (ValueError, TypeError):
-                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "auto_relock_seconds must be between 0 and 86400."})
-        elif k == "webhook_type":
-            if str(v).lower() not in ("generic", "slack", "discord", "telegram"):
-                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "webhook_type must be generic, slack, discord, or telegram."})
-        elif k == "webhook_enabled":
-            if str(v).lower() not in ("true", "false", "1", "0"):
-                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "webhook_enabled must be 'true' or 'false'."})
-        elif k == "theme":
-            if str(v).lower() not in ("dark", "light", "oled", "system"):
-                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "theme must be dark, light, oled, or system."})
-        elif k == "accent":
-            if not re.fullmatch(r"#[0-9a-fA-F]{6}", str(v)):
-                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "accent must be a #RRGGBB color."})
-        elif k == "density":
-            if str(v) not in ("compact", "comfy"):
-                raise HTTPException(status_code=400, detail={"code": "INVALID_VALUE", "message": "density must be compact or comfy."})
+    try:
+        normalized = _normalize_settings(settings_dict)
+    except ValueError as e:
+        msg = str(e)
+        code = "INVALID_SETTING_KEY" if "not recognized" in msg else "INVALID_VALUE"
+        raise HTTPException(status_code=400, detail={"code": code, "message": msg})
 
     global _safe_mode_unlocked_at
-    for k, v in settings_dict.items():
-        val_str = str(v).lower() if k in ("auto_refresh", "safe_mode") else str(v)
+    for k, val_str in normalized.items():
         store.set_setting(k, val_str)
-        if k == "safe_mode":
-            if val_str in ("false", "0"):
-                _safe_mode_unlocked_at = time.time()
-            else:
-                _safe_mode_unlocked_at = None
+    if "safe_mode" in normalized:
+        if normalized["safe_mode"] == "false":
+            _safe_mode_unlocked_at = time.time()
+        else:
+            _safe_mode_unlocked_at = None
     return store.get_settings()
 
 
@@ -1847,10 +1985,34 @@ async def export_data(
         return JSONResponse(content=backup)
 
 
+APP_OVERRIDE_TYPES = {
+    "id": str, "source": str, "name": str, "icon": str, "category_id": str,
+    "tags": list, "notes": str, "pinned": bool, "hidden": bool,
+    "sort_order": int, "url_override": str, "created_at": (int, float),
+}
+
+
+def _valid_override_field(key: str, value: Any) -> bool:
+    if key not in APP_OVERRIDE_TYPES:
+        return False
+    if value is None:
+        return key != "tags"
+    expected = APP_OVERRIDE_TYPES[key]
+    if expected is int:
+        return type(value) is int  # bool is an int subclass; reject it here
+    if expected is bool:
+        return type(value) is bool
+    if not isinstance(value, expected):
+        return False
+    if key == "tags":
+        return all(isinstance(t, str) for t in value)
+    return True
+
+
 @app.post("/api/import")
 async def import_data(backup: Dict[str, Any], user: Dict[str, Any] = Depends(require_admin)):
-    # Validate every section before writing so a malformed backup cannot leave
-    # a half-imported database.
+    # Validate EVERY section before writing anything, then apply in one DB
+    # transaction so a malformed backup cannot leave half-imported state.
     required = {
         "categories": {"id": str, "name": str, "color": str},
         "rules": {"id": str, "category_id": str, "field": str, "operator": str, "value": str},
@@ -1861,7 +2023,8 @@ async def import_data(backup: Dict[str, Any], user: Dict[str, Any] = Depends(req
         entries = backup.get(section, [])
         if not isinstance(entries, list) or any(
             not isinstance(e, dict) or any(
-                k not in e or not isinstance(e[k], t) for k, t in fields.items()
+                k not in e or not isinstance(e[k], t) or (t is int and type(e[k]) is not int)
+                for k, t in fields.items()
             )
             for e in entries
         ):
@@ -1870,22 +2033,39 @@ async def import_data(backup: Dict[str, Any], user: Dict[str, Any] = Depends(req
         if not isinstance(backup.get(section, {}), dict):
             raise HTTPException(status_code=400, detail={"code": "INVALID_BACKUP", "message": f"Invalid {section} section in backup."})
 
-    for c in backup.get("categories", []):
-        store.upsert_category(c["id"], c["name"], c["color"], c.get("mode", "manual"), c.get("sort_order", 0))
-    for r in backup.get("rules", []):
-        store.add_rule(r["id"], r["category_id"], r["field"], r["operator"], r["value"], r.get("priority", 10))
     for ca in backup.get("custom_apps", []):
-        kwargs = {k: v for k, v in ca.items() if k not in ("id", "name", "host", "port")}
-        if kwargs.get("log_file") and not process_actions._is_safe_log_path(kwargs["log_file"]):
-            kwargs["log_file"] = None
-        store.upsert_custom_app(ca["id"], ca["name"], ca.get("host", "localhost"), ca["port"], **kwargs)
+        for key in ("env", "custom_headers"):
+            if key in ca and ca[key] is not None and not isinstance(ca[key], dict):
+                raise HTTPException(status_code=400, detail={"code": "INVALID_BACKUP", "message": f"Invalid {key} in custom_apps entry."})
+        if "expected_status" in ca and not isinstance(ca["expected_status"], str):
+            raise HTTPException(status_code=400, detail={"code": "INVALID_BACKUP", "message": "Invalid expected_status in custom_apps entry."})
     for v in backup.get("views", []):
-        store.save_view(v["id"], v["name"], v.get("filters", {}), v.get("sort", {}), v.get("group_by", "none"), v.get("view_type", "table"), v.get("columns", []))
+        for key in ("filters", "sort"):
+            if key in v and not isinstance(v[key], dict):
+                raise HTTPException(status_code=400, detail={"code": "INVALID_BACKUP", "message": f"Invalid {key} in views entry."})
+        if "columns" in v and not isinstance(v["columns"], list):
+            raise HTTPException(status_code=400, detail={"code": "INVALID_BACKUP", "message": "Invalid columns in views entry."})
+
     for app_id, ov in backup.get("app_overrides", {}).items():
-        store.upsert_app_override(app_id, **ov)
-    for k, v in backup.get("settings", {}).items():
-        if k in ALLOWED_SETTINGS_KEYS:
-            store.set_setting(k, str(v))
+        if not isinstance(app_id, str) or not isinstance(ov, dict) or not all(
+            _valid_override_field(k, v) for k, v in ov.items()
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "INVALID_BACKUP", "message": f"Invalid app_overrides entry for '{app_id}'."}
+            )
+    try:
+        normalized_settings = _normalize_settings(backup.get("settings", {}))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_BACKUP", "message": f"Invalid settings section: {e}"})
+
+    to_apply = dict(backup)
+    to_apply["settings"] = normalized_settings
+    store.apply_import(to_apply)
+
+    global _safe_mode_unlocked_at
+    if "safe_mode" in normalized_settings:
+        _safe_mode_unlocked_at = time.time() if normalized_settings["safe_mode"] == "false" else None
     await refresh_discovery()
     return {"status": "imported"}
 
@@ -1910,7 +2090,7 @@ async def auth_setup(data: SetupModel, request: Request, response: Response):
     mode = os.getenv("PORTLY_MODE", "desktop").lower()
     host = os.getenv("PORTLY_HOST", "127.0.0.1")
     allow_insecure = os.getenv("PORTLY_ALLOW_INSECURE_BIND", "false").lower() in ("true", "1")
-    client_host = request.client.host if request.client else "127.0.0.1"
+    client_host = get_client_ip(request)
     is_remote = client_host not in ("127.0.0.1", "::1", "localhost", "testclient")
 
     if (mode == "server" or host in ("0.0.0.0", "::") or is_remote) and not allow_insecure:
@@ -1928,6 +2108,7 @@ async def auth_setup(data: SetupModel, request: Request, response: Response):
     pw_hash = auth.hash_password(data.password)
     user_id = f"u_{uuid.uuid4().hex[:12]}"
     user = store.create_user(user_id, data.username, pw_hash, role="admin")
+    auth.consume_setup_token()
     token = auth.create_session(user["id"], user["username"], role="admin")
     
     is_secure = request.url.scheme == "https" or os.getenv("PORTLY_COOKIE_SECURE", "").lower() in ("true", "1")
@@ -2023,6 +2204,15 @@ async def update_user_role_endpoint(user_id: str, data: UserRoleModel, user: Dic
     target_user = store.get_user_by_id(user_id)
     if not target_user:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "User not found."})
+
+    if role == "viewer":
+        users = store.list_users()
+        listed = next((u for u in users if u.get("id") == user_id), None)
+        if listed and listed.get("role") == "admin" and sum(1 for u in users if u.get("role") == "admin") <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "LAST_ADMIN", "message": "Cannot demote the last remaining admin."}
+            )
 
     store.update_user_role(user_id, role)
     auth.revoke_all_sessions(user_id)

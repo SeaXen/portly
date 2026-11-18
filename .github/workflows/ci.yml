@@ -57,7 +57,7 @@ jobs:
       - name: Build frontend production bundle
         working-directory: portly/frontend
         run: |
-          npm install --no-audit || npm ci
+          npm ci --no-audit
           npm run build
 
   e2e-test:
@@ -82,7 +82,7 @@ jobs:
       - name: Build frontend
         working-directory: portly/frontend
         run: |
-          npm install --no-audit || npm ci
+          npm ci --no-audit
           npm run build
 
       - name: Install dependencies
