@@ -315,11 +315,14 @@ def test_endpoint_pwa_manifest_and_sw(test_app_client):
 
 
 def test_endpoint_test_webhook(test_app_client):
-    with patch("urllib.request.urlopen") as mock_urlopen:
+    # S-6: webhook sender now uses a non-redirecting opener instead of urlopen.
+    with patch("urllib.request.build_opener") as mock_build:
         mock_resp = MagicMock()
         mock_resp.status = 200
         mock_resp.getcode.return_value = 200
-        mock_urlopen.return_value.__enter__.return_value = mock_resp
+        mock_opener = MagicMock()
+        mock_opener.open.return_value.__enter__.return_value = mock_resp
+        mock_build.return_value = mock_opener
 
         res = test_app_client.post("/api/settings/test-webhook", json={
             "url": "https://discord.com/api/webhooks/mock/123",

@@ -2,8 +2,10 @@
 
 import asyncio
 from datetime import datetime, timezone
+import ipaddress
 import json
 import logging
+import os
 import threading
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -11,6 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from portly.backend.health import _is_safe_health_host, _NoRedirectHandler
 from portly.backend.store import Store
 
 logger = logging.getLogger("portly.notifications")
@@ -110,6 +113,22 @@ def format_webhook_payload(
     return headers, json.dumps(payload).encode("utf-8")
 
 
+def _is_internal_webhook_host(host: str) -> bool:
+    """True for private/loopback/reserved hosts that need an explicit opt-in to target."""
+    lower = host.lower().strip().strip("[]")
+    if lower in ("localhost", "metadata", "metadata.google.internal", "instance-data"):
+        return True
+    try:
+        ip = ipaddress.ip_address(lower)
+        return ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local
+    except ValueError:
+        return False
+
+
+def _internal_webhooks_allowed() -> bool:
+    return os.environ.get("PORTLY_ALLOW_INTERNAL_WEBHOOKS", "").strip().lower() in ("1", "true", "yes")
+
+
 def send_webhook_sync(
     url: str,
     webhook_type: str,
@@ -123,13 +142,20 @@ def send_webhook_sync(
     if not url or not (url.startswith("http://") or url.startswith("https://")):
         return False, "Invalid webhook URL: must begin with http:// or https://"
 
+    host = urllib.parse.urlparse(url).hostname or ""
+    if not _is_safe_health_host(host):
+        return False, f"Webhook host '{host}' is blocked (link-local/metadata address)."
+    if _is_internal_webhook_host(host) and not _internal_webhooks_allowed():
+        return False, f"Webhook host '{host}' is internal. Set PORTLY_ALLOW_INTERNAL_WEBHOOKS=1 to permit."
+
     headers, body = format_webhook_payload(webhook_type, event_type, message, details, url=url)
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    opener = urllib.request.build_opener(_NoRedirectHandler)
 
     last_err = ""
     for attempt in range(max_retries + 1):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with opener.open(req, timeout=timeout) as resp:
                 status = getattr(resp, "status", getattr(resp, "code", getattr(resp, "getcode", lambda: 200)()))
                 if status < 400:
                     return True, f"Delivered successfully (HTTP {status})"

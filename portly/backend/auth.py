@@ -52,16 +52,17 @@ def _token_hash(token: str) -> str:
 
 
 def get_setup_token() -> str:
-    """Returns the single-use setup token, persisted across restarts and workers."""
+    """Generates a single-use setup token, printing it once. Only its hash is stored.
+
+    A new token is created each call (invalidating any previous one), so a token
+    lost before setup can be regenerated with `portly reset-setup-token`.
+    """
     env_token = os.environ.get("PORTLY_SETUP_TOKEN", "").strip()
     if env_token:
         return env_token
     with _auth_lock:
-        record = _get_store().get_setup_token_record()
-        if record and record.get("token_plain"):
-            return record["token_plain"]
         token = secrets.token_hex(16)
-        _get_store().save_setup_token(_token_hash(token), token)
+        _get_store().save_setup_token(_token_hash(token))
         return token
 
 

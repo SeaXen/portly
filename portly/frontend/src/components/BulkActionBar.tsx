@@ -37,7 +37,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
 
   return (
     <div className="floating-bulk-bar">
-      <span className="c144" style={{ fontSize: '13px', color: '#ECEEF3', marginRight: '6px' }}>
+      <span className="c144" style={{ fontSize: '13px', color: 'var(--text)', marginRight: '6px' }}>
         <b>{selectedCount}</b> selected
       </span>
 
@@ -60,7 +60,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
               position: 'absolute',
               bottom: '42px',
               left: 0,
-              background: '#151821',
+              background: 'var(--surface-2)',
               border: '1px solid rgba(255,255,255,0.12)',
               borderRadius: '9px',
               padding: '6px',

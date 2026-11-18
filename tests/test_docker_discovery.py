@@ -112,3 +112,128 @@ def test_cached_container_stats():
     cached = docker_src.get_cached_container_stats("c_test")
     assert cached["cpu_percent"] == 12.5
     assert cached["memory_mb"] == 256.0
+
+
+MB = 1024 * 1024
+V2_CPU = {
+    "cpu_stats": {"cpu_usage": {"total_usage": 2000000000}, "system_cpu_usage": 40000000000, "online_cpus": 8},
+    "precpu_stats": {"cpu_usage": {"total_usage": 1000000000}, "system_cpu_usage": 36000000000},
+}
+
+
+def _raw_stats(cache_fields, usage=200 * MB):
+    return {
+        "cpu_stats": {"cpu_usage": {"total_usage": 2000000000}, "system_cpu_usage": 40000000000, "online_cpus": 2},
+        "precpu_stats": {"cpu_usage": {"total_usage": 1000000000}, "system_cpu_usage": 36000000000},
+        "memory_stats": {"usage": usage, "limit": 1000 * MB, "stats": cache_fields},
+    }
+
+
+class _FakeStatsContainer:
+    def __init__(self, cid, raw):
+        self.id = cid
+        self._raw = raw
+
+    def stats(self, stream=False):
+        return self._raw
+
+
+def test_calculate_cpu_percent_cgroup_v2():
+    assert docker_src._calculate_cpu_percent(V2_CPU) == 200.0
+
+
+def test_calculate_cpu_percent_cgroup_v1_percpu():
+    d = {
+        "cpu_stats": {"cpu_usage": {"total_usage": 2000000000, "percpu_usage": [1, 2, 3, 4]},
+                      "system_cpu_usage": 40000000000},
+        "precpu_stats": {"cpu_usage": {"total_usage": 1000000000}, "system_cpu_usage": 36000000000},
+    }
+    assert docker_src._calculate_cpu_percent(d) == 100.0
+
+
+def test_calculate_cpu_percent_falls_back_to_psutil_count(monkeypatch):
+    monkeypatch.setattr(docker_src.psutil, "cpu_count", lambda: 4)
+    d = {
+        "cpu_stats": {"cpu_usage": {"total_usage": 2000000000}, "system_cpu_usage": 40000000000},
+        "precpu_stats": {"cpu_usage": {"total_usage": 1000000000}, "system_cpu_usage": 36000000000},
+    }
+    assert docker_src._calculate_cpu_percent(d) == 100.0
+
+
+def test_refresh_memory_cgroup_v2_inactive_file():
+    docker_src.clear_container_stats_cache("mem_v2")
+    raw = _raw_stats({"inactive_file": 50 * MB, "cache": 199 * MB})
+    docker_src._refresh_container_stats(_FakeStatsContainer("mem_v2", raw))
+    cached = docker_src.get_cached_container_stats("mem_v2")
+    assert cached["memory_mb"] == 150.0
+    assert cached["memory_limit_mb"] == 1000.0
+    docker_src.clear_container_stats_cache("mem_v2")
+
+
+def test_refresh_memory_cgroup_v1_cache_fallback():
+    docker_src.clear_container_stats_cache("mem_v1")
+    raw = _raw_stats({"cache": 50 * MB})
+    docker_src._refresh_container_stats(_FakeStatsContainer("mem_v1", raw))
+    assert docker_src.get_cached_container_stats("mem_v1")["memory_mb"] == 150.0
+    docker_src.clear_container_stats_cache("mem_v1")
+
+
+def test_refresh_memory_total_inactive_file_fallback():
+    docker_src.clear_container_stats_cache("mem_ti")
+    raw = _raw_stats({"total_inactive_file": 40 * MB})
+    docker_src._refresh_container_stats(_FakeStatsContainer("mem_ti", raw))
+    assert docker_src.get_cached_container_stats("mem_ti")["memory_mb"] == 160.0
+    docker_src.clear_container_stats_cache("mem_ti")
+
+
+def test_refresh_memory_clamped_at_zero():
+    docker_src.clear_container_stats_cache("mem_clamp")
+    raw = _raw_stats({"inactive_file": 50 * MB}, usage=10 * MB)
+    docker_src._refresh_container_stats(_FakeStatsContainer("mem_clamp", raw))
+    assert docker_src.get_cached_container_stats("mem_clamp")["memory_mb"] == 0.0
+    docker_src.clear_container_stats_cache("mem_clamp")
+
+
+def test_collect_running_container_stats_is_parallel():
+    class SlowContainer:
+        def __init__(self, cid):
+            self.id = cid
+
+        def stats(self, stream=False):
+            time.sleep(0.2)
+            return _raw_stats({})
+
+    containers = [SlowContainer(f"par{i:02d}") for i in range(20)]
+    t0 = time.perf_counter()
+    ids = docker_src._collect_running_container_stats(containers)
+    elapsed = time.perf_counter() - t0
+    assert len(ids) == 20
+    assert elapsed < 1.5, f"parallel stats collection took {elapsed:.2f}s"
+    for c in containers:
+        docker_src.clear_container_stats_cache(c.id[:12])
+
+
+def test_collect_running_container_stats_handles_errors():
+    class BadContainer:
+        id = "badc"
+
+        def stats(self, stream=False):
+            raise RuntimeError("stats unavailable")
+
+    good = _FakeStatsContainer("goodc", _raw_stats({}))
+    docker_src.clear_container_stats_cache("goodc")
+    ids = docker_src._collect_running_container_stats([BadContainer(), good])
+    assert "badc" in ids
+    assert docker_src.get_cached_container_stats("goodc")["memory_mb"] == 200.0
+    docker_src.clear_container_stats_cache("badc")
+    docker_src.clear_container_stats_cache("goodc")
+
+
+def test_stats_cache_exposes_age():
+    docker_src.clear_container_stats_cache("agec")
+    assert docker_src.get_cached_container_stats("agec")["stats_age_sec"] is None
+    docker_src.update_container_stats_cache("agec", {"cpu_percent": 1.0})
+    assert docker_src.get_cached_container_stats("agec")["stats_age_sec"] is not None
+    docker_src._container_stats_cache["agec"]["ts"] = time.time() - 12.5
+    assert docker_src.get_cached_container_stats("agec")["stats_age_sec"] == 12.5
+    docker_src.clear_container_stats_cache("agec")

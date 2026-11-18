@@ -210,7 +210,7 @@ def run_custom_update(app_id: str, store: Store, actor: str = "system") -> Dict[
         "stderr": proc.stderr[-8000:],
     }
     log_app_id = app_id if app_id.startswith("custom:") else f"custom:{app_id}"
-    store.log_event("app.update", f"Custom update for {app_id}: {result['status']}", app_id=log_app_id, actor=actor)
+    store.log_event("app.update", f"Custom update for {app_id}: {result['status']} | command: {cmd}", app_id=log_app_id, actor=actor)
     return result
 
 
@@ -285,7 +285,7 @@ def start_custom_app(app_id: str, store: Store, actor: str = "system", internal:
     )
     t.start()
 
-    store.log_event("custom_app_start", f"Started app '{custom_app['name']}' (PID {proc.pid})", app_id=app_id, actor=actor)
+    store.log_event("custom_app_start", f"Started app '{custom_app['name']}' (PID {proc.pid}) | command: {cmd}", app_id=app_id, actor=actor)
     return {"status": "started", "pid": proc.pid, "name": custom_app["name"]}
 
 
@@ -342,7 +342,8 @@ def stop_custom_app(app_id: str, store: Store, actor: str = "system") -> Dict[st
         except Exception as e:
             logger.warning(f"Custom stop command failed: {e}")
 
-    store.log_event("custom_app_stop", f"Stopped app '{name}'", app_id=app_id, actor=actor)
+    stop_audit = f" | command: {stop_cmd}" if stop_cmd and stop_cmd.lower() != "auto" else ""
+    store.log_event("custom_app_stop", f"Stopped app '{name}'{stop_audit}", app_id=app_id, actor=actor)
     return {"status": "stopped", "name": name}
 
 

@@ -1,8 +1,7 @@
-version: "3.8"
-
 services:
   portly:
     image: ghcr.io/seaxen/portly:latest
+    build: .
     container_name: portly
     # Required to discover host network sockets and processes
     network_mode: host
@@ -11,8 +10,9 @@ services:
     group_add:
       - "${DOCKER_GID:-999}"
     volumes:
+      # Docker socket is root-equivalent even with :ro — see SECURITY.md
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./data:/app/data
+      - portly-data:/app/data
       - /:/hostfs:ro
     environment:
       - PORTLY_PORT=5533
@@ -20,4 +20,9 @@ services:
       - PORTLY_MODE=server
       - PORTLY_HOSTFS=/hostfs
       - PORTLY_ALLOW_INSECURE_BIND=false
+      # Comma-separated hostnames allowed in Host header / CORS (e.g. behind a reverse proxy)
+      # - PORTLY_ALLOWED_HOSTS=portly.example.com,192.168.1.10
     restart: unless-stopped
+
+volumes:
+  portly-data:

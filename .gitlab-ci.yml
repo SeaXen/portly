@@ -1,9 +1,25 @@
 stages:
+  - lint
   - test
   - build
 
 variables:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+lint:
+  stage: lint
+  image: python:3.12-slim
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq nodejs npm >/dev/null
+    - pip install ruff
+  script:
+    - ruff check portly tests
+    - npm --prefix portly/frontend ci
+    - npm --prefix portly/frontend run lint
+    - npm --prefix portly/frontend run test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
 
 backend-tests:
   stage: test
@@ -11,14 +27,30 @@ backend-tests:
   before_script:
     - python3 --version
     - pip install -r requirements.txt
-    - pip install pytest httpx pytest-asyncio pytest-cov
+    - pip install pytest httpx pytest-asyncio pytest-cov ruff
   script:
     - python3 -m compileall -q portly
     - export PORTLY_TESTING=1
     - python3 -m pytest tests/ --ignore=tests/e2e -v
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+
+e2e-tests:
+  stage: test
+  image: python:3.12-slim
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq nodejs npm >/dev/null
+    - pip install -r requirements.txt
+    - pip install pytest pytest-playwright playwright
+    - playwright install chromium --with-deps
+  script:
+    - npm --prefix portly/frontend ci
+    - npm --prefix portly/frontend run build
+    - python3 -m pytest -o addopts= tests/e2e -v
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
 
 frontend-build:
   stage: build
@@ -28,5 +60,5 @@ frontend-build:
     - npm ci --no-audit
     - npm run build
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'

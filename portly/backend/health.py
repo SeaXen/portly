@@ -11,6 +11,13 @@ import urllib.request
 logger = logging.getLogger("portly.health")
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Leaves 3xx responses untouched so expected_status can match them and redirects aren't followed."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _is_safe_health_host(host: str) -> bool:
     """Verifies that host does not target cloud metadata or link-local addresses."""
     if not host:
@@ -33,19 +40,14 @@ def check_tcp_port(host: str, port: int, timeout: float = 1.5) -> Tuple[bool, fl
         return False, 0.0
 
     t0 = time.perf_counter()
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.settimeout(timeout)
     try:
-        s.connect((host, port))
+        # create_connection resolves both IPv4 and IPv6, unlike an AF_INET-only socket
+        sock = socket.create_connection((host, port), timeout=timeout)
         latency = (time.perf_counter() - t0) * 1000.0
+        sock.close()
         return True, round(latency, 1)
     except Exception:
         return False, 0.0
-    finally:
-        try:
-            s.close()
-        except Exception:
-            pass
 
 
 def check_http_endpoint(
@@ -73,7 +75,8 @@ def check_http_endpoint(
         headers=headers
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as response:
+        opener = urllib.request.build_opener(_NoRedirectHandler)
+        with opener.open(req, timeout=timeout) as response:
             latency = (time.perf_counter() - t0) * 1000.0
             if allowed_codes:
                 is_ok = response.status in allowed_codes

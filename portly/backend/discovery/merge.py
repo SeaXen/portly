@@ -39,8 +39,9 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
         if not app_id.startswith("custom:"):
             app_id = f"custom:{app_id}"
 
-        # Resolve live status from background health poller if recorded
-        custom_status = "up"
+        # Resolve live status from background health poller if recorded;
+        # with no snapshot the state is genuinely unknown, not healthy.
+        custom_status = "unknown"
         latency_ms = 0.0
         if store and hasattr(store, "get_latest_health"):
             latest = store.get_latest_health(app_id)
@@ -70,9 +71,9 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
             "update_cmd": ca.get("update_cmd"),
             "expected_status": ca.get("expected_status", "200,204,301,302"),
             "custom_headers": ca.get("custom_headers", {}),
-            "cpu_percent": 0.0,
-            "ram_mb": 0.0,
-            "uptime_sec": 0,
+            "cpu_percent": None,
+            "ram_mb": None,
+            "uptime_sec": None,
             "created_at": ca.get("created_at", time.time()),
         })
 
@@ -151,7 +152,7 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
             category_mode = "manual" if item.get("label_category") else "auto"
 
         # Status
-        status = item.get("status", "up")
+        status = item.get("status", "unknown")
         if app_id in conflicted_ids:
             status = "conflict"
 

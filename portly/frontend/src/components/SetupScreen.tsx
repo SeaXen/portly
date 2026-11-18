@@ -50,7 +50,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
     <div
       style={{
         minHeight: '100vh',
-        background: '#0A0B0F',
+        background: 'var(--bg)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -62,7 +62,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
         style={{
           width: '100%',
           maxWidth: 440,
-          background: '#101218',
+          background: 'var(--surface-1)',
           border: '1px solid rgba(255, 255, 255, 0.08)',
           borderRadius: 16,
           padding: 36,
@@ -79,7 +79,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
               height: 52,
               borderRadius: 14,
               background: '#1D2A44',
-              color: '#8C9EFF',
+              color: 'var(--accent)',
               fontSize: 26,
               display: 'flex',
               alignItems: 'center',
@@ -89,8 +89,8 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
           >
             ⚓
           </div>
-          <h1 style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 700, color: '#ECEEF3' }}>Welcome to Portly</h1>
-          <p style={{ margin: 0, fontSize: 14, color: '#8D95A5' }}>Create your primary administrator account</p>
+          <h1 style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>Welcome to Portly</h1>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)' }}>Create your primary administrator account</p>
         </div>
 
         {error && (
@@ -98,8 +98,8 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
             role="alert"
             style={{
               background: 'rgba(255, 138, 138, 0.1)',
-              border: '1px solid #FF8A8A',
-              color: '#FF8A8A',
+              border: '1px solid var(--danger)',
+              color: 'var(--danger)',
               padding: '10px 14px',
               borderRadius: 8,
               fontSize: 13,
@@ -112,7 +112,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="setup-username" style={{ fontSize: 13, color: '#8D95A5', fontWeight: 500 }}>
+            <label htmlFor="setup-username" style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>
               Admin Username
             </label>
             <input
@@ -129,7 +129,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
                 borderRadius: 8,
                 border: '1px solid #242C37',
                 background: '#161B22',
-                color: '#ECEEF3',
+                color: 'var(--text)',
                 padding: '0 14px',
                 fontSize: 14,
                 outline: 'none',
@@ -139,10 +139,10 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label htmlFor="setup-password" style={{ fontSize: 13, color: '#8D95A5', fontWeight: 500 }}>
+              <label htmlFor="setup-password" style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>
                 Password (min 10 characters)
               </label>
-              <span style={{ fontSize: 12, color: isPasswordLongEnough ? '#5EEAD4' : '#8D95A5' }}>
+              <span style={{ fontSize: 12, color: isPasswordLongEnough ? 'var(--success)' : 'var(--muted)' }}>
                 {password.length}/10
               </span>
             </div>
@@ -158,9 +158,9 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
               style={{
                 height: 42,
                 borderRadius: 8,
-                border: `1px solid ${password.length > 0 && !isPasswordLongEnough ? '#FF8A8A' : '#242C37'}`,
+                border: `1px solid ${password.length > 0 && !isPasswordLongEnough ? 'var(--danger)' : '#242C37'}`,
                 background: '#161B22',
-                color: '#ECEEF3',
+                color: 'var(--text)',
                 padding: '0 14px',
                 fontSize: 14,
                 outline: 'none',
@@ -169,7 +169,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="setup-confirm-password" style={{ fontSize: 13, color: '#8D95A5', fontWeight: 500 }}>
+            <label htmlFor="setup-confirm-password" style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>
               Confirm Password
             </label>
             <input
@@ -186,7 +186,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
                 borderRadius: 8,
                 border: '1px solid #242C37',
                 background: '#161B22',
-                color: '#ECEEF3',
+                color: 'var(--text)',
                 padding: '0 14px',
                 fontSize: 14,
                 outline: 'none',
@@ -196,10 +196,10 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <label htmlFor="setup-token" style={{ fontSize: 13, color: '#8D95A5', fontWeight: 500 }}>
+              <label htmlFor="setup-token" style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>
                 Setup Token
               </label>
-              <span style={{ fontSize: 11, color: '#8D95A5' }}>Printed to console on server startup</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Printed to console on server startup</span>
             </div>
             <input
               id="setup-token"
@@ -215,7 +215,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
                 borderRadius: 8,
                 border: '1px solid #242C37',
                 background: '#161B22',
-                color: '#ECEEF3',
+                color: 'var(--text)',
                 padding: '0 14px',
                 fontSize: 14,
                 outline: 'none',
@@ -231,7 +231,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
               height: 44,
               borderRadius: 8,
               border: 0,
-              background: '#5EEAD4',
+              background: 'var(--success)',
               color: '#0B1220',
               fontWeight: 600,
               fontSize: 15,

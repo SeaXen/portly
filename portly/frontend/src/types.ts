@@ -6,7 +6,7 @@ export interface AppItem {
   port: number;
   proto: string;
   bind: string;
-  status: 'up' | 'down' | 'conflict';
+  status: 'up' | 'down' | 'conflict' | 'unknown';
   health?: string;
   category_id: string;
   category_mode: 'auto' | 'manual';
@@ -18,9 +18,10 @@ export interface AppItem {
   open_url: string;
   url_override?: string;
   local_only: boolean;
-  cpu_percent: number;
-  ram_mb: number;
-  uptime_sec: number;
+  cpu_percent: number | null;
+  ram_mb: number | null;
+  uptime_sec: number | null;
+  stats_age_sec?: number | null;
   pid?: number;
   cmdline?: string;
   cwd?: string;

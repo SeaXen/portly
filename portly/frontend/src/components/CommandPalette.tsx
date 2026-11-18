@@ -141,16 +141,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         {confirmDisableSafeMode ? (
           <div style={{ padding: '28px 24px', textAlign: 'center' }}>
             <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#FBBF77" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
                 <line x1="12" y1="9" x2="12" y2="13"></line>
                 <line x1="12" y1="17" x2="12.01" y2="17"></line>
               </svg>
             </div>
-            <div style={{ fontWeight: 600, fontSize: '16px', color: '#ECEEF3', marginBottom: '8px' }}>
+            <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--text)', marginBottom: '8px' }}>
               Unlock Safe Mode?
             </div>
-            <div style={{ fontSize: '13px', color: '#8D95A5', marginBottom: '24px', lineHeight: 1.5, maxWidth: '420px', margin: '0 auto 24px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '24px', lineHeight: 1.5, maxWidth: '420px', margin: '0 auto 24px' }}>
               Disabling Safe Mode allows mutating system actions including stopping, starting, restarting, killing host processes, and reassigning ports.
             </div>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
@@ -186,7 +186,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         ) : (
           <>
             <div className="command-input-wrap">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#8D95A5' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--muted)' }}>
                 <circle cx="11" cy="11" r="7"></circle>
                 <path d="m20 20-3.5-3.5"></path>
               </svg>
@@ -208,7 +208,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
 
             <div className="command-results">
               {allItems.length === 0 ? (
-                <div style={{ padding: '24px', textAlign: 'center', color: '#8D95A5', fontSize: '13px' }}>
+                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>
                   No matching commands or services found.
                 </div>
               ) : (
@@ -238,10 +238,10 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <span style={{ fontWeight: 600 }}>{a.name}</span>
-                          <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF' }}>{a.port}</span>
-                          <span style={{ fontSize: '12px', color: '#8D95A5' }}>{a.source}</span>
+                          <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>{a.port}</span>
+                          <span style={{ fontSize: '12px', color: 'var(--muted)' }}>{a.source}</span>
                         </div>
-                        <span className="command-badge" style={{ color: a.status === 'up' ? '#5EEAD4' : '#FF8A8A' }}>
+                        <span className="command-badge" style={{ color: a.status === 'unknown' ? 'var(--muted)' : (a.status === 'up' ? 'var(--success)' : 'var(--danger)') }}>
                           {a.status}
                         </span>
                       </div>

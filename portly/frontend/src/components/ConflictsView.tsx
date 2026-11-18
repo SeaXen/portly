@@ -19,7 +19,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
 }) => {
   const { success, error } = useToast();
   const [reservations, setReservations] = useState<PortReservation[]>([]);
-  const [loadingRes, setLoadingRes] = useState(false);
+  const [, setLoadingRes] = useState(false);
   const [showAddRes, setShowAddRes] = useState(false);
   const [resPort, setResPort] = useState(8080);
   const [resProto, setResProto] = useState('tcp');
@@ -82,19 +82,19 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%', boxSizing: 'border-box' }}>
       {/* Port Conflicts Section */}
-      <div style={{ background: '#101218', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '24px' }}>
+      <div style={{ background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '24px' }}>
         <div style={{ marginBottom: '20px' }}>
-          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#ECEEF3' }}>Port Conflicts & Collisions</h2>
-          <div style={{ fontSize: '13px', color: '#8D95A5', marginTop: '4px' }}>
+          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>Port Conflicts & Collisions</h2>
+          <div style={{ fontSize: '13px', color: 'var(--muted)', marginTop: '4px' }}>
             Conflicts occur when two different processes or containers attempt to bind to the same host port.
           </div>
         </div>
 
         {conflicts.length === 0 ? (
           <div style={{ padding: '40px 24px', textAlign: 'center' }}>
-            <div style={{ marginBottom: '10px' }}><Icon name="check" size={36} color="#5EEAD4" /></div>
-            <div style={{ fontSize: '15px', fontWeight: 600, color: '#5EEAD4', marginBottom: '6px' }}>No Active Port Collisions</div>
-            <div style={{ fontSize: '13px', color: '#8D95A5', maxWidth: '420px', margin: '0 auto 16px auto' }}>
+            <div style={{ marginBottom: '10px' }}><Icon name="check" size={36} color="var(--success)" /></div>
+            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--success)', marginBottom: '6px' }}>No Active Port Collisions</div>
+            <div style={{ fontSize: '13px', color: 'var(--muted)', maxWidth: '420px', margin: '0 auto 16px auto' }}>
               Every active listener on your system has a unique, uncontested port assignment.
             </div>
             <button type="button" className="c078" onClick={() => onSelectNav('ports')}>
@@ -110,7 +110,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 <div
                   key={i}
                   style={{
-                    background: '#151821',
+                    background: 'var(--surface-2)',
                     border: '1px solid rgba(255, 138, 138, 0.25)',
                     borderRadius: '12px',
                     padding: '18px',
@@ -118,12 +118,12 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FF8A8A' }} />
-                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#FF8A8A' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--danger)' }} />
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--danger)' }}>
                         Port Conflict on :{c.port}
                       </span>
                     </div>
-                    <span style={{ fontSize: '12px', color: '#8D95A5' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
                       {collidingApps.length} competing services
                     </span>
                   </div>
@@ -133,7 +133,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                       <div
                         key={app.id}
                         style={{
-                          background: '#101218',
+                          background: 'var(--surface-1)',
                           border: '1px solid rgba(255,255,255,0.06)',
                           borderRadius: '10px',
                           padding: '14px',
@@ -143,8 +143,8 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                         }}
                       >
                         <div>
-                          <div style={{ fontWeight: 600, color: '#ECEEF3' }}>{app.name}</div>
-                          <div style={{ fontSize: '12px', color: '#8D95A5', marginTop: '2px' }}>
+                          <div style={{ fontWeight: 600, color: 'var(--text)' }}>{app.name}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
                             {app.source === 'docker' ? app.image : (app.process_name ? `${app.process_name}${app.pid ? ` (PID ${app.pid})` : ''}` : 'Host')}
                           </div>
                         </div>
@@ -168,11 +168,11 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
       </div>
 
       {/* Port Reservations & Intent Registry Section */}
-      <div style={{ background: '#101218', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '24px' }}>
+      <div style={{ background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#ECEEF3' }}>Port Reservations & Intent Registry</h2>
-            <div style={{ fontSize: '13px', color: '#8D95A5', marginTop: '4px' }}>
+            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>Port Reservations & Intent Registry</h2>
+            <div style={{ fontSize: '13px', color: 'var(--muted)', marginTop: '4px' }}>
               Reserve ports for planned databases or stacks. Portly alerts if unexpected listeners bind to them and warns during preflight checks.
             </div>
           </div>
@@ -191,7 +191,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
           <form
             onSubmit={handleCreateReservation}
             style={{
-              background: '#151821',
+              background: 'var(--surface-2)',
               border: '1px solid rgba(140, 158, 255, 0.25)',
               borderRadius: '12px',
               padding: '18px',
@@ -201,10 +201,10 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
               gap: '14px',
             }}
           >
-            <div style={{ fontWeight: 600, color: '#8C9EFF', fontSize: '14px' }}>Create Port Reservation</div>
+            <div style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '14px' }}>Create Port Reservation</div>
             <div style={{ display: 'grid', gridTemplateColumns: '120px 100px 1fr', gap: '12px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Port</label>
+                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Port</label>
                 <input
                   type="number"
                   required
@@ -217,7 +217,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Protocol</label>
+                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Protocol</label>
                 <select
                   value={resProto}
                   onChange={(e) => setResProto(e.target.value)}
@@ -229,7 +229,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Reservation Name</label>
+                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Reservation Name</label>
                 <input
                   type="text"
                   name="reservation_name"
@@ -246,7 +246,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Target Service (optional)</label>
+                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Target Service (optional)</label>
                 <input
                   type="text"
                   name="target_service"
@@ -259,7 +259,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Notes / Description</label>
+                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Notes / Description</label>
                 <input
                   type="text"
                   name="reservation_description"
@@ -284,7 +284,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
 
         {/* Reservations List */}
         {reservations.length === 0 ? (
-          <div style={{ padding: '30px', textAlign: 'center', color: '#8D95A5', fontSize: '13px' }}>
+          <div style={{ padding: '30px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>
             No port reservations defined. Click <strong>+ New Reservation</strong> to claim ports for planned workloads.
           </div>
         ) : (
@@ -293,7 +293,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
               <div
                 key={r.id}
                 style={{
-                  background: '#151821',
+                  background: 'var(--surface-2)',
                   border: r.is_colliding ? '1px solid rgba(255, 138, 138, 0.4)' : '1px solid rgba(255,255,255,0.08)',
                   borderRadius: '10px',
                   padding: '14px',
@@ -312,12 +312,12 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                         padding: '2px 8px',
                         borderRadius: '6px',
                         background: r.is_colliding ? 'rgba(255, 138, 138, 0.15)' : 'rgba(140, 158, 255, 0.15)',
-                        color: r.is_colliding ? '#FF8A8A' : '#8C9EFF',
+                        color: r.is_colliding ? 'var(--danger)' : 'var(--accent)',
                       }}
                     >
                       :{r.port}/{r.proto}
                     </span>
-                    <span style={{ fontWeight: 600, color: '#ECEEF3' }}>{r.name}</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>{r.name}</span>
                   </div>
                   <button
                     type="button"
@@ -331,13 +331,13 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 </div>
 
                 {r.is_colliding && (
-                  <div style={{ fontSize: '11.5px', color: '#FF8A8A', background: 'rgba(255,92,92,0.1)', padding: '6px 8px', borderRadius: '6px' }}>
-                    <Icon name="warning" size={12} color="#FF8A8A" /> In use by active app: <strong>{r.colliding_app || 'Active Listener'}</strong>
+                  <div style={{ fontSize: '11.5px', color: 'var(--danger)', background: 'rgba(255,92,92,0.1)', padding: '6px 8px', borderRadius: '6px' }}>
+                    <Icon name="warning" size={12} color="var(--danger)" /> In use by active app: <strong>{r.colliding_app || 'Active Listener'}</strong>
                   </div>
                 )}
 
                 {r.description && (
-                  <div style={{ fontSize: '12px', color: '#8D95A5' }}>{r.description}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--muted)' }}>{r.description}</div>
                 )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748B', marginTop: '4px' }}>

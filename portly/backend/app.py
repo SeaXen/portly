@@ -4,6 +4,7 @@ import asyncio
 import csv
 import hmac
 import io
+import ipaddress
 import json
 import logging
 import os
@@ -229,7 +230,7 @@ async def lifespan(app: FastAPI):
         maint_task.cancel()
 
 
-app = FastAPI(title="Portly API", version="0.1.1", lifespan=lifespan)
+app = FastAPI(title="Portly API", version="1.1.0", lifespan=lifespan)
 
 def _dashboard_origins() -> set:
     """Origins allowed to call the dashboard: explicit config or the app's own host/port."""
@@ -282,22 +283,43 @@ else:
     )
 
 
+def _parse_host(header: str) -> str:
+    """Extract a bare host from a Host/Origin netloc (handles [v6]:port, host:port, bare)."""
+    if not header:
+        return ""
+    header = header.strip().lower()
+    if header.startswith("["):
+        end = header.find("]")
+        return header[1:end] if end != -1 else header[1:]
+    if header.count(":") == 1:
+        return header.rsplit(":", 1)[0]
+    return header
+
+
+def _is_ip_literal(value: str) -> bool:
+    try:
+        ipaddress.ip_address(value)
+        return True
+    except ValueError:
+        return False
+
+
 # Security Headers & CSRF / Host Validation Middleware
 @app.middleware("http")
 async def security_and_csrf_middleware(request: Request, call_next):
     # 1. Host Validation
-    host_header = request.headers.get("host", "").split(":")[0].strip().lower()
+    host_header = _parse_host(request.headers.get("host", ""))
     allowed_hosts = {"127.0.0.1", "localhost", "::1", "testserver", "testclient"}
     
     env_allowed = os.getenv("PORTLY_ALLOWED_HOSTS", "")
     if env_allowed:
         for h in env_allowed.split(","):
             if h.strip():
-                allowed_hosts.add(h.strip().lower())
-    
+                allowed_hosts.add(_parse_host(h.strip()))
+
     bind_host = os.getenv("PORTLY_HOST", "")
     if bind_host and bind_host not in ("0.0.0.0", "::"):
-        allowed_hosts.add(bind_host.lower())
+        allowed_hosts.add(_parse_host(bind_host))
 
     pub_host = store.get_setting("public_host", "").strip()
     if pub_host:
@@ -305,12 +327,12 @@ async def security_and_csrf_middleware(request: Request, call_next):
         if pub_parsed:
             allowed_hosts.add(pub_parsed.lower())
 
-    if host_header and host_header not in allowed_hosts and not any(host_header.endswith(f".{ah}") for ah in allowed_hosts if "." in ah):
+    if host_header and host_header not in allowed_hosts and not _is_ip_literal(host_header) and not any(host_header.endswith(f".{ah}") for ah in allowed_hosts if "." in ah):
         # Allow loopback/local networks if insecure bind allowed or testing
         if os.getenv("PORTLY_ALLOW_INSECURE_BIND", "").lower() not in ("true", "1") and os.getenv("PORTLY_TESTING") != "1":
             return JSONResponse(
                 status_code=400,
-                content={"code": "INVALID_HOST", "message": f"Host '{host_header}' is not in allowed hosts."}
+                content={"code": "INVALID_HOST", "message": f"Host '{host_header}' is not allowed. Set PORTLY_ALLOWED_HOSTS={host_header} or set Public host in Settings."}
             )
 
     # 2. CSRF Protection on Mutating Requests.
@@ -330,11 +352,11 @@ async def security_and_csrf_middleware(request: Request, call_next):
         # Same-origin is always valid, even when the bound port or public host
         # differs from what was known at import time (reverse proxy, CLI port).
         own_origin = f"{request.url.scheme}://{request.headers.get('host', '')}".rstrip("/")
-        own_host = request.headers.get("host", "").strip().lower()
+        own_host = _parse_host(request.headers.get("host", ""))
 
         def _same_host(value: str) -> bool:
             parsed = urlparse(value)
-            return bool(parsed.netloc) and parsed.netloc.lower() == own_host
+            return bool(parsed.netloc) and _parse_host(parsed.netloc) == own_host
 
         if origin:
             if origin.strip().lower() == "null":
@@ -369,10 +391,10 @@ async def security_and_csrf_middleware(request: Request, call_next):
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: blob:; "
-        "connect-src 'self' ws: wss:; "
+        "connect-src 'self'; "
         "font-src 'self' data:; "
         "object-src 'none'; "
         "frame-ancestors 'none';"
@@ -788,7 +810,7 @@ async def get_proxy_config_endpoint(
 
 
 @app.get("/api/apps/{app_id:path}/favicon")
-async def get_app_favicon_endpoint(app_id: str):
+async def get_app_favicon_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_auth)):
     target_app = None
     for a in _cached_apps:
         if a["id"] == app_id:
@@ -913,6 +935,24 @@ async def get_app_compose_endpoint(app_id: str, user: Dict[str, Any] = Depends(r
         )
 
 
+@app.get("/api/apps/{app_id:path}/inspect/reveal-env")
+async def reveal_env_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_admin)):
+    """Admin-only audit-logged endpoint to reveal unmasked environment variables."""
+    store.log_event("app.reveal_env", f"User '{user['username']}' revealed environment variables for {app_id}", actor=user.get("username", "admin"))
+    
+    if app_id.startswith("custom:"):
+        ca = store.get_custom_app(app_id.replace("custom:", ""))
+        if not ca:
+            raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Custom app not found"})
+        return {"env": ca.get("env", {})}
+    elif app_id.startswith("docker:"):
+        c_name = app_id.split(":")[1]
+        insp = await asyncio.to_thread(docker_actions.inspect_container, c_name)
+        return {"env": insp.get("env", {})}
+    
+    return {"env": {}}
+
+
 @app.get("/api/apps/{app_id:path}")
 async def get_app_detail(app_id: str, user: Dict[str, Any] = Depends(require_auth)):
     target = None
@@ -967,24 +1007,6 @@ async def get_app_detail(app_id: str, user: Dict[str, Any] = Depends(require_aut
         }
 
     raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"App '{app_id}' not found"})
-
-
-@app.get("/api/apps/{app_id:path}/inspect/reveal-env")
-async def reveal_env_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_admin)):
-    """Admin-only audit-logged endpoint to reveal unmasked environment variables."""
-    store.log_event("app.reveal_env", f"User '{user['username']}' revealed environment variables for {app_id}", actor=user.get("username", "admin"))
-    
-    if app_id.startswith("custom:"):
-        ca = store.get_custom_app(app_id.replace("custom:", ""))
-        if not ca:
-            raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Custom app not found"})
-        return {"env": ca.get("env", {})}
-    elif app_id.startswith("docker:"):
-        c_name = app_id.split(":")[1]
-        insp = await asyncio.to_thread(docker_actions.inspect_container, c_name)
-        return {"env": insp.get("env", {})}
-    
-    return {"env": {}}
 
 
 @app.patch("/api/apps/{app_id:path}")
@@ -1935,26 +1957,36 @@ async def export_data(
     user: Dict[str, Any] = Depends(require_admin)
 ):
     actor = user.get("username", "admin")
+
+    def _csv_safe(value: Any) -> Any:
+        # Prevent spreadsheet formula injection from attacker-influenced names.
+        if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+            return "'" + value
+        return value
+
+    def _md_cell(value: Any) -> str:
+        return str(value if value is not None else "").replace("|", "\\|").replace("`", "\\`").replace("\n", " ")
+
     if format == "csv":
         out = io.StringIO()
         writer = csv.writer(out)
         writer.writerow(["Name", "Port", "Source", "Bind", "Category", "Status", "Process/Image"])
         for a in _cached_apps:
             writer.writerow([
-                a.get("name"),
-                a.get("port"),
-                a.get("source"),
-                a.get("bind"),
-                a.get("category_id"),
-                a.get("status"),
-                a.get("image") or a.get("process_name")
+                _csv_safe(a.get("name")),
+                _csv_safe(a.get("port")),
+                _csv_safe(a.get("source")),
+                _csv_safe(a.get("bind")),
+                _csv_safe(a.get("category_id")),
+                _csv_safe(a.get("status")),
+                _csv_safe(a.get("image") or a.get("process_name"))
             ])
         store.log_event("export_data", f"Exported ports configuration in CSV format", actor=actor)
         return Response(content=out.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=portly-ports.csv"})
     elif format == "markdown":
         lines = ["# Portly - Ports Cheat Sheet\n", "| Port | Name | Source | Bind | Status |", "|---|---|---|---|---|"]
         for a in _cached_apps:
-            lines.append(f"| `{a.get('port')}` | **{a.get('name')}** | {a.get('source')} | `{a.get('bind')}` | {a.get('status')} |")
+            lines.append(f"| `{_md_cell(a.get('port'))}` | **{_md_cell(a.get('name'))}** | {_md_cell(a.get('source'))} | `{_md_cell(a.get('bind'))}` | {_md_cell(a.get('status'))} |")
         store.log_event("export_data", f"Exported ports configuration in Markdown format", actor=actor)
         return Response(content="\n".join(lines), media_type="text/markdown", headers={"Content-Disposition": "attachment; filename=portly-ports.md"})
     else:
@@ -2224,10 +2256,13 @@ async def update_user_role_endpoint(user_id: str, data: UserRoleModel, user: Dic
 async def update_user_password_endpoint(
     user_id: str,
     data: UserPasswordModel,
+    request: Request,
+    response: Response,
     user: Dict[str, Any] = Depends(require_auth)
 ):
     is_admin = user.get("role") == "admin"
-    if not is_admin and user.get("user_id") != user_id:
+    is_self = user.get("user_id") == user_id
+    if not is_admin and not is_self:
         raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "You can only update your own password."})
 
     target_user = store.get_user_by_id(user_id)
@@ -2247,6 +2282,12 @@ async def update_user_password_endpoint(
     store.update_user_password(user_id, pw_hash)
     auth.revoke_all_sessions(user_id)
     store.log_event("user.password_change", f"Password changed for user {target_user['username']}", actor=user["username"])
+    if is_self:
+        # Keep the current browser signed in with a fresh session; all other
+        # sessions (other browsers) were revoked above.
+        token = auth.create_session(target_user["id"], target_user["username"], role=target_user.get("role", "admin"))
+        is_secure = request.url.scheme == "https" or os.getenv("PORTLY_COOKIE_SECURE", "").lower() in ("true", "1")
+        response.set_cookie(key="portly_session", value=token, httponly=True, samesite="lax", secure=is_secure, max_age=86400 * 7, path="/")
     return {"status": "updated"}
 
 

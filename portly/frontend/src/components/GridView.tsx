@@ -11,11 +11,11 @@ interface GridViewProps {
   onAdoptApp?: (app: AppItem) => void;
 }
 
-export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categories, visibleFields = {}, onAdoptApp }) => {
+export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, visibleFields = {}, onAdoptApp }) => {
   return (
     <div className="c025" style={{ width: '100%', boxSizing: 'border-box' }}>
       {apps.map((app) => {
-        const initial = (app.name || 'A').charAt(0).toUpperCase();
+        const statsStale = app.stats_age_sec == null || app.stats_age_sec > 15;
 
         return (
           <div
@@ -59,7 +59,7 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
                 <span
                   className="c032"
                   style={{
-                    backgroundColor: app.status === 'up' ? '#4ADE80' : (app.status === 'down' ? '#F87171' : '#FBBF77'),
+                    backgroundColor: app.status === 'unknown' ? 'var(--muted)' : (app.status === 'up' ? '#4ADE80' : (app.status === 'down' ? '#F87171' : 'var(--warning)')),
                   }}
                 />
                 <span style={{ textTransform: 'capitalize' }}>{app.status}</span>
@@ -82,7 +82,7 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
                       padding: '1px 7px',
                       borderRadius: '6px',
                       background: 'rgba(251, 191, 119, 0.15)',
-                      color: '#FBBF77',
+                      color: 'var(--warning)',
                       border: '1px solid rgba(251, 191, 119, 0.25)',
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -106,10 +106,10 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
                         ? 'rgba(251, 191, 119, 0.18)'
                         : 'rgba(94, 234, 212, 0.14)',
                       color: app.tls_expired
-                        ? '#FF8A8A'
+                        ? 'var(--danger)'
                         : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30)
-                        ? '#FBBF77'
-                        : '#5EEAD4',
+                        ? 'var(--warning)'
+                        : 'var(--success)',
                       border: `1px solid ${
                         app.tls_expired
                           ? 'rgba(255, 92, 92, 0.3)'
@@ -126,7 +126,7 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
                         : 'TLS / SSL Enabled'
                     }
                   >
-                    {app.tls_expired ? <><Icon name="x" size={12} color="#FF8A8A" /> Expired</> : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30) ? <><Icon name="warning" size={12} color="#FBBF77" /> {app.tls_days_remaining}d</> : <><Icon name="lock" size={12} /> TLS</>}
+                    {app.tls_expired ? <><Icon name="x" size={12} color="var(--danger)" /> Expired</> : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30) ? <><Icon name="warning" size={12} color="var(--warning)" /> {app.tls_days_remaining}d</> : <><Icon name="lock" size={12} /> TLS</>}
                   </span>
                 )}
                 {visibleFields.bind !== false && <span className="c037">{app.bind}</span>}
@@ -136,8 +136,8 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
             {/* Bottom row: CPU & RAM, Open */}
             <div className="c038">
               {visibleFields.cpuram !== false ? (
-                <span>
-                  CPU {app.cpu_percent || 0}% &nbsp;·&nbsp; RAM {app.ram_mb || 0} MB
+                <span style={statsStale ? { color: 'var(--muted)' } : undefined} title={statsStale ? 'Stale or unavailable stats' : undefined}>
+                  CPU {app.cpu_percent == null ? '—' : `${app.cpu_percent}%`} &nbsp;·&nbsp; RAM {app.ram_mb == null ? '—' : `${app.ram_mb} MB`}{statsStale ? ' (stale)' : ''}
                 </span>
               ) : <span />}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -145,7 +145,7 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, categori
                   <button
                     type="button"
                     className="c078"
-                    style={{ fontSize: '11px', padding: '2px 8px', height: '24px', color: '#8C9EFF' }}
+                    style={{ fontSize: '11px', padding: '2px 8px', height: '24px', color: 'var(--accent)' }}
                     title="Adopt as Custom App"
                     onClick={(e) => {
                       e.stopPropagation();

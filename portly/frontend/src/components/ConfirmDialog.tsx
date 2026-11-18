@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -21,26 +21,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  const cancelBtnRef = useRef<HTMLButtonElement>(null);
-  const confirmBtnRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      if (isDanger) {
-        cancelBtnRef.current?.focus();
-      } else {
-        confirmBtnRef.current?.focus();
-      }
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          onCancel();
-        }
-      };
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-    }
-  }, [isOpen, isDanger, onCancel]);
+  const dialogRef = useFocusTrap<HTMLDivElement>(isOpen, onCancel);
 
   if (!isOpen) return null;
 
@@ -62,13 +43,14 @@ export function ConfirmDialog({
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-desc"
         style={{
-          background: '#161B22',
-          border: '1px solid #242C37',
+          background: 'var(--surface-1)',
+          border: '1px solid var(--border)',
           borderRadius: 14,
           padding: 24,
           maxWidth: 440,
@@ -79,22 +61,21 @@ export function ConfirmDialog({
           gap: 16,
         }}
       >
-        <h3 id="confirm-dialog-title" style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#ECEEF3' }}>
+        <h3 id="confirm-dialog-title" style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>
           {title}
         </h3>
-        <p id="confirm-dialog-desc" style={{ margin: 0, fontSize: 14, color: '#8D95A5', lineHeight: 1.5 }}>
+        <p id="confirm-dialog-desc" style={{ margin: 0, fontSize: 14, color: 'var(--muted)', lineHeight: 1.5 }}>
           {message}
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
           <button
-            ref={cancelBtnRef}
             onClick={onCancel}
             style={{
               padding: '8px 16px',
               borderRadius: 8,
-              border: '1px solid #242C37',
-              background: '#1D2430',
-              color: '#ECEEF3',
+              border: '1px solid var(--border)',
+              background: 'var(--surface-2)',
+              color: 'var(--text)',
               fontSize: 14,
               cursor: 'pointer',
               fontWeight: 500,
@@ -103,13 +84,12 @@ export function ConfirmDialog({
             {cancelLabel}
           </button>
           <button
-            ref={confirmBtnRef}
             onClick={onConfirm}
             style={{
               padding: '8px 18px',
               borderRadius: 8,
               border: 0,
-              background: isDanger ? '#FF4D4D' : '#8C9EFF',
+              background: isDanger ? 'var(--danger)' : 'var(--accent)',
               color: isDanger ? '#FFFFFF' : '#0B1220',
               fontSize: 14,
               cursor: 'pointer',

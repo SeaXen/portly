@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Icon } from './Icon';
 import { api } from '../api';
 import { User } from '../types';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useToast } from './Toast';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -13,6 +14,7 @@ interface UserManagementDrawerProps {
 
 export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManagementDrawerProps) {
   const { success, error } = useToast();
+  const containerRef = useFocusTrap<HTMLDivElement>(isOpen, onClose);
   const [activeTab, setActiveTab] = useState<'users' | 'audit'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
@@ -138,6 +140,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
         onClick={onClose}
       />
       <div
+        ref={containerRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="user-mgmt-title"
@@ -148,7 +151,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
           bottom: 0,
           width: '100%',
           maxWidth: 580,
-          background: '#101218',
+          background: 'var(--surface-1)',
           borderLeft: '1px solid #242C37',
           zIndex: 8001,
           display: 'flex',
@@ -168,17 +171,17 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
           }}
         >
           <div>
-            <h2 id="user-mgmt-title" style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#ECEEF3' }}>
+            <h2 id="user-mgmt-title" style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>
               Access & Security
             </h2>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: '#8D95A5' }}>Manage users, roles, and audit trail</p>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>Manage users, roles, and audit trail</p>
           </div>
           <button
             onClick={onClose}
             style={{
               background: 'transparent',
               border: 0,
-              color: '#8D95A5',
+              color: 'var(--muted)',
               fontSize: 20,
               cursor: 'pointer',
               padding: 6,
@@ -197,8 +200,8 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
               padding: '12px 4px',
               background: 'transparent',
               border: 0,
-              borderBottom: activeTab === 'users' ? '2px solid #8C9EFF' : '2px solid transparent',
-              color: activeTab === 'users' ? '#ECEEF3' : '#8D95A5',
+              borderBottom: activeTab === 'users' ? '2px solid var(--accent)' : '2px solid transparent',
+              color: activeTab === 'users' ? 'var(--text)' : 'var(--muted)',
               fontWeight: 500,
               fontSize: 14,
               cursor: 'pointer',
@@ -212,8 +215,8 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
               padding: '12px 4px',
               background: 'transparent',
               border: 0,
-              borderBottom: activeTab === 'audit' ? '2px solid #8C9EFF' : '2px solid transparent',
-              color: activeTab === 'audit' ? '#ECEEF3' : '#8D95A5',
+              borderBottom: activeTab === 'audit' ? '2px solid var(--accent)' : '2px solid transparent',
+              color: activeTab === 'audit' ? 'var(--text)' : 'var(--muted)',
               fontWeight: 500,
               fontSize: 14,
               cursor: 'pointer',
@@ -229,11 +232,11 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
             <>
               {/* User list */}
               <div>
-                <h3 style={{ margin: '0 0 12px', fontSize: 14, color: '#8D95A5', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                <h3 style={{ margin: '0 0 12px', fontSize: 14, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   Active Accounts
                 </h3>
                 {loading ? (
-                  <div style={{ color: '#8D95A5', fontSize: 13 }}>Loading accounts…</div>
+                  <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading accounts…</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {users.map((u) => {
@@ -254,14 +257,14 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                         >
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontWeight: 600, color: '#ECEEF3', fontSize: 14 }}>{u.username}</span>
+                              <span style={{ fontWeight: 600, color: 'var(--text)', fontSize: 14 }}>{u.username}</span>
                               {isSelf && (
-                                <span style={{ fontSize: 11, background: '#1D2A44', color: '#8C9EFF', padding: '1px 6px', borderRadius: 4 }}>
+                                <span style={{ fontSize: 11, background: '#1D2A44', color: 'var(--accent)', padding: '1px 6px', borderRadius: 4 }}>
                                   You
                                 </span>
                               )}
                             </div>
-                            <div style={{ fontSize: 12, color: '#8D95A5', marginTop: 2 }}>ID: {u.id}</div>
+                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>ID: {u.id}</div>
                           </div>
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -270,9 +273,9 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                               onChange={(e) => handleRoleChange(u.id, e.target.value)}
                               disabled={isSelf}
                               style={{
-                                background: '#101218',
+                                background: 'var(--surface-1)',
                                 border: '1px solid #242C37',
-                                color: '#ECEEF3',
+                                color: 'var(--text)',
                                 borderRadius: 6,
                                 padding: '4px 8px',
                                 fontSize: 13,
@@ -292,7 +295,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                                 background: '#242C37',
                                 border: 0,
                                 borderRadius: 6,
-                                color: '#ECEEF3',
+                                color: 'var(--text)',
                                 padding: '6px 10px',
                                 fontSize: 12,
                                 cursor: 'pointer',
@@ -309,7 +312,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                                   background: 'rgba(255, 77, 77, 0.15)',
                                   border: 0,
                                   borderRadius: 6,
-                                  color: '#FF8A8A',
+                                  color: 'var(--danger)',
                                   padding: '6px 10px',
                                   fontSize: 12,
                                   cursor: 'pointer',
@@ -328,10 +331,10 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
 
               {/* Create User Form */}
               <div style={{ background: '#161B22', border: '1px solid #242C37', borderRadius: 12, padding: 20 }}>
-                <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: '#ECEEF3' }}>Add New User</h3>
+                <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>Add New User</h3>
                 <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ fontSize: 12, color: '#8D95A5' }}>Username</label>
+                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>Username</label>
                     <input
                       type="text"
                       name="new_username"
@@ -343,8 +346,8 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                         height: 38,
                         borderRadius: 6,
                         border: '1px solid #242C37',
-                        background: '#101218',
-                        color: '#ECEEF3',
+                        background: 'var(--surface-1)',
+                        color: 'var(--text)',
                         padding: '0 12px',
                         fontSize: 13,
                         outline: 'none',
@@ -353,7 +356,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ fontSize: 12, color: '#8D95A5' }}>Password (min 10 characters)</label>
+                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>Password (min 10 characters)</label>
                     <input
                       type="password"
                       name="new_password"
@@ -365,8 +368,8 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                         height: 38,
                         borderRadius: 6,
                         border: '1px solid #242C37',
-                        background: '#101218',
-                        color: '#ECEEF3',
+                        background: 'var(--surface-1)',
+                        color: 'var(--text)',
                         padding: '0 12px',
                         fontSize: 13,
                         outline: 'none',
@@ -375,7 +378,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <label style={{ fontSize: 12, color: '#8D95A5' }}>Role</label>
+                    <label style={{ fontSize: 12, color: 'var(--muted)' }}>Role</label>
                     <select
                       value={newRole}
                       onChange={(e) => setNewRole(e.target.value as 'admin' | 'viewer')}
@@ -383,8 +386,8 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                         height: 38,
                         borderRadius: 6,
                         border: '1px solid #242C37',
-                        background: '#101218',
-                        color: '#ECEEF3',
+                        background: 'var(--surface-1)',
+                        color: 'var(--text)',
                         padding: '0 12px',
                         fontSize: 13,
                         outline: 'none',
@@ -402,7 +405,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                       height: 38,
                       borderRadius: 6,
                       border: 0,
-                      background: '#8C9EFF',
+                      background: 'var(--accent)',
                       color: '#0B1220',
                       fontWeight: 600,
                       fontSize: 13,
@@ -417,13 +420,13 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
             </>
           ) : (
             <div>
-              <h3 style={{ margin: '0 0 12px', fontSize: 14, color: '#8D95A5', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <h3 style={{ margin: '0 0 12px', fontSize: 14, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 Audit Trail (Last 100 Events)
               </h3>
               {loading ? (
-                <div style={{ color: '#8D95A5', fontSize: 13 }}>Loading audit logs…</div>
+                <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading audit logs…</div>
               ) : auditLogs.length === 0 ? (
-                <div style={{ color: '#8D95A5', fontSize: 13 }}>No audit logs recorded yet.</div>
+                <div style={{ color: 'var(--muted)', fontSize: 13 }}>No audit logs recorded yet.</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {auditLogs.map((log, idx) => (
@@ -440,12 +443,12 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
-                        <span style={{ fontWeight: 600, color: '#8C9EFF', fontFamily: 'monospace' }}>{log.event_type || log.type}</span>
-                        <span style={{ color: '#8D95A5' }}>{log.timestamp ? new Date(log.timestamp * 1000).toLocaleString() : ''}</span>
+                        <span style={{ fontWeight: 600, color: 'var(--accent)', fontFamily: 'monospace' }}>{log.event_type || log.type}</span>
+                        <span style={{ color: 'var(--muted)' }}>{log.timestamp ? new Date(log.timestamp * 1000).toLocaleString() : ''}</span>
                       </div>
-                      <div style={{ fontSize: 13, color: '#ECEEF3' }}>{log.message}</div>
+                      <div style={{ fontSize: 13, color: 'var(--text)' }}>{log.message}</div>
                       {log.actor && (
-                        <div style={{ fontSize: 11, color: '#5EEAD4' }}>Actor: {log.actor}</div>
+                        <div style={{ fontSize: 11, color: 'var(--success)' }}>Actor: {log.actor}</div>
                       )}
                     </div>
                   ))}
@@ -499,12 +502,12 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
               gap: 16,
             }}
           >
-            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: '#ECEEF3' }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--text)' }}>
               Change Password: {passwordTarget.username}
             </h3>
             <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 12, color: '#8D95A5' }}>New Password (min 10 chars)</label>
+                <label style={{ fontSize: 12, color: 'var(--muted)' }}>New Password (min 10 chars)</label>
                 <input
                   type="password"
                   name="reset_password"
@@ -517,8 +520,8 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                     height: 38,
                     borderRadius: 6,
                     border: '1px solid #242C37',
-                    background: '#101218',
-                    color: '#ECEEF3',
+                    background: 'var(--surface-1)',
+                    color: 'var(--text)',
                     padding: '0 12px',
                     fontSize: 13,
                     outline: 'none',
@@ -534,7 +537,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                     borderRadius: 6,
                     border: '1px solid #242C37',
                     background: '#1D2430',
-                    color: '#ECEEF3',
+                    color: 'var(--text)',
                     fontSize: 13,
                     cursor: 'pointer',
                   }}
@@ -547,7 +550,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                     padding: '8px 16px',
                     borderRadius: 6,
                     border: 0,
-                    background: '#8C9EFF',
+                    background: 'var(--accent)',
                     color: '#0B1220',
                     fontSize: 13,
                     fontWeight: 600,

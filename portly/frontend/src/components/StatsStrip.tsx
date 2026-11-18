@@ -38,7 +38,7 @@ export const StatsStrip: React.FC<StatsStripProps> = ({ stats, onOpenSystemDrawe
             key={key}
             className={cls}
             onClick={() => onOpenSystemDrawer(key)}
-            aria-label={`${data?.label || key.toUpperCase()}${data?.value || '-'}${data?.context || ''} telemetry`}
+            aria-label={`${data?.label || key.toUpperCase()}${data?.value || '—'}${data?.context || ''} telemetry`}
             style={{
               transition: 'background-color 0.15s ease',
             }}
@@ -47,7 +47,7 @@ export const StatsStrip: React.FC<StatsStripProps> = ({ stats, onOpenSystemDrawe
           >
             <div className="c083">
               <div className="c084">{data?.label || key.toUpperCase()}</div>
-              <div className="c085">{data?.value || '-'}</div>
+              <div className="c085">{data?.value || '—'}</div>
               <div className="c086">{data?.context || ''}</div>
             </div>
 
@@ -62,7 +62,7 @@ export const StatsStrip: React.FC<StatsStripProps> = ({ stats, onOpenSystemDrawe
               <polyline
                 points={polyPoints}
                 fill="none"
-                stroke="#8C9EFF"
+                stroke="var(--accent)"
                 strokeWidth="1.6"
                 strokeLinejoin="round"
                 strokeLinecap="round"

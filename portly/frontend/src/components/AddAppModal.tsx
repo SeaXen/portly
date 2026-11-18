@@ -75,7 +75,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   const [deployHostPort, setDeployHostPort] = useState(6379);
   const [deployContainerPort, setDeployContainerPort] = useState('6379/tcp');
   const [deployEnv, setDeployEnv] = useState('');
-  const [deployRestart, setDeployRestart] = useState('unless-stopped');
+  const [deployRestart] = useState('unless-stopped');
   const [deploying, setDeploying] = useState(false);
   const [deployPortStatus, setDeployPortStatus] = useState<{ free: boolean; used_by: string } | null>(null);
 
@@ -221,6 +221,9 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
       warning('Please enter an app name.');
       return;
     }
+    if (startCmd.trim() || (stopCmd && stopCmd !== 'auto')) {
+      warning('Custom commands run in a shell with Portly’s privileges — only use trusted commands.');
+    }
     setSubmitting(true);
     try {
       let parsedHeaders: Record<string, string> = {};
@@ -347,7 +350,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         style={{
           width: '680px',
           maxWidth: '95vw',
-          background: '#101218',
+          background: 'var(--surface-1)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: '16px',
           padding: '24px',
@@ -360,8 +363,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         {/* Header */}
         <div className="c226" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div>
-            <h2 id="add-app-title" className="c227" style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#ECEEF3' }}>Add Custom App</h2>
-            <div className="c228" style={{ fontSize: '13px', color: '#8D95A5', marginTop: '2px' }}>
+            <h2 id="add-app-title" className="c227" style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>Add Custom App</h2>
+            <div className="c228" style={{ fontSize: '13px', color: 'var(--muted)', marginTop: '2px' }}>
               Track an app Portly can’t detect, adopt running services, or bookmark external web dashboards.
             </div>
           </div>
@@ -417,11 +420,11 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         {/* Tab 1: From Host Process */}
         {activeTab === 'process' && (
           <div style={{ marginBottom: '20px', maxHeight: '320px', overflowY: 'auto' }}>
-            <div style={{ fontSize: '13px', color: '#8D95A5', marginBottom: '10px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '10px' }}>
               Select a running local process to adopt into Portly management:
             </div>
             {availableApps.filter((a) => a.source === 'host').length === 0 ? (
-              <div style={{ padding: '24px', textAlign: 'center', color: '#8D95A5', fontSize: '13px' }}>
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '13px' }}>
                 No host processes discovered yet.
               </div>
             ) : (
@@ -433,15 +436,15 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '10px 14px',
-                    background: '#151821',
+                    background: 'var(--surface-2)',
                     borderRadius: '8px',
                     marginBottom: '6px',
                   }}
                 >
                   <div>
-                    <span style={{ fontWeight: 600, color: '#ECEEF3' }}>{h.name}</span>
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF', marginLeft: '8px' }}>:{h.port}</span>
-                    <div style={{ fontSize: '11px', color: '#8D95A5', marginTop: '2px' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>{h.name}</span>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)', marginLeft: '8px' }}>:{h.port}</span>
+                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
                       PID {h.pid} · {h.bind} · {h.process_name || 'process'}
                     </div>
                   </div>
@@ -462,7 +465,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         {/* Tab 2: From Docker Container */}
         {activeTab === 'docker' && (
           <div style={{ marginBottom: '20px', maxHeight: '320px', overflowY: 'auto' }}>
-            <div style={{ fontSize: '13px', color: '#8D95A5', marginBottom: '10px' }}>
+            <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '10px' }}>
               Discovered Docker containers available for adoption or customization:
             </div>
             {dockerApps.length > 0 ? (
@@ -474,15 +477,15 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '10px 14px',
-                    background: '#151821',
+                    background: 'var(--surface-2)',
                     borderRadius: '8px',
                     marginBottom: '6px',
                   }}
                 >
                   <div>
-                    <span style={{ fontWeight: 600, color: '#ECEEF3' }}>{d.name}</span>
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#5EEAD4', marginLeft: '8px' }}>:{d.port}</span>
-                    <div style={{ fontSize: '11px', color: '#8D95A5', marginTop: '2px' }}>
+                    <span style={{ fontWeight: 600, color: 'var(--text)' }}>{d.name}</span>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--success)', marginLeft: '8px' }}>:{d.port}</span>
+                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
                       Image: {d.image || d.container_name} · Status: {d.status}
                     </div>
                   </div>
@@ -497,8 +500,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 </div>
               ))
             ) : (
-              <div style={{ padding: '20px', background: '#151821', borderRadius: '10px' }}>
-                <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#FBBF77' }}>
+              <div style={{ padding: '20px', background: 'var(--surface-2)', borderRadius: '10px' }}>
+                <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: 'var(--warning)' }}>
                   No active Docker containers discovered on socket. You can specify a container manually:
                 </p>
                 <form onSubmit={handleManualDockerSubmit} style={{ display: 'flex', gap: '10px' }}>
@@ -535,11 +538,11 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         {/* Tab 3: External URL */}
         {activeTab === 'external' && (
           <form onSubmit={handleExternalSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ fontSize: '13px', color: '#8D95A5' }}>
+            <div style={{ fontSize: '13px', color: 'var(--muted)' }}>
               Add remote web dashboards, NAS portals, router admin pages, or cloud services to Portly:
             </div>
             <div>
-              <label htmlFor="ext-name" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>App / Dashboard Name</label>
+              <label htmlFor="ext-name" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>App / Dashboard Name</label>
               <input
                 id="ext-name"
                 name="extName"
@@ -554,7 +557,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
               />
             </div>
             <div>
-              <label htmlFor="ext-url" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Full Target URL</label>
+              <label htmlFor="ext-url" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Full Target URL</label>
               <input
                 id="ext-url"
                 name="extUrl"
@@ -570,7 +573,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label htmlFor="ext-category" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Category</label>
+                <label htmlFor="ext-category" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Category</label>
                 <select
                   id="ext-category"
                   name="extCategory"
@@ -585,7 +588,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 </select>
               </div>
               <div>
-                <label htmlFor="ext-tags" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Tags</label>
+                <label htmlFor="ext-tags" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Tags</label>
                 <input
                   id="ext-tags"
                   name="extTags"
@@ -613,7 +616,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             {/* Name & Icon */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '14px' }}>
               <div>
-                <label htmlFor="custom-name" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Name</label>
+                <label htmlFor="custom-name" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Name</label>
                 <input
                   id="custom-name"
                   name="customName"
@@ -628,7 +631,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 />
               </div>
               <div>
-                <span style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Icon</span>
+                <span style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Icon</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <div
                     className="c233"
@@ -636,8 +639,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                       width: '34px',
                       height: '34px',
                       borderRadius: '8px',
-                      background: '#8C9EFF',
-                      color: '#0A0B0F',
+                      background: 'var(--accent)',
+                      color: 'var(--bg)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -651,10 +654,10 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             </div>
 
             {/* Network: Host & Port */}
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginTop: '6px' }}>Network</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginTop: '6px' }}>Network</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label htmlFor="custom-host" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Host</label>
+                <label htmlFor="custom-host" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Host</label>
                 <input
                   id="custom-host"
                   name="customHost"
@@ -667,7 +670,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 />
               </div>
               <div>
-                <label htmlFor="custom-port" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Port</label>
+                <label htmlFor="custom-port" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Port</label>
                 <input
                   id="custom-port"
                   name="customPort"
@@ -684,9 +687,9 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             {portStatus && (
               <div
                 aria-live="polite"
-                style={{ fontSize: '12px', color: portStatus.free ? '#5EEAD4' : '#FF8A8A', display: 'flex', alignItems: 'center', gap: '6px' }}
+                style={{ fontSize: '12px', color: portStatus.free ? 'var(--success)' : 'var(--danger)', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
-                <span style={{ display: 'inline-flex' }}><Icon name={portStatus.free ? 'check' : 'x'} size={13} color={portStatus.free ? '#5EEAD4' : '#FF8A8A'} /></span>
+                <span style={{ display: 'inline-flex' }}><Icon name={portStatus.free ? 'check' : 'x'} size={13} color={portStatus.free ? 'var(--success)' : 'var(--danger)'} /></span>
                 <span>
                   {portStatus.free
                     ? `Port ${port} is free · opens http://${host}:${port}`
@@ -696,10 +699,10 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             )}
 
             {/* Organize: Category & Tags */}
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginTop: '6px' }}>Organize</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginTop: '6px' }}>Organize</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label htmlFor="custom-category" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Category</label>
+                <label htmlFor="custom-category" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Category</label>
                 <select
                   id="custom-category"
                   name="customCategory"
@@ -714,7 +717,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 </select>
               </div>
               <div>
-                <label htmlFor="custom-tags" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Tags (comma-separated)</label>
+                <label htmlFor="custom-tags" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Tags (comma-separated)</label>
                 <input
                   id="custom-tags"
                   name="customTags"
@@ -730,10 +733,10 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             </div>
 
             {/* Health Probing Settings */}
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginTop: '6px' }}>Health Checks & Probing</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginTop: '6px' }}>Health Checks & Probing</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '14px' }}>
               <div>
-                <label htmlFor="custom-health-path" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Health check path</label>
+                <label htmlFor="custom-health-path" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Health check path</label>
                 <input
                   id="custom-health-path"
                   name="customHealthPath"
@@ -747,7 +750,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 />
               </div>
               <div>
-                <label htmlFor="custom-health-interval" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Interval (sec)</label>
+                <label htmlFor="custom-health-interval" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Interval (sec)</label>
                 <input
                   id="custom-health-interval"
                   name="customHealthInterval"
@@ -764,7 +767,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label htmlFor="custom-expected-status" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Expected status codes (comma-separated)</label>
+                <label htmlFor="custom-expected-status" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Expected status codes (comma-separated)</label>
                 <input
                   id="custom-expected-status"
                   name="customExpectedStatus"
@@ -778,7 +781,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 />
               </div>
               <div>
-                <label htmlFor="custom-headers" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Custom headers (JSON or KEY: VAL)</label>
+                <label htmlFor="custom-headers" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Custom headers (JSON or KEY: VAL)</label>
                 <input
                   id="custom-headers"
                   name="customHeaders"
@@ -794,10 +797,10 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             </div>
 
             {/* Run Controls */}
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginTop: '6px' }}>Run Controls</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginTop: '6px' }}>Run Controls</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label htmlFor="custom-start-cmd" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Start command</label>
+                <label htmlFor="custom-start-cmd" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Start command</label>
                 <input
                   id="custom-start-cmd"
                   name="customStartCmd"
@@ -811,7 +814,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 />
               </div>
               <div>
-                <label htmlFor="custom-stop-cmd" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Stop command</label>
+                <label htmlFor="custom-stop-cmd" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Stop command</label>
                 <input
                   id="custom-stop-cmd"
                   name="customStopCmd"
@@ -828,7 +831,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label htmlFor="custom-workdir" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Working directory</label>
+                <label htmlFor="custom-workdir" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Working directory</label>
                 <input
                   id="custom-workdir"
                   name="customWorkdir"
@@ -842,7 +845,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 />
               </div>
               <div>
-                <label htmlFor="custom-log-file" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Log file path</label>
+                <label htmlFor="custom-log-file" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Log file path</label>
                 <input
                   id="custom-log-file"
                   name="customLogFile"
@@ -859,7 +862,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
 
             {/* Switches */}
             <div style={{ display: 'flex', gap: '20px', marginTop: '6px' }}>
-              <label style={{ fontSize: '13px', color: '#ECEEF3', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <label style={{ fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   name="startOnBoot"
@@ -869,7 +872,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 />
                 Start on boot
               </label>
-              <label style={{ fontSize: '13px', color: '#ECEEF3', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <label style={{ fontSize: '13px', color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
                   name="pin"
@@ -883,7 +886,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
 
             {/* Footer */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '14px', borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
-              <span style={{ fontSize: '12px', color: '#8D95A5' }}>Saved to your Portly SQLite store.</span>
+              <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Saved to your Portly SQLite store.</span>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button type="button" className="c078" onClick={onClose}>Cancel</button>
                 <button type="submit" className="c080" disabled={submitting}>
@@ -897,13 +900,13 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         {/* Tab 4: Deploy New Container */}
         {activeTab === 'deploy' && (
           <form onSubmit={handleDeploySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ fontSize: '13px', color: '#8D95A5' }}>
+            <div style={{ fontSize: '13px', color: 'var(--muted)' }}>
               Launch a new container directly from Docker registry with custom port bindings and automatic conflict checking:
             </div>
 
             {/* Quick Templates */}
             <div>
-              <span style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '8px' }}>
+              <span style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '8px' }}>
                 1-Click Quick Deploy Templates
               </span>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -923,7 +926,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label htmlFor="deploy-image" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
+                <label htmlFor="deploy-image" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>
                   Image Tag (e.g. redis:7-alpine, postgres:16)
                 </label>
                 <input
@@ -941,7 +944,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
               </div>
 
               <div>
-                <label htmlFor="deploy-name" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
+                <label htmlFor="deploy-name" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>
                   Container Name
                 </label>
                 <input
@@ -961,7 +964,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <div>
-                <label htmlFor="deploy-host-port" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
+                <label htmlFor="deploy-host-port" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>
                   Host Port
                 </label>
                 <input
@@ -980,14 +983,14 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                   style={{ width: '100%', boxSizing: 'border-box' }}
                 />
                 {deployPortStatus && (
-                  <div style={{ fontSize: '11px', marginTop: '4px', color: deployPortStatus.free ? '#5EEAD4' : '#FF8A8A' }}>
+                  <div style={{ fontSize: '11px', marginTop: '4px', color: deployPortStatus.free ? 'var(--success)' : 'var(--danger)' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Icon name={deployPortStatus.free ? 'check' : 'x'} size={13} /> {deployPortStatus.free ? 'Port is free to bind' : `Port conflict: ${deployPortStatus.used_by}`}</span>
                   </div>
                 )}
               </div>
 
               <div>
-                <label htmlFor="deploy-container-port" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
+                <label htmlFor="deploy-container-port" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>
                   Container Port / Protocol
                 </label>
                 <input
@@ -1006,7 +1009,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             </div>
 
             <div>
-              <label htmlFor="deploy-env" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>
+              <label htmlFor="deploy-env" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>
                 Environment Variables (KEY=VALUE, one per line)
               </label>
               <textarea
@@ -1036,8 +1039,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         {/* Tab 5: Preflight Collision Check (D-10, F-5) */}
         {activeTab === 'preflight' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ fontSize: '13px', color: '#8D95A5', lineHeight: 1.5 }}>
-              Preflight checks validate whether ports declared in a <code style={{ color: '#8C9EFF' }}>docker run</code> command, a <code style={{ color: '#8C9EFF' }}>docker-compose.yml</code> file, or a list of ports are available before launching.
+            <div style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5 }}>
+              Preflight checks validate whether ports declared in a <code style={{ color: 'var(--accent)' }}>docker run</code> command, a <code style={{ color: 'var(--accent)' }}>docker-compose.yml</code> file, or a list of ports are available before launching.
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
@@ -1058,8 +1061,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                     fontSize: '12px',
                     fontWeight: 600,
                     cursor: 'pointer',
-                    background: preflightMode === m ? '#8C9EFF' : 'rgba(255,255,255,0.06)',
-                    color: preflightMode === m ? '#0B1220' : '#ECEEF3',
+                    background: preflightMode === m ? 'var(--accent)' : 'rgba(255,255,255,0.06)',
+                    color: preflightMode === m ? '#0B1220' : 'var(--text)',
                     border: 0,
                   }}
                 >
@@ -1094,7 +1097,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label htmlFor="preflight-input" style={{ fontSize: '12px', color: '#8D95A5' }}>
+                <label htmlFor="preflight-input" style={{ fontSize: '12px', color: 'var(--muted)' }}>
                   {preflightMode === 'command' ? 'Command Line Invocation' : preflightMode === 'compose' ? 'Compose YAML Definition (or drop .yml file here)' : 'Comma or Space-separated Ports'}
                 </label>
                 <span style={{ fontSize: '11px', color: '#64748B' }}>Drag & drop .yml file supported</span>
@@ -1116,7 +1119,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 className="c080"
                 disabled={preflightChecking}
                 onClick={handleRunPreflight}
-                style={{ background: '#8C9EFF', color: '#0B1220' }}
+                style={{ background: 'var(--accent)', color: '#0B1220' }}
               >
                 {preflightChecking ? 'Checking Collisions…' : 'Run Preflight Check'}
               </button>
@@ -1126,15 +1129,15 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
             {preflightResult && (
               <div
                 style={{
-                  background: '#101218',
+                  background: 'var(--surface-1)',
                   borderRadius: '10px',
                   padding: '16px',
                   border: `1px solid ${preflightResult.has_collision ? 'rgba(255, 138, 138, 0.3)' : 'rgba(94, 234, 212, 0.3)'}`,
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                  <span style={{ display: 'inline-flex' }}><Icon name={preflightResult.has_collision ? 'warning' : 'check'} size={18} color={preflightResult.has_collision ? '#FBBF77' : '#5EEAD4'} /></span>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: preflightResult.has_collision ? '#FF8A8A' : '#5EEAD4' }}>
+                  <span style={{ display: 'inline-flex' }}><Icon name={preflightResult.has_collision ? 'warning' : 'check'} size={18} color={preflightResult.has_collision ? 'var(--warning)' : 'var(--success)'} /></span>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: preflightResult.has_collision ? 'var(--danger)' : 'var(--success)' }}>
                     {preflightResult.has_collision
                       ? `${preflightResult.collisions.length} Port Collision(s) Detected!`
                       : 'All Requested Ports Available!'}
@@ -1162,13 +1165,13 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#FF8A8A', fontWeight: 600 }}>
+                            <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--danger)', fontWeight: 600 }}>
                               Port {col.port}/{col.proto || 'tcp'}
                             </span>
-                            <span style={{ color: '#ECEEF3' }}>
-                              Bound by: <strong style={{ color: '#FBBF77' }}>{col.service_name || col.owner || 'Unknown Socket'}</strong>
+                            <span style={{ color: 'var(--text)' }}>
+                              Bound by: <strong style={{ color: 'var(--warning)' }}>{col.service_name || col.owner || 'Unknown Socket'}</strong>
                             </span>
-                            <span style={{ color: '#8D95A5', fontSize: '11px' }}>
+                            <span style={{ color: 'var(--muted)', fontSize: '11px' }}>
                               Source: {col.source || 'host'}
                             </span>
                           </div>
@@ -1177,7 +1180,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                             <button
                               type="button"
                               className="c078"
-                              style={{ fontSize: '11px', padding: '2px 8px', color: '#5EEAD4', borderColor: 'rgba(94, 234, 212, 0.3)', whiteSpace: 'nowrap' }}
+                              style={{ fontSize: '11px', padding: '2px 8px', color: 'var(--success)', borderColor: 'rgba(94, 234, 212, 0.3)', whiteSpace: 'nowrap' }}
                               title={`Replace port ${col.port} with free port ${suggested}`}
                               onClick={() => {
                                 const oldP = String(col.port);
@@ -1194,7 +1197,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                     })}
                   </div>
                 ) : (
-                  <div style={{ fontSize: '12px', color: '#8D95A5' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--muted)' }}>
                     Checked {preflightResult.checked_ports.length} port(s): {preflightResult.checked_ports.join(', ')}. No socket or container conflicts found.
                   </div>
                 )}

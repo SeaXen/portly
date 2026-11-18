@@ -27,7 +27,7 @@ export const AppIcon: React.FC<AppIconProps> = ({
           height: `${size}px`,
           borderRadius: size >= 32 ? '9px' : '7px',
           background: source === 'docker' ? 'rgba(94, 234, 212, 0.15)' : 'rgba(140, 158, 255, 0.15)',
-          color: source === 'docker' ? '#5EEAD4' : '#8C9EFF',
+          color: source === 'docker' ? 'var(--success)' : 'var(--accent)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

@@ -57,7 +57,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   if (!res.ok) {
-    let errDetail: any = {};
+    let errDetail: any;
     try {
       errDetail = await res.json();
     } catch {

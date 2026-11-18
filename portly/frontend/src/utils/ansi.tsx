@@ -70,6 +70,7 @@ interface SpanSegment {
  * Strips non-SGR ANSI escape sequences (e.g. cursor moves, clear screen)
  */
 function cleanAnsiLine(raw: string): string {
+  // eslint-disable-next-line no-control-regex -- ANSI escape sequences are intentional here.
   return raw.replace(/(?:\x1b|\u001b)\[[0-9;]*[A-HJKSTfimnsu]/g, (match) => {
     return match.endsWith('m') ? match : '';
   });
@@ -81,6 +82,7 @@ function cleanAnsiLine(raw: string): string {
 export function parseAnsiToReact(raw: string): React.ReactNode {
   if (!raw) return '';
   const text = cleanAnsiLine(raw);
+  // eslint-disable-next-line no-control-regex -- ANSI escape sequences are intentional here.
   const regex = /(?:\x1b|\u001b)\[([0-9;]*)m/g;
 
   let currentFg: string | undefined;

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { ToastMessage } from '../types';
 import { Icon } from './Icon';
 
@@ -57,7 +57,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           const isWarn = t.type === 'warning';
           const isSucc = t.type === 'success';
 
-          const borderColor = isErr ? '#FF8A8A' : isWarn ? '#FBBF77' : isSucc ? '#5EEAD4' : '#8C9EFF';
+          const borderColor = isErr ? 'var(--danger)' : isWarn ? 'var(--warning)' : isSucc ? 'var(--success)' : 'var(--accent)';
           const iconName = isErr ? 'warning' : isWarn ? 'bolt' : isSucc ? 'check' : 'info';
 
           return (
@@ -66,11 +66,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               role={isErr ? 'alert' : 'status'}
               style={{
                 pointerEvents: 'auto',
-                background: '#161B22',
+                background: 'var(--surface-1)',
                 border: `1px solid ${borderColor}`,
                 borderRadius: 10,
                 padding: '12px 16px',
-                color: '#ECEEF3',
+                color: 'var(--text)',
                 fontSize: 14,
                 boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
                 display: 'flex',
@@ -86,7 +86,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 style={{
                   background: 'transparent',
                   border: 0,
-                  color: '#8D95A5',
+                  color: 'var(--muted)',
                   cursor: 'pointer',
                   fontSize: 16,
                   padding: 4,

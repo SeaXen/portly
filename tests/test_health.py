@@ -111,3 +111,59 @@ def test_check_http_endpoint_expected_status(dummy_http_server):
     ok_expected, code, _ = health.check_http_endpoint(url, expected_status="200,500")
     assert ok_expected is True
     assert code == 500
+
+
+class RedirectHTTPHandler(BaseHTTPRequestHandler):
+    redirect_target_hits = 0
+
+    def do_GET(self):
+        if self.path == "/redirect":
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{self.server.server_port}/redirect-target")
+            self.end_headers()
+        elif self.path == "/redirect-target":
+            type(self).redirect_target_hits += 1
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, format, *args):
+        pass
+
+
+@pytest.fixture(scope="module")
+def redirect_http_server():
+    server = HTTPServer(("127.0.0.1", 0), RedirectHTTPHandler)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield port
+    server.shutdown()
+
+
+def test_check_http_endpoint_does_not_follow_redirect(redirect_http_server):
+    RedirectHTTPHandler.redirect_target_hits = 0
+    url = f"http://127.0.0.1:{redirect_http_server}/redirect"
+    ok, code, _ = health.check_http_endpoint(url, expected_status="200,302")
+    assert ok is True
+    assert code == 302
+    assert RedirectHTTPHandler.redirect_target_hits == 0
+
+
+def test_check_tcp_port_ipv6_only():
+    try:
+        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        sock.bind(("::1", 0))
+    except OSError:
+        pytest.skip("IPv6 loopback not available")
+    sock.listen(1)
+    port = sock.getsockname()[1]
+    try:
+        ok, latency = health.check_tcp_port("::1", port, timeout=0.5)
+        assert ok is True
+        assert latency >= 0.0
+    finally:
+        sock.close()

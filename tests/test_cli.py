@@ -59,6 +59,19 @@ def test_cli_run_success(monkeypatch):
     assert mock_uvicorn.call_args[1]["port"] == 5533
 
 
+def test_cli_reset_setup_token(monkeypatch, capsys):
+    from portly.backend import auth
+    monkeypatch.delenv("PORTLY_SETUP_TOKEN", raising=False)
+    monkeypatch.setattr(sys, "argv", ["portly", "reset-setup-token"])
+
+    cli.main()
+    err = capsys.readouterr().err
+    assert "Setup Token:" in err
+    token = err.split("Setup Token:", 1)[1].strip().splitlines()[0]
+    assert auth.verify_setup_token(token)
+    auth.consume_setup_token()
+
+
 def test_cli_start_and_stop_not_found(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["portly", "start", "non_existent_app_999"])
     with pytest.raises(SystemExit) as exc:

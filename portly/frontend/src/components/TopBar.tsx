@@ -112,7 +112,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         </button>
 
         <label className="c074 topbar-search-label" style={{ cursor: 'text' }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#8D95A5' }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--muted)' }}>
             <circle cx="11" cy="11" r="7"></circle>
             <path d="m20 20-3.5-3.5"></path>
           </svg>
@@ -131,7 +131,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             type="button"
             className="c076"
             onClick={onOpenCommandPalette}
-            style={{ cursor: 'pointer', background: 'transparent', color: '#8D95A5' }}
+            style={{ cursor: 'pointer', background: 'transparent', color: 'var(--muted)' }}
             title="Press Ctrl+K or Cmd+K"
           >
             Ctrl&nbsp;K
@@ -181,7 +181,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: kioskMode ? '#5EEAD4' : 'inherit',
+              color: kioskMode ? 'var(--success)' : 'inherit',
               borderColor: kioskMode ? 'rgba(94, 234, 212, 0.3)' : undefined,
             }}
           >
@@ -214,7 +214,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 position: 'absolute',
                 top: '42px',
                 right: 0,
-                background: '#151821',
+                background: 'var(--surface-2)',
                 border: '1px solid rgba(255,255,255,0.12)',
                 borderRadius: '10px',
                 padding: '6px',
@@ -236,7 +236,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                   gap: '8px',
                   padding: '8px 12px',
                   borderRadius: '6px',
-                  color: '#ECEEF3',
+                  color: 'var(--text)',
                   fontSize: '13px',
                   textDecoration: 'none',
                   transition: 'background 0.1s',
@@ -245,7 +245,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 onClick={() => setShowExportMenu(false)}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#8C9EFF' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line></svg> CSV Table
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--accent)' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line></svg> CSV Table
               </a>
               <a
                 href={api.exportUrl('markdown')}
@@ -256,7 +256,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                   gap: '8px',
                   padding: '8px 12px',
                   borderRadius: '6px',
-                  color: '#ECEEF3',
+                  color: 'var(--text)',
                   fontSize: '13px',
                   textDecoration: 'none',
                   transition: 'background-color 0.1s',
@@ -265,7 +265,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 onClick={() => setShowExportMenu(false)}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#5EEAD4' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Markdown Sheet
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--success)' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Markdown Sheet
               </a>
               <a
                 href={api.exportUrl('json')}
@@ -276,7 +276,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                   gap: '8px',
                   padding: '8px 12px',
                   borderRadius: '6px',
-                  color: '#ECEEF3',
+                  color: 'var(--text)',
                   fontSize: '13px',
                   textDecoration: 'none',
                   transition: 'background-color 0.1s',
@@ -285,7 +285,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 onClick={() => setShowExportMenu(false)}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#FBBF77' }}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Full JSON Backup
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--warning)' }}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> Full JSON Backup
               </a>
               <input
                 ref={fileInputRef}
@@ -299,14 +299,14 @@ export const TopBar: React.FC<TopBarProps> = ({
                 type="button"
                 style={{
                   display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px',
-                  borderRadius: '6px', color: '#ECEEF3', fontSize: '13px',
+                  borderRadius: '6px', color: 'var(--text)', fontSize: '13px',
                   background: 'transparent', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left',
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 onClick={() => { setShowExportMenu(false); fileInputRef.current?.click(); }}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: '#5EEAD4' }}><path d="M12 4v11M7 11l5 5 5-5M4 20h16"></path></svg> Restore Backup
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--success)' }}><path d="M12 4v11M7 11l5 5 5-5M4 20h16"></path></svg> Restore Backup
               </button>
             </div>
           )}
@@ -325,7 +325,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             borderRadius: '9px',
             background: 'rgba(255,255,255,0.05)',
             border: '1px solid rgba(255,255,255,0.09)',
-            color: '#ECEEF3',
+            color: 'var(--text)',
             fontSize: '13px',
             fontWeight: 500,
             display: 'flex',
@@ -354,7 +354,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             aria-hidden="true"
             style={{
               animation: scanning ? 'spin 1s linear infinite' : 'none',
-              color: '#8C9EFF',
+              color: 'var(--accent)',
             }}
           >
             <path d="M21 12a9 9 0 1 1-3-6.7"></path>
@@ -376,7 +376,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               borderRadius: '9px',
               background: 'rgba(140, 158, 255, 0.1)',
               border: '1px solid rgba(140, 158, 255, 0.3)',
-              color: '#8C9EFF',
+              color: 'var(--accent)',
               fontSize: '13px',
               fontWeight: 500,
               display: 'flex',
@@ -402,14 +402,14 @@ export const TopBar: React.FC<TopBarProps> = ({
               className="topbar-user-badge"
               style={{
                 fontSize: '12px',
-                color: '#8D95A5',
+                color: 'var(--muted)',
                 background: 'rgba(255,255,255,0.05)',
                 padding: '4px 10px',
                 borderRadius: '6px',
                 border: '1px solid rgba(255,255,255,0.08)',
               }}
             >
-              {user.username} <span style={{ color: user.role === 'admin' ? '#8C9EFF' : '#5EEAD4', marginLeft: 4 }}>({user.role})</span>
+              {user.username} <span style={{ color: user.role === 'admin' ? 'var(--accent)' : 'var(--success)', marginLeft: 4 }}>({user.role})</span>
             </span>
             {onLogout && (
               <button
@@ -423,7 +423,7 @@ export const TopBar: React.FC<TopBarProps> = ({
                   borderRadius: '9px',
                   background: 'rgba(255,255,255,0.05)',
                   border: '1px solid rgba(255,255,255,0.08)',
-                  color: '#8D95A5',
+                  color: 'var(--muted)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -448,7 +448,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             height: '36px',
             padding: '0 16px',
             borderRadius: '9px',
-            background: '#8C9EFF',
+            background: 'var(--accent)',
             border: 0,
             color: '#0A0D14',
             fontSize: '13.5px',

@@ -22,9 +22,9 @@ def _get_process_info(pid: int) -> Dict[str, Any]:
         "name": f"PID {pid}",
         "cmdline": "",
         "cwd": "",
-        "cpu_percent": 0.0,
-        "ram_mb": 0.0,
-        "create_time": 0.0,
+        "cpu_percent": None,
+        "ram_mb": None,
+        "create_time": None,
     }
     if not pid or pid <= 0:
         return info
@@ -69,16 +69,16 @@ def _get_process_info(pid: int) -> Dict[str, Any]:
         try:
             info["cpu_percent"] = round(proc_obj.cpu_percent(interval=None), 1)
         except Exception:
-            info["cpu_percent"] = 0.0
+            info["cpu_percent"] = None
         try:
             mem = proc_obj.memory_info()
             info["ram_mb"] = round(mem.rss / (1024 * 1024), 1)
         except Exception:
-            info["ram_mb"] = 0.0
+            info["ram_mb"] = None
         try:
             info["create_time"] = proc_obj.create_time()
         except Exception:
-            info["create_time"] = 0.0
+            info["create_time"] = None
     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
         _proc_instances.pop(pid, None)
 
@@ -250,9 +250,9 @@ def discover_host_ports() -> List[Dict[str, Any]]:
             "name": "System Listener",
             "cmdline": "",
             "cwd": "",
-            "cpu_percent": 0.0,
-            "ram_mb": 0.0,
-            "create_time": 0.0,
+            "cpu_percent": None,
+            "ram_mb": None,
+            "create_time": None,
         }
 
         proc_name = pinfo["name"] or "process"
@@ -261,7 +261,7 @@ def discover_host_ports() -> List[Dict[str, Any]]:
         else:
             stable_id = f"host:{proc_name}:{port}/{proto}"
 
-        uptime_sec = 0
+        uptime_sec = None
         if pinfo.get("create_time"):
             uptime_sec = max(0, int(time.time() - pinfo["create_time"]))
 
@@ -277,11 +277,11 @@ def discover_host_ports() -> List[Dict[str, Any]]:
             "worker_pids": valid_pids,
             "cmdline": pinfo.get("cmdline", ""),
             "cwd": pinfo.get("cwd", ""),
-            "cpu_percent": pinfo.get("cpu_percent", 0.0),
-            "ram_mb": pinfo.get("ram_mb", 0.0),
+            "cpu_percent": pinfo.get("cpu_percent"),
+            "ram_mb": pinfo.get("ram_mb"),
             "uptime_sec": uptime_sec,
             "status": "up",
-            "created_at": pinfo.get("create_time", time.time()),
+            "created_at": pinfo.get("create_time") or time.time(),
         })
 
     return results

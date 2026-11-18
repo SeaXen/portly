@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { api } from '../api';
 import { LoginScreen } from './LoginScreen';
 import { SetupScreen } from './SetupScreen';
@@ -68,13 +68,13 @@ export function AuthGate({ children }: { children: (auth: AuthContextType) => Re
       <div
         style={{
           minHeight: '100vh',
-          background: '#0A0B0F',
+          background: 'var(--bg)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 16,
-          color: '#8D95A5',
+          color: 'var(--muted)',
           fontFamily: 'Inter, system-ui, sans-serif',
         }}
       >

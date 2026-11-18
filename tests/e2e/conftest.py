@@ -114,3 +114,51 @@ def authenticated_context(browser_instance, portly_server_info):
     }])
     yield context
     context.close()
+
+
+@pytest.fixture(scope="session")
+def fresh_portly_server_info(tmp_path_factory):
+    """A fresh Portly instance with no users, so the first-run setup screen is shown."""
+    port = get_free_port()
+    data_dir = str(tmp_path_factory.mktemp("portly_e2e_fresh"))
+
+    env = os.environ.copy()
+    env["PORTLY_DATA_DIR"] = data_dir
+    env["PORTLY_PORT"] = str(port)
+    env["PORTLY_HOST"] = "127.0.0.1"
+    env["PORTLY_MODE"] = "desktop"
+    env.pop("PORTLY_TESTING", None)
+
+    cmd = [sys.executable, "-m", "portly", "run", "--port", str(port), "--host", "127.0.0.1"]
+    proc = subprocess.Popen(
+        cmd,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    ready = False
+    start_time = time.time()
+    while time.time() - start_time < 25:
+        try:
+            with socket.create_connection(('127.0.0.1', port), timeout=0.5):
+                ready = True
+                break
+        except Exception:
+            time.sleep(0.3)
+
+    if not ready:
+        proc.kill()
+        raise RuntimeError(f"Portly server failed to start on port {port}")
+
+    yield {
+        "url": f"http://127.0.0.1:{port}",
+        "port": port,
+        "data_dir": data_dir,
+    }
+
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()

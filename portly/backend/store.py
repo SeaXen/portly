@@ -383,6 +383,23 @@ class Store:
                 conn.execute("PRAGMA user_version = 3;")
                 conn.commit()
 
+            if current_ver < 4:
+                # S-4: the setup token must never be stored in plaintext. Rebuild
+                # the table without token_plain (portable across SQLite versions).
+                cur = conn.execute("PRAGMA table_info(setup_token);")
+                if any(c["name"] == "token_plain" for c in cur.fetchall()):
+                    conn.execute("""
+                    CREATE TABLE setup_token_v4 (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        token_hash TEXT NOT NULL
+                    );
+                    """)
+                    conn.execute("INSERT INTO setup_token_v4 (id, token_hash) SELECT id, token_hash FROM setup_token;")
+                    conn.execute("DROP TABLE setup_token;")
+                    conn.execute("ALTER TABLE setup_token_v4 RENAME TO setup_token;")
+                conn.execute("PRAGMA user_version = 4;")
+                conn.commit()
+
     # App overrides
     def get_app(self, app_id: str) -> Optional[Dict[str, Any]]:
         with self._get_connection() as conn:
@@ -893,19 +910,19 @@ class Store:
             conn.execute("DELETE FROM login_attempts")
             conn.commit()
 
-    # Single-use setup token (hash for verification, plaintext for CLI display)
+    # Single-use setup token (hash only — plaintext is printed once and never stored)
     def get_setup_token_record(self) -> Optional[Dict[str, str]]:
         with self._get_connection() as conn:
-            cur = conn.execute("SELECT token_hash, token_plain FROM setup_token WHERE id = 1")
+            cur = conn.execute("SELECT token_hash FROM setup_token WHERE id = 1")
             row = cur.fetchone()
             return dict(row) if row else None
 
-    def save_setup_token(self, token_hash: str, token_plain: str):
+    def save_setup_token(self, token_hash: str):
         with self._get_connection() as conn:
             conn.execute(
-                "INSERT INTO setup_token (id, token_hash, token_plain) VALUES (1, ?, ?) "
-                "ON CONFLICT(id) DO UPDATE SET token_hash = excluded.token_hash, token_plain = excluded.token_plain",
-                (token_hash, token_plain),
+                "INSERT INTO setup_token (id, token_hash) VALUES (1, ?) "
+                "ON CONFLICT(id) DO UPDATE SET token_hash = excluded.token_hash",
+                (token_hash,),
             )
             conn.commit()
 

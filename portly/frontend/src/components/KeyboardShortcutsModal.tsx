@@ -33,7 +33,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ 
         className="modal-content"
         style={{
           width: '460px',
-          background: '#101218',
+          background: 'var(--surface-1)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: '16px',
           padding: '24px',
@@ -42,7 +42,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ 
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', borderBottom: '1px solid rgba(255,255,255,0.07)', paddingBottom: '12px' }}>
-          <h3 id="shortcuts-title" style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#ECEEF3' }}>Keyboard Shortcuts</h3>
+          <h3 id="shortcuts-title" style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: 'var(--text)' }}>Keyboard Shortcuts</h3>
           <button type="button" className="c077" onClick={onClose} aria-label="Close"><Icon name="x" size={13} /></button>
         </div>
 
@@ -55,12 +55,12 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ 
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '8px 12px',
-                background: '#151821',
+                background: 'var(--surface-2)',
                 borderRadius: '8px',
                 fontSize: '13px',
               }}
             >
-              <span style={{ color: '#8D95A5' }}>{s.desc}</span>
+              <span style={{ color: 'var(--muted)' }}>{s.desc}</span>
               <kbd
                 style={{
                   fontFamily: 'JetBrains Mono, monospace',
@@ -68,7 +68,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ 
                   background: 'rgba(255,255,255,0.08)',
                   padding: '3px 8px',
                   borderRadius: '6px',
-                  color: '#8C9EFF',
+                  color: 'var(--accent)',
                 }}
               >
                 {s.key}

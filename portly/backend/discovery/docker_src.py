@@ -5,7 +5,10 @@ import logging
 import os
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+
+import psutil
 
 logger = logging.getLogger("portly.docker")
 
@@ -122,10 +125,13 @@ def _start_event_listener():
 
 def _calculate_cpu_percent(d: Dict[str, Any]) -> float:
     try:
-        cpu_count = len(d.get("cpu_stats", {}).get("cpu_usage", {}).get("percpu_usage", [])) or 1
-        cpu_delta = float(d.get("cpu_stats", {}).get("cpu_usage", {}).get("total_usage", 0)) - \
+        cpu_stats = d.get("cpu_stats", {})
+        cpu_usage = cpu_stats.get("cpu_usage", {})
+        # cgroup v2 has no percpu_usage; online_cpus is the reliable core count there.
+        cpu_count = cpu_stats.get("online_cpus") or len(cpu_usage.get("percpu_usage", [])) or psutil.cpu_count() or 1
+        cpu_delta = float(cpu_usage.get("total_usage", 0)) - \
                     float(d.get("precpu_stats", {}).get("cpu_usage", {}).get("total_usage", 0))
-        system_delta = float(d.get("cpu_stats", {}).get("system_cpu_usage", 0)) - \
+        system_delta = float(cpu_stats.get("system_cpu_usage", 0)) - \
                        float(d.get("precpu_stats", {}).get("system_cpu_usage", 0))
 
         if system_delta > 0.0 and cpu_delta > 0.0:
@@ -134,6 +140,67 @@ def _calculate_cpu_percent(d: Dict[str, Any]) -> float:
     except Exception:
         pass
     return 0.0
+
+
+_STATS_MAX_WORKERS = 8
+
+
+def _refresh_container_stats(c: Any) -> str:
+    """Fetch and cache resource stats for one container; returns its short id (or "" on error)."""
+    try:
+        c_id = c.id[:12]
+    except Exception:
+        return ""
+    try:
+        raw_stats = c.stats(stream=False)
+        cpu_pct = _calculate_cpu_percent(raw_stats)
+        mem_stats = raw_stats.get("memory_stats", {})
+        mem_usage = mem_stats.get("usage", 0)
+        mem_detail = mem_stats.get("stats", {})
+        # cgroup v2 uses inactive_file, v1 uses cache — subtract reclaimable page cache
+        mem_cache = mem_detail.get("inactive_file", mem_detail.get("total_inactive_file", mem_detail.get("cache", 0)))
+        actual_mem = max(0, mem_usage - mem_cache)
+        mem_mb = round(actual_mem / (1024 * 1024), 1)
+        mem_limit_mb = round(mem_stats.get("limit", 0) / (1024 * 1024), 1)
+
+        rx_bytes = 0
+        tx_bytes = 0
+        for net_if in raw_stats.get("networks", {}).values():
+            rx_bytes += net_if.get("rx_bytes", 0)
+            tx_bytes += net_if.get("tx_bytes", 0)
+
+        blk_read = 0
+        blk_write = 0
+        io_stats = raw_stats.get("blkio_stats", {}).get("io_service_bytes_recursive") or []
+        for entry in io_stats:
+            op = entry.get("op", "").lower()
+            val = entry.get("value", 0)
+            if op == "read":
+                blk_read += val
+            elif op == "write":
+                blk_write += val
+
+        update_container_stats_cache(c_id, {
+            "cpu_percent": cpu_pct,
+            "memory_mb": mem_mb,
+            "memory_limit_mb": mem_limit_mb,
+            "net_rx_mb": round(rx_bytes / (1024 * 1024), 2),
+            "net_tx_mb": round(tx_bytes / (1024 * 1024), 2),
+            "block_read_mb": round(blk_read / (1024 * 1024), 2),
+            "block_write_mb": round(blk_write / (1024 * 1024), 2),
+        })
+    except Exception:
+        pass
+    return c_id
+
+
+def _collect_running_container_stats(containers: List[Any]) -> Set[str]:
+    """Fetch stats for all containers in a bounded thread pool; returns the ids that were seen."""
+    active_ids: Set[str] = set()
+    with ThreadPoolExecutor(max_workers=_STATS_MAX_WORKERS) as executor:
+        for c_id in executor.map(_refresh_container_stats, containers):
+            active_ids.add(c_id)
+    return active_ids
 
 
 def _start_stats_collector():
@@ -152,58 +219,11 @@ def _start_stats_collector():
                 continue
             try:
                 running_containers = _client.containers.list(filters={"status": "running"})
-                active_ids = set()
-                for c in running_containers:
-                    c_id = c.id[:12]
-                    active_ids.add(c_id)
-                    try:
-                        raw_stats = c.stats(stream=False)
-                        cpu_pct = _calculate_cpu_percent(raw_stats)
-                        mem_stats = raw_stats.get("memory_stats", {})
-                        mem_usage = mem_stats.get("usage", 0)
-                        # subtract cache if present
-                        mem_cache = mem_stats.get("stats", {}).get("cache", 0)
-                        actual_mem = max(0, mem_usage - mem_cache)
-                        mem_mb = round(actual_mem / (1024 * 1024), 1)
-                        mem_limit_mb = round(mem_stats.get("limit", 0) / (1024 * 1024), 1)
-
-                        # Networks IO
-                        rx_bytes = 0
-                        tx_bytes = 0
-                        for net_if in raw_stats.get("networks", {}).values():
-                            rx_bytes += net_if.get("rx_bytes", 0)
-                            tx_bytes += net_if.get("tx_bytes", 0)
-
-                        # Block IO
-                        blk_read = 0
-                        blk_write = 0
-                        io_stats = raw_stats.get("blkio_stats", {}).get("io_service_bytes_recursive") or []
-                        for entry in io_stats:
-                            op = entry.get("op", "").lower()
-                            val = entry.get("value", 0)
-                            if op == "read":
-                                blk_read += val
-                            elif op == "write":
-                                blk_write += val
-
-                        update_container_stats_cache(c_id, {
-                            "cpu_percent": cpu_pct,
-                            "memory_mb": mem_mb,
-                            "memory_limit_mb": mem_limit_mb,
-                            "net_rx_mb": round(rx_bytes / (1024 * 1024), 2),
-                            "net_tx_mb": round(tx_bytes / (1024 * 1024), 2),
-                            "block_read_mb": round(blk_read / (1024 * 1024), 2),
-                            "block_write_mb": round(blk_write / (1024 * 1024), 2),
-                        })
-                    except Exception:
-                        pass
-
+                active_ids = _collect_running_container_stats(running_containers)
                 # Purge inactive containers from cache
-                cached_ids = list(_container_stats_cache.keys())
-                for cid in cached_ids:
+                for cid in list(_container_stats_cache.keys()):
                     if cid not in active_ids:
                         clear_container_stats_cache(cid)
-
             except Exception:
                 pass
             time.sleep(4)
@@ -213,7 +233,7 @@ def _start_stats_collector():
 
 
 def get_cached_container_stats(container_id: str) -> Dict[str, Any]:
-    return _container_stats_cache.get(container_id, {
+    defaults: Dict[str, Any] = {
         "cpu_percent": 0.0,
         "memory_mb": 0.0,
         "memory_limit_mb": 0.0,
@@ -221,12 +241,22 @@ def get_cached_container_stats(container_id: str) -> Dict[str, Any]:
         "net_tx_mb": 0.0,
         "block_read_mb": 0.0,
         "block_write_mb": 0.0,
-    })
+    }
+    cached = _container_stats_cache.get(container_id)
+    if not cached:
+        defaults["stats_age_sec"] = None
+        return defaults
+    result = dict(cached)
+    ts = cached.get("ts")
+    result["stats_age_sec"] = round(time.time() - ts, 1) if ts else None
+    return result
 
 
 def update_container_stats_cache(container_id: str, stats: Dict[str, Any]):
-    """Updates the container resource metrics cache."""
-    _container_stats_cache[container_id] = stats
+    """Updates the container resource metrics cache, stamping it with the collection time."""
+    entry = dict(stats)
+    entry["ts"] = time.time()
+    _container_stats_cache[container_id] = entry
 
 
 def clear_container_stats_cache(container_id: Optional[str] = None):
@@ -344,6 +374,7 @@ def discover_docker_containers() -> List[Dict[str, Any]]:
                             "net_tx_mb": stats.get("net_tx_mb", 0.0),
                             "block_read_mb": stats.get("block_read_mb", 0.0),
                             "block_write_mb": stats.get("block_write_mb", 0.0),
+                            "stats_age_sec": stats.get("stats_age_sec"),
                             "created_at": created_at,
                         })
 
@@ -377,6 +408,7 @@ def discover_docker_containers() -> List[Dict[str, Any]]:
                         "net_tx_mb": stats.get("net_tx_mb", 0.0),
                         "block_read_mb": stats.get("block_read_mb", 0.0),
                         "block_write_mb": stats.get("block_write_mb", 0.0),
+                        "stats_age_sec": stats.get("stats_age_sec"),
                         "created_at": created_at,
                     })
 

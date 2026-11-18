@@ -96,7 +96,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
     }
     setSaving(true);
     try {
-      const res = await api.saveComposeStack({
+      await api.saveComposeStack({
         name: stackName.trim(),
         compose_yaml: stackYaml,
         force,
@@ -159,7 +159,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
       {/* Left: Stacks Directory Panel */}
       <div
         style={{
-          background: '#101218',
+          background: 'var(--surface-1)',
           border: '1px solid rgba(255,255,255,0.07)',
           borderRadius: '14px',
           padding: '18px',
@@ -170,8 +170,8 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '12px' }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#ECEEF3' }}>Compose Stacks</h2>
-            <div style={{ fontSize: '11px', color: '#8D95A5', marginTop: '2px' }}>{stacks.length} managed stack(s)</div>
+            <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>Compose Stacks</h2>
+            <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{stacks.length} managed stack(s)</div>
           </div>
           <button
             type="button"
@@ -185,9 +185,9 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1 }}>
           {loading ? (
-            <div style={{ color: '#8D95A5', textAlign: 'center', padding: '20px 0', fontSize: '12px' }}>Loading stacks…</div>
+            <div style={{ color: 'var(--muted)', textAlign: 'center', padding: '20px 0', fontSize: '12px' }}>Loading stacks…</div>
           ) : stacks.length === 0 ? (
-            <div style={{ color: '#8D95A5', textAlign: 'center', padding: '30px 10px', fontSize: '12px' }}>
+            <div style={{ color: 'var(--muted)', textAlign: 'center', padding: '30px 10px', fontSize: '12px' }}>
               No compose stacks yet. Click <strong>+ New</strong> to create your first multi-container stack.
             </div>
           ) : (
@@ -200,8 +200,8 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                   style={{
                     padding: '12px',
                     borderRadius: '8px',
-                    background: isSelected ? 'rgba(140, 158, 255, 0.12)' : '#151821',
-                    border: isSelected ? '1px solid #8C9EFF' : '1px solid rgba(255,255,255,0.06)',
+                    background: isSelected ? 'rgba(140, 158, 255, 0.12)' : 'var(--surface-2)',
+                    border: isSelected ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.06)',
                     cursor: 'pointer',
                     display: 'flex',
                     flexDirection: 'column',
@@ -209,18 +209,18 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: 600, fontSize: '13px', color: '#ECEEF3' }}>{s.name}</span>
+                    <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text)' }}>{s.name}</span>
                     <span
                       style={{
                         width: '8px',
                         height: '8px',
                         borderRadius: '50%',
-                        background: s.status === 'running' ? '#5EEAD4' : '#64748B',
+                        background: s.status === 'running' ? 'var(--success)' : '#64748B',
                       }}
                       title={s.status}
                     />
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#8D95A5' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)' }}>
                     <span>{s.containers_running} container(s)</span>
                     <span>{s.ports.length > 0 ? `:${s.ports.join(', :')}` : 'No ports'}</span>
                   </div>
@@ -234,7 +234,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
       {/* Right: Stack Details & Editor Panel */}
       <div
         style={{
-          background: '#101218',
+          background: 'var(--surface-1)',
           border: '1px solid rgba(255,255,255,0.07)',
           borderRadius: '14px',
           padding: '24px',
@@ -262,9 +262,9 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                   />
                 ) : (
                   <div>
-                    <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#ECEEF3' }}>{selectedStack?.name}</h2>
-                    <div style={{ fontSize: '12px', color: '#8D95A5', marginTop: '2px' }}>
-                      Status: <strong style={{ color: selectedStack?.status === 'running' ? '#5EEAD4' : '#8D95A5' }}>{selectedStack?.status.toUpperCase()}</strong>
+                    <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>{selectedStack?.name}</h2>
+                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
+                      Status: <strong style={{ color: selectedStack?.status === 'running' ? 'var(--success)' : 'var(--muted)' }}>{selectedStack?.status.toUpperCase()}</strong>
                     </div>
                   </div>
                 )}
@@ -304,7 +304,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                       className="c078"
                       disabled={executingAction !== null}
                       onClick={() => handleStackAction('up')}
-                      style={{ color: '#5EEAD4', borderColor: 'rgba(94, 234, 212, 0.3)' }}
+                      style={{ color: 'var(--success)', borderColor: 'rgba(94, 234, 212, 0.3)' }}
                     >
                       {executingAction === 'up' ? 'Deploying…' : 'Deploy (Up -d)'}
                     </button>
@@ -321,7 +321,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                       className="c078"
                       disabled={executingAction !== null}
                       onClick={() => handleStackAction('down')}
-                      style={{ color: '#FF8A8A', borderColor: 'rgba(255, 138, 138, 0.3)' }}
+                      style={{ color: 'var(--danger)', borderColor: 'rgba(255, 138, 138, 0.3)' }}
                     >
                       Down
                     </button>
@@ -353,13 +353,13 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                 }}
               >
                 <div>
-                  <span style={{ fontWeight: 600, color: preflightResult.has_collision ? '#FF8A8A' : '#5EEAD4' }}>
+                  <span style={{ fontWeight: 600, color: preflightResult.has_collision ? 'var(--danger)' : 'var(--success)' }}>
                     {preflightResult.has_collision
-                      ? <><Icon name="warning" size={13} color="#FF8A8A" /> {preflightResult.collisions.length} Port Collision(s) Detected:</>
-                      : <><Icon name="check" size={13} color="#5EEAD4" /> All Declared Ports Available!</>}
+                      ? <><Icon name="warning" size={13} color="var(--danger)" /> {preflightResult.collisions.length} Port Collision(s) Detected:</>
+                      : <><Icon name="check" size={13} color="var(--success)" /> All Declared Ports Available!</>}
                   </span>
                   {preflightResult.has_collision && (
-                    <div style={{ marginTop: '4px', color: '#ECEEF3', fontSize: '11.5px' }}>
+                    <div style={{ marginTop: '4px', color: 'var(--text)', fontSize: '11.5px' }}>
                       {preflightResult.collisions.map((c) => `Port :${c.port} (${c.conflict_with})`).join(' · ')}
                     </div>
                   )}
@@ -379,7 +379,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
 
             {/* YAML Editor Area */}
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: '300px' }}>
-              <div style={{ fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>docker-compose.yml definition:</div>
+              <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>docker-compose.yml definition:</div>
               <textarea
                 value={stackYaml}
                 onChange={(e) => setStackYaml(e.target.value)}
@@ -393,8 +393,8 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                   fontFamily: 'JetBrains Mono, monospace',
                   fontSize: '12.5px',
                   lineHeight: 1.6,
-                  background: isEditing ? '#151821' : '#0B0D13',
-                  color: isEditing ? '#ECEEF3' : '#A0AEC0',
+                  background: isEditing ? 'var(--surface-2)' : '#0B0D13',
+                  color: isEditing ? 'var(--text)' : '#A0AEC0',
                 }}
               />
             </div>
@@ -403,7 +403,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
             {executionOutput && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', color: '#8D95A5', fontWeight: 600 }}>Execution Terminal Output:</span>
+                  <span style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 600 }}>Execution Terminal Output:</span>
                   <button type="button" className="c077" onClick={() => setExecutionOutput(null)} style={{ fontSize: '11px' }}><Icon name="x" size={11} /> Clear</button>
                 </div>
                 <div
@@ -417,7 +417,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                     maxHeight: '180px',
                     overflowY: 'auto',
                     whiteSpace: 'pre-wrap',
-                    color: '#5EEAD4',
+                    color: 'var(--success)',
                   }}
                 >
                   {executionOutput}
@@ -426,7 +426,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
             )}
           </>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8D95A5', fontSize: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--muted)', fontSize: '14px' }}>
             Select a stack from the left panel or click <strong>+ New</strong> to start.
           </div>
         )}

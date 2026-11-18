@@ -7,7 +7,7 @@ interface ListViewProps {
   categories: Category[];
 }
 
-export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail, categories }) => {
+export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail }) => {
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
       {apps.map((app) => (
@@ -19,7 +19,7 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail, categori
           className="c053"
           style={{
             height: '40px',
-            background: '#151821',
+            background: 'var(--surface-2)',
             border: '1px solid rgba(255,255,255,0.06)',
             borderRadius: '8px',
             padding: '0 14px',
@@ -42,24 +42,24 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail, categori
                 width: '7px',
                 height: '7px',
                 borderRadius: '50%',
-                backgroundColor: app.status === 'up' ? '#5EEAD4' : '#FF8A8A',
+                backgroundColor: app.status === 'unknown' ? 'var(--muted)' : (app.status === 'up' ? 'var(--success)' : 'var(--danger)'),
               }}
             />
-            <span style={{ fontWeight: 600, color: '#ECEEF3' }}>{app.name}</span>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF', fontWeight: 600 }}>
+            <span style={{ fontWeight: 600, color: 'var(--text)' }}>{app.name}</span>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)', fontWeight: 600 }}>
               {app.port}
             </span>
-            <span style={{ fontSize: '12px', color: '#8D95A5' }}>
+            <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
               {app.source === 'docker' ? app.image : app.process_name}
             </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: '#8D95A5' }}>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--muted)' }}>
               {app.bind}
             </span>
-            <span style={{ fontSize: '12px', color: '#8D95A5' }}>
-              CPU {app.cpu_percent}% · {app.ram_mb} MB
+            <span style={{ fontSize: '12px', color: app.stats_age_sec == null || app.stats_age_sec > 15 ? 'var(--muted)' : 'var(--muted)' }} title={app.stats_age_sec == null || app.stats_age_sec > 15 ? 'Stale or unavailable stats' : undefined}>
+              CPU {app.cpu_percent == null ? '—' : `${app.cpu_percent}%`} · {app.ram_mb == null ? '—' : `${app.ram_mb} MB`}{app.stats_age_sec == null || app.stats_age_sec > 15 ? ' (stale)' : ''}
             </span>
             <span className="c109" style={{ textTransform: 'capitalize' }}>
               {app.source}

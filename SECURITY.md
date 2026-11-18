@@ -38,6 +38,15 @@ Portly manages network sockets, host processes, and Docker container configurati
 - Traversals (`..`) and sensitive system files (`/etc/passwd`, `C:\Windows\System32\config\SAM`, `.bash_history`) are blocked.
 - Critical processes (PID 0, 1, 4, Portly's own PID, `systemd`, `csrss.exe`, `lsass.exe`, `services.exe`) cannot be terminated.
 
+### 7. Docker Deployment Privileges
+The default `docker-compose.yml` intentionally requests broad host access. Understand it before deploying:
+
+- **The Docker socket is root-equivalent, even when mounted `:ro`.** The `:ro` flag makes the socket *file* read-only; it does not restrict the Docker API reachable through it, which can create privileged containers and mount host paths. Treat container access as host-root access.
+- **`network_mode: host` and `pid: host`** remove network and process namespace isolation. They are required to discover host sockets and processes.
+- **`/:/hostfs:ro`** exposes the whole host filesystem read-only so disk stats reflect the host rather than container overlay storage. `:ro` limits writes but not visibility of sensitive files.
+- **Lower-privilege option:** use a `docker-socket-proxy` (see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)). Read-only proxy endpoints support monitoring only; enabling Portly's start/stop/recreate actions requires write access, which restores the root-equivalent risk.
+- Bind to `127.0.0.1` or place Portly behind authentication and a reverse proxy; do not expose it directly to untrusted networks.
+
 ---
 
 ## Reporting a Vulnerability

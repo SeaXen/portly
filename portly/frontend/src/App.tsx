@@ -39,7 +39,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const [viewType, setViewType] = useState<'table' | 'grid' | 'list' | 'board'>('table');
   const [density, setDensity] = useState<'compact' | 'comfy'>('compact');
   const [theme, setTheme] = useState<'dark' | 'light' | 'oled' | 'system'>('dark');
-  const [accent, setAccent] = useState('#8C9EFF');
+  const [accent, setAccent] = useState('var(--accent)');
   const [safeMode, setSafeMode] = useState(true);
   const [unlockCountdown, setUnlockCountdown] = useState<number | null>(null);
   const [kioskMode, setKioskMode] = useState(false);
@@ -56,8 +56,11 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const [lastScanTime, setLastScanTime] = useState<number>(Date.now() / 1000);
   const [events, setEvents] = useState<any[]>([]);
   const [dockerAvailable, setDockerAvailable] = useState(true);
-  const [dockerMsg, setDockerMsg] = useState('');
+  const [, setDockerMsg] = useState('');
   const [dockerBannerDismissed, setDockerBannerDismissed] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [initialLoadError, setInitialLoadError] = useState<string | null>(null);
+  const [streamDown, setStreamDown] = useState(false);
 
   // Visible Columns / Card Fields
   const [visibleFields, setVisibleFields] = useState<Record<string, boolean>>({
@@ -94,7 +97,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showNewCatModal, setShowNewCatModal] = useState(false);
   const [newCatName, setNewCatName] = useState('');
-  const [newCatColor, setNewCatColor] = useState('#8C9EFF');
+  const [newCatColor, setNewCatColor] = useState('var(--accent)');
 
   // Initial Load
   useEffect(() => {
@@ -225,7 +228,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
     const startPollingFallback = () => {
       if (!fallbackInterval && isComponentMounted) {
-        fallbackInterval = setInterval(fetchAppsAndStats, 4000);
+        fallbackInterval = setInterval(() => {
+          void fetchAppsAndStats();
+          setStreamDown(false);
+        }, 4000);
       }
     };
 
@@ -249,6 +255,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
         es.onopen = () => {
           reconnectAttempts = 0;
           stopPollingFallback();
+          setStreamDown(false);
         };
 
         es.onmessage = (event) => {
@@ -266,6 +273,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
         };
 
         es.onerror = () => {
+          setStreamDown(true);
           if (es) {
             try { es.close(); } catch {}
             es = null;
@@ -284,6 +292,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
           }
         };
       } catch {
+        setStreamDown(true);
         startPollingFallback();
         if (isComponentMounted) {
           reconnectTimeout = setTimeout(connectSSE, 4000);
@@ -304,6 +313,8 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   }, []);
 
   const loadInitialData = async () => {
+    setInitialLoading(true);
+    setInitialLoadError(null);
     try {
       const [appData, statData, catData, ruleData, viewData, setts, eventData] = await Promise.all([
         api.getApps({ include_hidden: true }),
@@ -331,8 +342,13 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       if (setts.accent) setAccent(setts.accent);
       if (setts.density) setDensity(setts.density as any);
       if (setts.default_view) setViewType(setts.default_view as any);
-    } catch (e) {
+    } catch (e: any) {
+      // 401 is handled by the AuthGate via the portly:unauthorized event.
+      if (e?.code === 'UNAUTHORIZED') return;
       console.error('Error loading initial data:', e);
+      setInitialLoadError(e?.message || 'Failed to load dashboard data.');
+    } finally {
+      setInitialLoading(false);
     }
   };
 
@@ -753,6 +769,31 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
           readOnly={readOnly}
         />
 
+        {/* Live stream health (non-blocking) */}
+        {streamDown && (
+          <div role="status" style={{ padding: '8px 16px', borderRadius: '10px', background: 'rgba(251,191,119,0.1)', border: '1px solid rgba(251,191,119,0.25)', color: 'var(--warning)', fontSize: '12px' }}>
+            Connection lost — retrying…
+          </div>
+        )}
+
+        {/* Initial load failure with retry */}
+        {initialLoadError && (
+          <div role="alert" style={{ padding: '14px 18px', borderRadius: '12px', background: 'rgba(255,138,138,0.1)', border: '1px solid rgba(255,138,138,0.3)', color: 'var(--danger)', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div>
+              <strong>Could not load dashboard data.</strong>
+              <div style={{ marginTop: '4px', color: 'var(--text)' }}>{initialLoadError}</div>
+            </div>
+            <button
+              type="button"
+              className="row-action-btn"
+              style={{ height: '28px', width: 'auto', padding: '0 12px', fontSize: '12px', fontWeight: 600, color: 'var(--danger)', borderColor: 'rgba(255,138,138,0.4)' }}
+              onClick={loadInitialData}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Safe Mode Warning Banner when safe mode is off (D-7, D-8, F-10) */}
         {!safeMode && (
           <div
@@ -761,7 +802,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               borderRadius: '12px',
               background: 'rgba(255, 138, 138, 0.1)',
               border: '1px solid rgba(255, 138, 138, 0.3)',
-              color: '#FF8A8A',
+              color: 'var(--danger)',
               fontSize: '13px',
               display: 'flex',
               alignItems: 'center',
@@ -770,11 +811,11 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FBBF77" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
               <div>
                 <strong>Safe Mode Unlocked:</strong> Real mutations on host processes &amp; containers are enabled.
                 {unlockCountdown != null && (
-                  <span style={{ marginLeft: 8, color: '#ECEEF3' }}>
+                  <span style={{ marginLeft: 8, color: 'var(--text)' }}>
                     Auto-relocking in <strong>{Math.floor(unlockCountdown / 60)}m {unlockCountdown % 60}s</strong>
                   </span>
                 )}
@@ -790,7 +831,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                 padding: '0 12px',
                 fontSize: '12px',
                 fontWeight: 600,
-                color: '#FF8A8A',
+                color: 'var(--danger)',
                 borderColor: 'rgba(255, 138, 138, 0.4)',
               }}
             >
@@ -807,7 +848,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               borderRadius: '12px',
               background: 'rgba(251, 191, 119, 0.08)',
               border: '1px solid rgba(251, 191, 119, 0.22)',
-              color: '#FBBF77',
+              color: 'var(--warning)',
               fontSize: '13px',
               display: 'flex',
               alignItems: 'center',
@@ -835,8 +876,8 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                 </svg>
               </div>
               <div>
-                <span style={{ fontWeight: 600, color: '#ECEEF3' }}>Docker Daemon Not Running</span>
-                <span style={{ color: '#8D95A5', marginLeft: '8px' }}>
+                <span style={{ fontWeight: 600, color: 'var(--text)' }}>Docker Daemon Not Running</span>
+                <span style={{ color: 'var(--muted)', marginLeft: '8px' }}>
                   Displaying host listening processes only. Start Docker Desktop to inspect containers and published ports.
                 </span>
               </div>
@@ -845,7 +886,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               <button
                 type="button"
                 className="row-action-btn"
-                style={{ height: '28px', width: 'auto', padding: '0 10px', fontSize: '12px', color: '#FBBF77', borderColor: 'rgba(251, 191, 119, 0.3)' }}
+                style={{ height: '28px', width: 'auto', padding: '0 10px', fontSize: '12px', color: 'var(--warning)', borderColor: 'rgba(251, 191, 119, 0.3)' }}
                 onClick={handleTriggerScan}
                 title="Retry Docker socket connection"
               >
@@ -935,6 +976,14 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
             {/* Views Container */}
             <div style={{ flex: 1, minHeight: 0 }}>
+              {apps.length === 0 && !initialLoadError && !initialLoading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '220px', gap: '10px', color: 'var(--muted)', textAlign: 'center' }}>
+                  <Icon name="info" size={28} />
+                  <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text)' }}>No services found yet — discovery is running…</div>
+                  <div style={{ fontSize: '12px' }}>New listening ports and containers will appear here automatically.</div>
+                </div>
+              ) : (
+                <>
               {viewType === 'table' && (
                 <TableView
                   apps={displayedApps}
@@ -983,12 +1032,14 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                   readOnly={readOnly}
                 />
               )}
+                </>
+              )}
             </div>
           </>
         )}
 
         {/* Footer info strip */}
-        <div className="c145" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#8D95A5', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '14px', marginTop: 'auto' }}>
+        <div className="c145" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--muted)', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '14px', marginTop: 'auto' }}>
           <span>{displayedApps.length} of {visibleApps.length} ports · Portly listening on port {window.location.port || (window.location.protocol === 'https:' ? '443' : '80')}</span>
           <span>SSE live · 4s polling fallback · Press ? for shortcuts</span>
         </div>
@@ -1105,11 +1156,11 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       {/* New Category Modal */}
       {showNewCatModal && (
         <div className="modal-backdrop" onClick={() => setShowNewCatModal(false)}>
-          <div className="modal-content" style={{ width: '380px', background: '#151821', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '14px', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" style={{ width: '380px', background: 'var(--surface-2)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '14px', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600 }}>Create New Category</h3>
             <form onSubmit={handleCreateCategory}>
               <div style={{ marginBottom: '14px' }}>
-                <label htmlFor="new-cat-name" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Category Name</label>
+                <label htmlFor="new-cat-name" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Category Name</label>
                 <input
                   id="new-cat-name"
                   name="newCatName"
@@ -1126,9 +1177,9 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               </div>
 
               <div style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '6px' }}>Color</label>
+                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Color</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {['#8C9EFF', '#5EEAD4', '#FBBF77', '#F5A3D0', '#B6E36B', '#C4B5FD', '#FF8A8A'].map((col) => (
+                  {['var(--accent)', 'var(--success)', 'var(--warning)', '#F5A3D0', '#B6E36B', '#C4B5FD', 'var(--danger)'].map((col) => (
                     <button
                       key={col}
                       type="button"
@@ -1178,8 +1229,8 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               gap: '6px',
               background: kioskAutoCycle ? 'rgba(94, 234, 212, 0.2)' : 'rgba(16, 18, 24, 0.92)',
               backdropFilter: 'blur(10px)',
-              border: `1px solid ${kioskAutoCycle ? '#5EEAD4' : 'rgba(255, 255, 255, 0.15)'}`,
-              color: kioskAutoCycle ? '#5EEAD4' : '#ECEEF3',
+              border: `1px solid ${kioskAutoCycle ? 'var(--success)' : 'rgba(255, 255, 255, 0.15)'}`,
+              color: kioskAutoCycle ? 'var(--success)' : 'var(--text)',
               padding: '8px 14px',
               borderRadius: '24px',
               fontSize: '12px',
@@ -1205,7 +1256,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               background: 'rgba(16, 18, 24, 0.92)',
               backdropFilter: 'blur(10px)',
               border: '1px solid rgba(140, 158, 255, 0.4)',
-              color: '#ECEEF3',
+              color: 'var(--text)',
               padding: '8px 16px',
               borderRadius: '24px',
               fontSize: '12px',

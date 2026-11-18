@@ -75,7 +75,7 @@ button{background:transparent;border:0;outline:none;cursor:pointer}
 .c068{display:flex;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:14px}
 .c069{display:flex;align-items:center;gap:12px;flex:none}
 .c070{margin:0;font-size:22px;font-weight:600;letter-spacing:-.02em}
-.c071{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#8D95A5;border:1px solid rgba(255,255,255,.07);border-radius:999px;padding:3px 10px;white-space:nowrap}
+.c071{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);border:1px solid rgba(255,255,255,.07);border-radius:999px;padding:3px 10px;white-space:nowrap}
 .c072{width:7px;height:7px;border-radius:50%;background:#5EEAD4;display:inline-block}
 .c073{display:flex;flex-wrap:nowrap;align-items:center;gap:8px}
 .c074{display:flex;flex:none;align-items:center;gap:8px;height:34px;box-sizing:border-box;padding:0 10px 0 12px;background:#151821;border:1px solid rgba(255,255,255,.07);border-radius:9px;color:#8D95A5}

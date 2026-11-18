@@ -14,7 +14,7 @@
   --surface-3: #E2E8F0;
   --border: rgba(0, 0, 0, 0.09);
   --text: #0F172A;
-  --muted: #64748B;
+  --muted: #475569;
 }
 
 [data-theme="light"] body {
@@ -896,7 +896,7 @@ kbd,
 .table-bind-text {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12.5px;
-  color: #94A3B8;
+  color: var(--muted);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -911,7 +911,7 @@ kbd,
   padding: 1px 5px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.06);
-  color: #8D95A5;
+  color: var(--muted);
 }
 
 /* Status Indicator */
@@ -944,6 +944,13 @@ kbd,
   border-radius: 50%;
   background: #FBBF77;
   box-shadow: 0 0 6px rgba(251, 191, 119, 0.6);
+}
+
+.status-dot-unknown {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8D95A5;
 }
 
 /* Row Action Buttons */
@@ -1192,4 +1199,19 @@ button.c088 {
 [data-theme="light"] [style*="rgb(21, 24, 33)"],
 [data-theme="light"] [style*="#151821"] {
   background: #F8FAFC !important;
+}
+
+/* D-6: fit all six stat tiles on narrow screens (hide secondary context) */
+@media (max-width: 900px) {
+  .c082, .c088 { padding: 10px 8px; gap: 4px; }
+  .c086 { display: none; }
+  .c085 { font-size: 14px; }
+  .c084 { font-size: 10px; }
+}
+
+/* D-6: two rows of three tiles on narrow/tablet screens so values fit */
+@media (max-width: 900px) {
+  .c081 { flex-wrap: wrap !important; overflow-x: visible !important; }
+  .c082, .c088 { flex: 1 1 33.333%; min-width: 33.333%; }
+  .c088:nth-child(4) { border-left: none; }
 }

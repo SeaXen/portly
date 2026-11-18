@@ -47,7 +47,7 @@ Unlike generic container dashboards (Portainer) or static bookmark launchpads (H
 
 ## Evidence on Hand
 
-- **Backend & E2E**: 170 automated tests (149 unit/integration + 21 Playwright E2E) passing in pytest (`tests/`).
+- **Backend & E2E**: The full pytest suite passes, including unit/integration and Playwright E2E tests (`tests/`).
 - **Frontend**: Production React 19 + TypeScript + Vite build with zero bundle warnings and zero external runtime calls.
 - **Security**: Timing-safe auth, SSRF-protected favicon & health checks, command execution allowlists, accessible dialog focus traps.
 
@@ -60,7 +60,7 @@ Unlike generic container dashboards (Portainer) or static bookmark launchpads (H
 
 ## Accessibility & Inclusion
 
-- Compliance with WCAG 2.1 AA standards.
+- Designed with WCAG 2.1 AA in mind; accessibility is an ongoing effort. An axe audit script (`portly/frontend/scripts/axe-audit.mjs`) checks serious/critical violations in dark and light themes; it does not yet pass cleanly.
 - Full keyboard navigation across all views (Table, Grid, List, Board) and global command palette (`Ctrl+K` / `Cmd+K` accessible anywhere).
 - Accessible Toasts (`role="status"`, `role="alert"`) and modal dialogs (`role="dialog"`, `aria-modal="true"`, focus trapped, ESC to dismiss).
 - Strict 4.5:1 text contrast on all text elements and interactive controls.

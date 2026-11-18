@@ -68,23 +68,23 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
               style={{
                 background: 'transparent',
                 border: 'none',
-                borderBottom: isActive ? '2px solid #8C9EFF' : '2px solid transparent',
+                borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
                 cursor: 'pointer',
                 font: 'inherit',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
                 padding: '8px 12px 10px 12px',
-                color: isActive ? '#ECEEF3' : '#8D95A5',
+                color: isActive ? 'var(--text)' : 'var(--muted)',
                 fontWeight: isActive ? 600 : 500,
                 fontSize: '13.5px',
                 transition: 'color 0.12s ease, border-color 0.12s ease',
               }}
               onMouseEnter={(e) => {
-                if (!isActive) e.currentTarget.style.color = '#ECEEF3';
+                if (!isActive) e.currentTarget.style.color = 'var(--text)';
               }}
               onMouseLeave={(e) => {
-                if (!isActive) e.currentTarget.style.color = '#8D95A5';
+                if (!isActive) e.currentTarget.style.color = 'var(--muted)';
               }}
             >
               <span>{v.name}</span>
@@ -96,7 +96,7 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
                     padding: '1px 6px',
                     borderRadius: '6px',
                     background: isActive ? 'rgba(140, 158, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                    color: isActive ? '#ECEEF3' : '#8D95A5',
+                    color: isActive ? 'var(--text)' : 'var(--muted)',
                   }}
                 >
                   {count}
@@ -124,7 +124,7 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
             marginLeft: 'auto',
             transition: 'color 0.12s',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#8C9EFF')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent)')}
           onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -136,9 +136,9 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
 
       {showSaveModal && (
         <div className="modal-backdrop" onClick={() => setShowSaveModal(false)}>
-          <div className="modal-content" style={{ width: '380px', background: '#101218', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '14px', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 600, color: '#ECEEF3' }}>Save Current View</h3>
-            <p style={{ fontSize: '13px', color: '#8D95A5', margin: '0 0 16px 0', lineHeight: 1.5 }}>
+          <div className="modal-content" style={{ width: '380px', background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '14px', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>Save Current View</h3>
+            <p style={{ fontSize: '13px', color: 'var(--muted)', margin: '0 0 16px 0', lineHeight: 1.5 }}>
               Save current filters, sort order, and column visibility as a tab.
             </p>
             <form onSubmit={handleSave}>
@@ -157,7 +157,7 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
               />
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button type="button" className="c078" onClick={() => setShowSaveModal(false)}>Cancel</button>
-                <button type="submit" className="c080" style={{ background: '#8C9EFF', color: '#0A0D14', fontWeight: 600 }}>Save View</button>
+                <button type="submit" className="c080" style={{ background: 'var(--accent)', color: '#0A0D14', fontWeight: 600 }}>Save View</button>
               </div>
             </form>
           </div>

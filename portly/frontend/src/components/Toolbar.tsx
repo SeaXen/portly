@@ -67,7 +67,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     position: 'absolute',
     top: '40px',
     left: 0,
-    background: '#151821',
+    background: 'var(--surface-2)',
     border: '1px solid rgba(255,255,255,0.12)',
     borderRadius: '10px',
     padding: '6px',
@@ -87,7 +87,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         width: '100%',
         border: 0,
         background: isSelected ? 'rgba(140, 158, 255, 0.15)' : 'transparent',
-        color: isSelected ? '#8C9EFF' : '#ECEEF3',
+        color: isSelected ? 'var(--accent)' : 'var(--text)',
         fontWeight: isSelected ? 600 : 400,
         textAlign: 'left',
         cursor: 'pointer',
@@ -214,6 +214,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             {renderDropdownItem('UP', () => { onChangeStatusFilter('up'); setShowStatusMenu(false); }, statusFilter === 'up')}
             {renderDropdownItem('DOWN', () => { onChangeStatusFilter('down'); setShowStatusMenu(false); }, statusFilter === 'down')}
             {renderDropdownItem('CONFLICT', () => { onChangeStatusFilter('conflict'); setShowStatusMenu(false); }, statusFilter === 'conflict')}
+            {renderDropdownItem('UNKNOWN', () => { onChangeStatusFilter('unknown'); setShowStatusMenu(false); }, statusFilter === 'unknown')}
           </div>
         )}
       </div>
@@ -341,7 +342,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           padding: '0 12px',
           fontSize: '13px',
           background: showHidden ? 'rgba(140, 158, 255, 0.15)' : undefined,
-          color: showHidden ? '#8C9EFF' : undefined,
+          color: showHidden ? 'var(--accent)' : undefined,
           opacity: hiddenCount === 0 && !showHidden ? 0.5 : 1,
         }}
       >

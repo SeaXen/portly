@@ -10,30 +10,13 @@ Docker Compose is the standard production deployment method for Portly.
 
 ### Production `docker-compose.yml`
 
-```yaml
-version: '3.8'
+Use the maintained root [`docker-compose.yml`](../docker-compose.yml) as-is and run `docker compose up -d` from the repository root.
 
-services:
-  portly:
-    image: ghcr.io/seaxen/portly:latest
-    container_name: portly
-    restart: unless-stopped
-    network_mode: host
-    pid: host
-    group_add:
-      - "${DOCKER_GID:-999}"
-    environment:
-      - PORTLY_HOST=0.0.0.0
-      - PORTLY_PORT=5533
-      - PORTLY_MODE=server
-      - PORTLY_DATA_DIR=/app/data
-      - PORTLY_HOSTFS=/hostfs
-      - PORTLY_ALLOW_INSECURE_BIND=false
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./data:/app/data
-      - /:/hostfs:ro
-```
+Key points in that file:
+
+- Data (SQLite database, snapshots, icons, certs) lives in the named **`portly-data`** volume mounted at `/app/data`, so it survives container recreation. Back up the volume rather than a host `./data` folder.
+- `build: .` builds the image locally; the `image:` tag is the published image. Use whichever your workflow needs.
+- `PORTLY_ALLOWED_HOSTS` is offered as a commented example. Uncomment it and set a comma-separated list of hostnames (e.g. `portly.example.com,192.168.1.10`) when Portly is reached via a DNS name or reverse proxy: it controls Host-header validation and the allowed CORS origins. IP literals are allowed automatically; domain names must be listed.
 
 ### Non-Root User & Docker Socket Permissions (`DOCKER_GID`)
 Portly runs inside the container as the non-privileged user `portly` (UID/GID 1000/1000). On Linux hosts, `/var/run/docker.sock` is owned by `root:docker`.
@@ -71,6 +54,13 @@ And point `DOCKER_HOST=tcp://127.0.0.1:2375` in Portly's environment.
 - **Process Inspection:** `pid: host` allows Portly to resolve process names, command lines, memory RSS, and CPU utilization for listening host processes.
 - **Docker Socket Mount:** `/var/run/docker.sock` allows Portly to query the Docker Engine API and receive real-time container lifecycle events.
 - **Host Filesystem Mount:** Mounts root filesystem at `/hostfs:ro` and sets `PORTLY_HOSTFS=/hostfs` so Portly can report accurate host disk utilization rather than overlay container storage.
+
+### Security Notes on Host Access
+
+- **The Docker socket is root-equivalent even with `:ro`.** The flag makes the socket file read-only, not the API behind it; that API can create privileged containers and mount host paths. See [`SECURITY.md`](../SECURITY.md).
+- `network_mode: host`, `pid: host` and `/:/hostfs:ro` are deliberately broad because host socket/process discovery and real disk telemetry depend on them. Narrowing these mounts breaks those features.
+- The `docker-socket-proxy` example above is the lower-privilege option for monitoring. Read-only endpoints (`POST=0`) do not support Portly's start/stop/recreate actions; enabling those write endpoints restores the root-equivalent risk.
+- Keep Portly behind authentication and a reverse proxy; set `PORTLY_ALLOWED_HOSTS` to the hostnames it is served under.
 
 ---
 
@@ -163,3 +153,5 @@ ingress:
 - [ ] On first launch in server mode, copy the **Setup Token** printed to `stderr` and create the initial admin password.
 - [ ] Keep **Safe Mode** enabled by default in settings to guard against accidental container termination.
 - [ ] Set `PORTLY_CORS_ORIGINS` to trusted domains if accessing Portly via custom cross-origin web clients.
+- [ ] Set `PORTLY_ALLOWED_HOSTS` to the hostnames Portly is served under (comma-separated) so Host-header checks and CORS allow them.
+- [ ] Review the host-access tradeoffs in [Security Notes on Host Access](#security-notes-on-host-access) before exposing Portly beyond a trusted network.

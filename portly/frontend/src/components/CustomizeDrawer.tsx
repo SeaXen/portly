@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Icon } from './Icon';
 import { api } from '../api';
 import { Category, Rule } from '../types';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useToast } from './Toast';
 
 export type Theme = 'dark' | 'light' | 'oled' | 'system';
@@ -50,6 +51,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
   readOnly = false,
 }) => {
   const { error } = useToast();
+  const containerRef = useFocusTrap<HTMLDivElement>(true, onClose);
   const [showAddRule, setShowAddRule] = useState(false);
   const [newRuleField, setNewRuleField] = useState('image');
   const [newRuleOp, setNewRuleOp] = useState('contains');
@@ -107,7 +109,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
     }
   };
 
-  const accents = ['#8C9EFF', '#5EEAD4', '#FBBF77', '#F5A3D0', '#B6E36B', '#C4B5FD'];
+  const accents = ['var(--accent)', 'var(--success)', 'var(--warning)', '#F5A3D0', '#B6E36B', '#C4B5FD'];
 
   const handleCreateRule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,10 +142,14 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
   return (
     <div className="drawer-backdrop" onClick={onClose} style={{ zIndex: 1250 }}>
       <div
+        ref={containerRef}
         className="drawer-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="customize-drawer-title"
         style={{
           width: '420px',
-          background: '#101218',
+          background: 'var(--surface-1)',
           borderLeft: '1px solid rgba(255,255,255,0.08)',
           padding: '24px',
           display: 'flex',
@@ -155,13 +161,13 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
       >
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.07)', paddingBottom: '14px' }}>
-          <span style={{ fontSize: '18px', fontWeight: 600, color: '#ECEEF3' }}>Customize Dashboard</span>
+          <span id="customize-drawer-title" style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text)' }}>Customize Dashboard</span>
           <button type="button" className="c077" onClick={onClose} aria-label="Close drawer"><Icon name="x" size={13} /></button>
         </div>
 
         {/* Layout */}
         <div className="c168">
-          <div className="c169" style={{ fontSize: '12px', color: '#8D95A5', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+          <div className="c169" style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
             Layout View
           </div>
           <div className="c093" style={{ marginBottom: '10px' }}>
@@ -178,7 +184,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
             ))}
           </div>
 
-          <div className="c169" style={{ fontSize: '12px', color: '#8D95A5', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '12px 0 8px' }}>
+          <div className="c169" style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '12px 0 8px' }}>
             Theme
           </div>
           <div className="c093">
@@ -195,7 +201,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
             ))}
           </div>
 
-          <div className="c169" style={{ fontSize: '12px', color: '#8D95A5', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '12px 0 8px' }}>
+          <div className="c169" style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '12px 0 8px' }}>
             Density
           </div>
           <div className="c093">
@@ -218,12 +224,12 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
 
         {/* Organize */}
         <div className="c168">
-          <div className="c169" style={{ fontSize: '12px', color: '#8D95A5', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+          <div className="c169" style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
             Organize & Sort
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div>
-              <label htmlFor="custom-group-by" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Group By</label>
+              <label htmlFor="custom-group-by" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Group By</label>
               <select
                 id="custom-group-by"
                 name="groupBy"
@@ -239,7 +245,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
               </select>
             </div>
             <div>
-              <label htmlFor="custom-sort-by" style={{ display: 'block', fontSize: '12px', color: '#8D95A5', marginBottom: '4px' }}>Sort By</label>
+              <label htmlFor="custom-sort-by" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Sort By</label>
               <select
                 id="custom-sort-by"
                 name="sortBy"
@@ -260,7 +266,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
 
         {/* Card & Column Fields */}
         <div className="c168">
-          <div className="c169" style={{ fontSize: '12px', color: '#8D95A5', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+          <div className="c169" style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
             Card & Column Fields
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -271,7 +277,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
               { id: 'bind', label: 'Bind address' },
               { id: 'uptime', label: 'Uptime duration' },
             ].map((f) => (
-              <label key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px', color: '#ECEEF3', cursor: 'pointer' }}>
+              <label key={f.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text)', cursor: 'pointer' }}>
                 <span>{f.label}</span>
                 <input
                   type="checkbox"
@@ -286,7 +292,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
 
         {/* Accent Color */}
         <div className="c168">
-          <div className="c169" style={{ fontSize: '12px', color: '#8D95A5', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+          <div className="c169" style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
             Accent Color
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -311,7 +317,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
               type="color"
               aria-label="Custom accent color"
               title="Custom accent color"
-              value={/^#[0-9a-f]{6}$/i.test(accent) ? accent : '#8C9EFF'}
+              value={/^#[0-9a-f]{6}$/i.test(accent) ? accent : 'var(--accent)'}
               onChange={(e) => onChangeAccent(e.target.value)}
               style={{ width: '28px', height: '28px', padding: 0, border: 'none', borderRadius: '50%', background: 'transparent', cursor: 'pointer' }}
             />
@@ -321,7 +327,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
         {/* Auto-categorize Rules */}
         <div className="c168">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <div className="c169" style={{ fontSize: '12px', color: '#8D95A5', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <div className="c169" style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Auto-categorize Rules
             </div>
             {!readOnly && (
@@ -347,16 +353,16 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '6px 10px',
-                    background: '#151821',
+                    background: 'var(--surface-2)',
                     borderRadius: '6px',
                     fontSize: '12px',
                   }}
                 >
-                  <span style={{ color: '#ECEEF3', fontFamily: 'JetBrains Mono, monospace' }}>
+                  <span style={{ color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace' }}>
                     {r.field} {r.operator} {r.value}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: cat?.color || '#8C9EFF', fontWeight: 600 }}>
+                    <span style={{ color: cat?.color || 'var(--accent)', fontWeight: 600 }}>
                       → {cat?.name || r.category_id}
                     </span>
                     {!readOnly && (
@@ -364,7 +370,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                         type="button"
                         aria-label="Delete rule"
                         onClick={() => handleDeleteRule(r.id)}
-                        style={{ background: 'none', border: 0, color: '#8D95A5', cursor: 'pointer', padding: 0 }}
+                        style={{ background: 'none', border: 0, color: 'var(--muted)', cursor: 'pointer', padding: 0 }}
                         title="Delete rule"
                       >
                         <Icon name="x" size={13} />
@@ -379,8 +385,8 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
 
         {/* Add rule sub-dialog */}
         {showAddRule && !readOnly && (
-          <form onSubmit={handleCreateRule} style={{ background: '#151821', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3', marginBottom: '10px' }}>Create Rule</div>
+          <form onSubmit={handleCreateRule} style={{ background: 'var(--surface-2)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '10px' }}>Create Rule</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
               <select
                 name="newRuleField"
@@ -420,7 +426,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
               required
             />
             <div style={{ marginBottom: '10px' }}>
-              <label htmlFor="rule-cat-select" style={{ display: 'block', fontSize: '11px', color: '#8D95A5', marginBottom: '4px' }}>Assign Category</label>
+              <label htmlFor="rule-cat-select" style={{ display: 'block', fontSize: '11px', color: 'var(--muted)', marginBottom: '4px' }}>Assign Category</label>
               <select
                 id="rule-cat-select"
                 name="newRuleCat"
@@ -444,10 +450,10 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
         {/* Webhooks & Alerts */}
         <div className="c168" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-            <div className="c169" style={{ fontSize: '12px', color: '#8D95A5', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <div className="c169" style={{ fontSize: '12px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Webhooks & Alerting
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#ECEEF3', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text)', cursor: 'pointer' }}>
               <input
                 type="checkbox"
                 name="webhookEnabled"
@@ -461,7 +467,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div>
-              <label htmlFor="webhook-type" style={{ display: 'block', fontSize: '11px', color: '#8D95A5', marginBottom: '4px' }}>Webhook Type</label>
+              <label htmlFor="webhook-type" style={{ display: 'block', fontSize: '11px', color: 'var(--muted)', marginBottom: '4px' }}>Webhook Type</label>
               <select
                 id="webhook-type"
                 name="webhookType"
@@ -479,7 +485,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
             </div>
 
             <div>
-              <label htmlFor="webhook-url" style={{ display: 'block', fontSize: '11px', color: '#8D95A5', marginBottom: '4px' }}>Endpoint URL</label>
+              <label htmlFor="webhook-url" style={{ display: 'block', fontSize: '11px', color: 'var(--muted)', marginBottom: '4px' }}>Endpoint URL</label>
               <input
                 id="webhook-url"
                 name="webhookUrl"
@@ -496,7 +502,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
             </div>
 
             {webhookFeedback && (
-              <div style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', background: 'rgba(140, 158, 255, 0.15)', color: '#8C9EFF' }}>
+              <div style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '6px', background: 'rgba(140, 158, 255, 0.15)', color: 'var(--accent)' }}>
                 {webhookFeedback}
               </div>
             )}

@@ -33,7 +33,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
     <div
       style={{
         minHeight: '100vh',
-        background: '#0A0B0F',
+        background: 'var(--bg)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -45,7 +45,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         style={{
           width: '100%',
           maxWidth: 400,
-          background: '#101218',
+          background: 'var(--surface-1)',
           border: '1px solid rgba(255, 255, 255, 0.08)',
           borderRadius: 16,
           padding: 36,
@@ -62,7 +62,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               height: 52,
               borderRadius: 14,
               background: '#1D2A44',
-              color: '#8C9EFF',
+              color: 'var(--accent)',
               fontSize: 26,
               display: 'flex',
               alignItems: 'center',
@@ -72,8 +72,8 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           >
             ⚓
           </div>
-          <h1 style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 700, color: '#ECEEF3' }}>Portly Dashboard</h1>
-          <p style={{ margin: 0, fontSize: 14, color: '#8D95A5' }}>Sign in to manage ports and containers</p>
+          <h1 style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>Portly Dashboard</h1>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)' }}>Sign in to manage ports and containers</p>
         </div>
 
         {error && (
@@ -81,8 +81,8 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             role="alert"
             style={{
               background: 'rgba(255, 138, 138, 0.1)',
-              border: '1px solid #FF8A8A',
-              color: '#FF8A8A',
+              border: '1px solid var(--danger)',
+              color: 'var(--danger)',
               padding: '10px 14px',
               borderRadius: 8,
               fontSize: 13,
@@ -95,7 +95,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="login-username" style={{ fontSize: 13, color: '#8D95A5', fontWeight: 500 }}>
+            <label htmlFor="login-username" style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>
               Username
             </label>
             <input
@@ -112,7 +112,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                 borderRadius: 8,
                 border: '1px solid #242C37',
                 background: '#161B22',
-                color: '#ECEEF3',
+                color: 'var(--text)',
                 padding: '0 14px',
                 fontSize: 14,
                 outline: 'none',
@@ -121,7 +121,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="login-password" style={{ fontSize: 13, color: '#8D95A5', fontWeight: 500 }}>
+            <label htmlFor="login-password" style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>
               Password
             </label>
             <input
@@ -138,7 +138,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                 borderRadius: 8,
                 border: '1px solid #242C37',
                 background: '#161B22',
-                color: '#ECEEF3',
+                color: 'var(--text)',
                 padding: '0 14px',
                 fontSize: 14,
                 outline: 'none',
@@ -153,7 +153,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
               height: 44,
               borderRadius: 8,
               border: 0,
-              background: '#8C9EFF',
+              background: 'var(--accent)',
               color: '#0B1220',
               fontWeight: 600,
               fontSize: 15,

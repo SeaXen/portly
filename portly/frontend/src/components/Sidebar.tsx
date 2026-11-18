@@ -61,7 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </svg>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontSize: '17px', fontWeight: 700, color: '#ECEEF3', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+            <div style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
               Portly
             </div>
             <span style={{ fontSize: '10px', color: 'var(--muted)', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
@@ -187,7 +187,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="sidebar-cat-list">
             {categories.map((cat) => {
               const isSelected = selectedCategory === cat.id;
-              const catColor = cat.color || '#8C9EFF';
+              const catColor = cat.color || 'var(--accent)';
 
               return (
                 <button
@@ -232,7 +232,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span
               className="safe-card-icon"
               style={{
-                color: safeMode ? '#5EEAD4' : '#FF8A8A',
+                color: safeMode ? 'var(--success)' : 'var(--danger)',
                 background: safeMode ? 'rgba(94, 234, 212, 0.12)' : 'rgba(255, 138, 138, 0.12)',
               }}
             >
@@ -251,10 +251,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </svg>
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: '#ECEEF3' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
                 Safe Mode
               </div>
-              <div style={{ fontSize: '11px', color: safeMode ? '#8D95A5' : '#FF8A8A', lineHeight: 1.3 }}>
+              <div style={{ fontSize: '11px', color: safeMode ? 'var(--muted)' : 'var(--danger)', lineHeight: 1.3 }}>
                 {safeMode
                   ? 'Mutations locked'
                   : unlockCountdown != null
@@ -282,23 +282,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="modal-content"
             style={{
               width: '440px',
-              background: '#101218',
+              background: 'var(--surface-1)',
               border: '1px solid rgba(255,255,255,0.12)',
               borderRadius: '14px',
               padding: '24px',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ fontSize: '18px', fontWeight: 600, color: '#ECEEF3', marginBottom: '8px' }}>
+            <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>
               Disable Safe Mode?
             </div>
-            <p style={{ fontSize: '13px', color: '#8D95A5', lineHeight: 1.5, margin: '0 0 16px 0' }}>
+            <p style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5, margin: '0 0 16px 0' }}>
               Turning off Safe mode allows executing real operations: starting/stopping services, killing processes, and recreating containers on your host machine.
             </p>
 
             <div style={{ background: '#161B22', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#ECEEF3', marginBottom: '8px' }}>Auto-Relock Protection:</div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#ECEEF3', cursor: 'pointer', marginBottom: '6px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>Auto-Relock Protection:</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text)', cursor: 'pointer', marginBottom: '6px' }}>
                 <input
                   type="radio"
                   name="relock"
@@ -307,7 +307,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 Unlock for 5 minutes (Recommended)
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#ECEEF3', cursor: 'pointer', marginBottom: '6px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text)', cursor: 'pointer', marginBottom: '6px' }}>
                 <input
                   type="radio"
                   name="relock"
@@ -316,7 +316,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 Unlock for 15 minutes
               </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#ECEEF3', cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text)', cursor: 'pointer' }}>
                 <input
                   type="radio"
                   name="relock"
@@ -334,7 +334,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 type="button"
                 className="c080"
-                style={{ background: '#FF8A8A', color: '#0A0B0F', fontWeight: 600 }}
+                style={{ background: 'var(--danger)', color: 'var(--bg)', fontWeight: 600 }}
                 onClick={confirmUnlockSafeMode}
               >
                 Disable Safe Mode

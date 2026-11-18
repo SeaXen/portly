@@ -64,8 +64,8 @@ export const BoardView: React.FC<BoardViewProps> = ({
                 minWidth: '260px',
                 maxWidth: '300px',
                 flexShrink: 1,
-                background: '#101218',
-                border: isTarget ? '2px dashed #8C9EFF' : '1px solid rgba(255,255,255,0.07)',
+                background: 'var(--surface-1)',
+                border: isTarget ? '2px dashed var(--accent)' : '1px solid rgba(255,255,255,0.07)',
                 borderRadius: '14px',
                 padding: '14px',
                 display: 'flex',
@@ -84,10 +84,10 @@ export const BoardView: React.FC<BoardViewProps> = ({
                     width: '8px',
                     height: '8px',
                     borderRadius: '3px',
-                    backgroundColor: cat.color || '#8C9EFF',
+                    backgroundColor: cat.color || 'var(--accent)',
                   }}
                 />
-                <span className="c152" style={{ fontWeight: 600, color: '#ECEEF3', flex: 1 }}>
+                <span className="c152" style={{ fontWeight: 600, color: 'var(--text)', flex: 1 }}>
                   {cat.name}
                 </span>
                 <span className="c055">{categoryApps.length}</span>
@@ -114,7 +114,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
                     }
                   }}
                   style={{
-                    background: '#151821',
+                    background: 'var(--surface-2)',
                     border: '1px solid rgba(255,255,255,0.07)',
                     borderRadius: '10px',
                     padding: '12px',
@@ -137,20 +137,20 @@ export const BoardView: React.FC<BoardViewProps> = ({
                           </svg>
                         </span>
                       )}
-                      <span className="c154" style={{ fontWeight: 600, color: '#ECEEF3' }}>
+                      <span className="c154" style={{ fontWeight: 600, color: 'var(--text)' }}>
                         {app.name}
                       </span>
                     </div>
                     <span
                       className="c122"
                       style={{
-                        backgroundColor: app.status === 'up' ? '#5EEAD4' : (app.status === 'down' ? '#FF8A8A' : '#FBBF77'),
+                        backgroundColor: app.status === 'unknown' ? 'var(--muted)' : (app.status === 'up' ? 'var(--success)' : (app.status === 'down' ? 'var(--danger)' : 'var(--warning)')),
                       }}
                     />
                   </div>
 
                   <div className="c155" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span className="c156" style={{ fontFamily: 'JetBrains Mono, monospace', color: '#8C9EFF', fontWeight: 600, fontSize: '15px' }}>
+                    <span className="c156" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)', fontWeight: 600, fontSize: '15px' }}>
                       {app.port}
                     </span>
                     <span className={app.source === 'docker' ? 'c111' : 'c109'} style={{ textTransform: 'capitalize' }}>
@@ -158,8 +158,8 @@ export const BoardView: React.FC<BoardViewProps> = ({
                     </span>
                   </div>
 
-                  <div className="c065" style={{ fontSize: '12px', color: '#8D95A5' }}>
-                    CPU {app.cpu_percent || 0}% · RAM {app.ram_mb || 0} MB
+                  <div className="c065" style={{ fontSize: '12px', color: app.stats_age_sec == null || app.stats_age_sec > 15 ? 'var(--muted)' : 'var(--muted)' }} title={app.stats_age_sec == null || app.stats_age_sec > 15 ? 'Stale or unavailable stats' : undefined}>
+                    CPU {app.cpu_percent == null ? '—' : `${app.cpu_percent}%`} · RAM {app.ram_mb == null ? '—' : `${app.ram_mb} MB`}{app.stats_age_sec == null || app.stats_age_sec > 15 ? ' (stale)' : ''}
                   </div>
                 </div>
               ))}
@@ -174,7 +174,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
                     padding: '12px',
                     textAlign: 'center',
                     fontSize: '12px',
-                    color: '#8D95A5',
+                    color: 'var(--muted)',
                     backgroundColor: isTarget ? 'rgba(140, 158, 255, 0.08)' : 'transparent',
                   }}
                 >
@@ -199,7 +199,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
               borderRadius: '14px',
               border: '1px dashed rgba(255,255,255,0.15)',
               background: 'transparent',
-              color: '#8D95A5',
+              color: 'var(--muted)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',

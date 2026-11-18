@@ -20,7 +20,7 @@ All notable changes to Portly are documented in this file.
 - **Docker**: Image updates preserve privileges, capabilities, devices, healthchecks and resource limits; exec streams with a real deadline and bounded output; Dockerfile honors `PORTLY_PORT`/`PORTLY_HOST`/`PORTLY_MODE` in CMD and healthcheck.
 - **Build**: CI uses `npm ci`; Docker `latest` is published only for GitHub Releases; service-worker cache bumped to v3; frontend lockfile regenerated so `npm ci` no longer fails in CI.
 
-## [0.1.1] - 2026-11-18
+## [1.1.0] - 2026-11-18
 
 ### ⚡ Feature Enhancements
 - **Unhide Support**: Added a `Hidden (N)` toggle in the toolbar to reveal hidden ports, plus an `Unhide` bulk action (`{"action":"unhide"}` on `POST /api/apps/bulk`). The dashboard now fetches with `include_hidden=true` and filters client-side so the toggle is instant.
@@ -39,7 +39,7 @@ All notable changes to Portly are documented in this file.
 - Bumped the service-worker cache version so updated UI assets are picked up.
 - Aligned `docs/API.md` with the implemented endpoints, exec allowlist and rate-limit window.
 
-## [1.1.0] - 2026-11-17
+## [0.1.1] - 2026-11-17
 
 ### 🚨 Critical Fixes & Stability (P0)
 - **First-Run Stability (P0-1)**: Fixed first-run crash on `0.0.0.0` in Docker by defaulting `PORTLY_MODE=server`, generating single-use setup token to `stderr`, and adding minimal `/api/health` healthcheck endpoint.

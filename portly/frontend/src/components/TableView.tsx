@@ -35,14 +35,13 @@ export const TableView: React.FC<TableViewProps> = ({
   onAdoptApp,
   safeMode,
   readOnly = false,
-  visibleFields = {},
   groupBy = 'none',
 }) => {
   const allSelected = apps.length > 0 && apps.every((a) => selectedIds.includes(a.id));
 
   const getCategoryColor = (catId: string) => {
     const c = categories.find((x) => x.id === catId);
-    return c?.color || '#8C9EFF';
+    return c?.color || 'var(--accent)';
   };
 
   const getCategoryName = (catId: string) => {
@@ -91,8 +90,8 @@ export const TableView: React.FC<TableViewProps> = ({
             />
           </div>
           <div></div>
-          <div style={{ color: '#8D95A5' }}>Name</div>
-          <div style={{ color: '#8C9EFF' }}>Port</div>
+          <div style={{ color: 'var(--muted)' }}>Name</div>
+          <div style={{ color: 'var(--accent)' }}>Port</div>
           <div>Source</div>
           <div>Category</div>
           <div>Bind</div>
@@ -104,7 +103,7 @@ export const TableView: React.FC<TableViewProps> = ({
 
         {/* Rows */}
         {apps.length === 0 ? (
-          <div style={{ padding: '56px 24px', textAlign: 'center', color: '#8D95A5', fontSize: '14px' }}>
+          <div style={{ padding: '56px 24px', textAlign: 'center', color: 'var(--muted)', fontSize: '14px' }}>
             No listening ports or applications found matching current filters.
           </div>
         ) : (
@@ -117,7 +116,7 @@ export const TableView: React.FC<TableViewProps> = ({
                     background: 'rgba(255, 255, 255, 0.03)',
                     fontSize: '12px',
                     fontWeight: 600,
-                    color: '#8C9EFF',
+                    color: 'var(--accent)',
                     letterSpacing: '0.04em',
                     borderTop: '1px solid rgba(255, 255, 255, 0.06)',
                     borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
@@ -127,16 +126,16 @@ export const TableView: React.FC<TableViewProps> = ({
                   }}
                 >
                   <span>{grp.name}</span>
-                  <span style={{ fontSize: '11px', color: '#8D95A5' }}>({grp.items.length})</span>
+                  <span style={{ fontSize: '11px', color: 'var(--muted)' }}>({grp.items.length})</span>
                 </div>
               )}
 
               {grp.items.map((app) => {
                 const isSelected = selectedIds.includes(app.id);
-                const initial = (app.name || 'A').charAt(0).toUpperCase();
                 const catColor = getCategoryColor(app.category_id);
                 const catName = getCategoryName(app.category_id);
-                const cpuVal = Math.min(100, Math.max(0, app.cpu_percent || 0));
+                const cpuVal = app.cpu_percent == null ? null : Math.min(100, Math.max(0, app.cpu_percent));
+                const statsStale = app.stats_age_sec == null || app.stats_age_sec > 15;
 
                 return (
                   <div
@@ -181,11 +180,11 @@ export const TableView: React.FC<TableViewProps> = ({
                     <div className="table-cell" style={{ gap: '10px' }}>
                       <AppIcon appId={app.id} name={app.name} source={app.source} size={30} />
                       <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                        <div style={{ fontWeight: 600, color: '#ECEEF3', fontSize: '13.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '13.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {app.name}
-                          {app.pinned && <span style={{ marginLeft: '6px', fontSize: '11px', color: '#FBBF77' }}>★</span>}
+                          {app.pinned && <span style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--warning)' }}>★</span>}
                         </div>
-                        <div style={{ fontSize: '11.5px', color: '#8D95A5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontSize: '11.5px', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {app.source === 'docker'
                             ? (app.image || app.container_name)
                             : (app.process_name ? `${app.process_name}${app.pid ? ` · PID ${app.pid}` : ''}` : app.cmdline || 'Host')}
@@ -194,7 +193,7 @@ export const TableView: React.FC<TableViewProps> = ({
                     </div>
 
                     {/* Port */}
-                    <div className="table-cell" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, color: '#8C9EFF', fontSize: '13.5px' }}>
+                    <div className="table-cell" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, color: 'var(--accent)', fontSize: '13.5px' }}>
                       {app.port}
                     </div>
 
@@ -208,7 +207,7 @@ export const TableView: React.FC<TableViewProps> = ({
                           borderRadius: '999px',
                           textTransform: 'capitalize',
                           fontWeight: 500,
-                          color: app.source === 'docker' ? '#5EEAD4' : '#C4B5FD',
+                          color: app.source === 'docker' ? 'var(--success)' : '#C4B5FD',
                           background: app.source === 'docker' ? 'rgba(94, 234, 212, 0.12)' : 'rgba(196, 181, 253, 0.12)',
                           border: `1px solid ${app.source === 'docker' ? 'rgba(94, 234, 212, 0.25)' : 'rgba(196, 181, 253, 0.25)'}`,
                         }}
@@ -222,7 +221,7 @@ export const TableView: React.FC<TableViewProps> = ({
                             padding: '1px 6px',
                             borderRadius: '999px',
                             background: 'rgba(251, 191, 119, 0.15)',
-                            color: '#FBBF77',
+                            color: 'var(--warning)',
                             border: '1px solid rgba(251, 191, 119, 0.25)',
                           }}
                           title={`Tunnel URL: ${app.url_override}`}
@@ -242,10 +241,10 @@ export const TableView: React.FC<TableViewProps> = ({
                               ? 'rgba(251, 191, 119, 0.18)'
                               : 'rgba(94, 234, 212, 0.14)',
                             color: app.tls_expired
-                              ? '#FF8A8A'
+                              ? 'var(--danger)'
                               : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30)
-                              ? '#FBBF77'
-                              : '#5EEAD4',
+                              ? 'var(--warning)'
+                              : 'var(--success)',
                             border: `1px solid ${
                               app.tls_expired
                                 ? 'rgba(255, 92, 92, 0.3)'
@@ -262,7 +261,7 @@ export const TableView: React.FC<TableViewProps> = ({
                               : 'TLS / SSL Enabled'
                           }
                         >
-                          {app.tls_expired ? <><Icon name="x" size={12} color="#FF8A8A" /> Expired</> : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30) ? <><Icon name="warning" size={12} color="#FBBF77" /> {app.tls_days_remaining}d</> : <><Icon name="lock" size={12} /> TLS</>}
+                          {app.tls_expired ? <><Icon name="x" size={12} color="var(--danger)" /> Expired</> : (app.tls_days_remaining !== undefined && app.tls_days_remaining <= 30) ? <><Icon name="warning" size={12} color="var(--warning)" /> {app.tls_days_remaining}d</> : <><Icon name="lock" size={12} /> TLS</>}
                         </span>
                       )}
                     </div>
@@ -305,19 +304,25 @@ export const TableView: React.FC<TableViewProps> = ({
                         {app.status === 'up' && (
                           <>
                             <span className="status-dot-up"></span>
-                            <span style={{ color: '#ECEEF3' }}>Up</span>
+                            <span style={{ color: 'var(--text)' }}>Up</span>
                           </>
                         )}
                         {app.status === 'down' && (
                           <>
                             <span className="status-dot-down"></span>
-                            <span style={{ color: '#FF8A8A' }}>Down</span>
+                            <span style={{ color: 'var(--danger)' }}>Down</span>
                           </>
                         )}
                         {app.status === 'conflict' && (
                           <>
                             <span className="status-dot-conflict"></span>
-                            <span style={{ color: '#FBBF77' }}>Conflict</span>
+                            <span style={{ color: 'var(--warning)' }}>Conflict</span>
+                          </>
+                        )}
+                        {app.status === 'unknown' && (
+                          <>
+                            <span className="status-dot-unknown"></span>
+                            <span style={{ color: 'var(--muted)' }}>Unknown</span>
                           </>
                         )}
                       </div>
@@ -326,16 +331,16 @@ export const TableView: React.FC<TableViewProps> = ({
                     {/* CPU bar */}
                     <div className="table-cell" style={{ gap: '8px' }}>
                       <div style={{ width: '42px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                        <div style={{ width: `${Math.max(4, cpuVal)}%`, height: '100%', background: '#8C9EFF', borderRadius: '2px' }} />
+                        <div style={{ width: `${cpuVal === null ? 0 : Math.max(4, cpuVal)}%`, height: '100%', background: 'var(--accent)', borderRadius: '2px' }} />
                       </div>
-                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: '#8D95A5' }}>
-                        {cpuVal}%
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: statsStale ? 'var(--muted)' : 'var(--muted)' }} title={statsStale ? 'Stale or unavailable stats' : undefined}>
+                        {cpuVal === null ? '—' : `${cpuVal}%`}{statsStale ? ' (stale)' : ''}
                       </span>
                     </div>
 
                     {/* RAM */}
-                    <div className="table-cell" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: '#8D95A5' }}>
-                      {app.ram_mb > 0 ? `${app.ram_mb} MB` : '0 MB'}
+                    <div className="table-cell" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: statsStale ? 'var(--muted)' : 'var(--muted)' }} title={statsStale ? 'Stale or unavailable stats' : undefined}>
+                      {app.ram_mb == null ? '—' : app.ram_mb > 0 ? `${app.ram_mb} MB` : '0 MB'}
                     </div>
 
                     {/* Actions */}
@@ -388,7 +393,7 @@ export const TableView: React.FC<TableViewProps> = ({
                             e.stopPropagation();
                             onAdoptApp(app);
                           }}
-                          style={{ color: '#8C9EFF' }}
+                          style={{ color: 'var(--accent)' }}
                         >
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                             <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>

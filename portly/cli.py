@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import socket
 import sys
 import webbrowser
 import uvicorn
@@ -11,6 +12,22 @@ from portly.backend import auth
 from portly.backend.discovery.merge import merge_discovered_apps
 from portly.backend.ports import check_port_availability, suggest_free_ports
 from portly.backend.store import Store
+
+
+def _display_host(host: str) -> str:
+    """Resolve wildcard bind addresses to a URL a user can actually open."""
+    if host not in ("0.0.0.0", "::"):
+        return host
+    try:
+        # UDP connect picks a route without sending a packet.
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            ip = sock.getsockname()[0]
+        if ip and ip != "0.0.0.0":
+            return ip
+    except OSError:
+        pass
+    return "localhost"
 
 
 def main():
@@ -57,6 +74,9 @@ def main():
     logs_parser.add_argument("app", help="App name or ID")
     logs_parser.add_argument("--tail", type=int, default=100, help="Number of lines to show (default: 100)")
 
+    # reset-setup-token command
+    subparsers.add_parser("reset-setup-token", help="Generate a new admin setup token (invalidates the previous one)")
+
     args = parser.parse_args()
 
     if not args.command or args.command == "run":
@@ -78,7 +98,7 @@ def main():
             print("=" * 80, file=sys.stderr)
             print("⚓ PORTLY INITIAL ADMIN SETUP REQUIRED", file=sys.stderr)
             print(f"Setup Token: {setup_token}", file=sys.stderr)
-            print(f"Complete setup at: http://{host}:{port}", file=sys.stderr)
+            print(f"Complete setup at: http://{_display_host(host)}:{port}", file=sys.stderr)
             print("=" * 80, file=sys.stderr)
 
         # Propagate configuration to environment for FastAPI lifespan and auth checks
@@ -86,9 +106,19 @@ def main():
         os.environ["PORTLY_PORT"] = str(port)
         os.environ["PORTLY_MODE"] = str(mode)
 
-        print(f"Starting Portly dashboard on http://{host}:{port} (Mode: {mode})")
+        print(f"Starting Portly dashboard on http://{_display_host(host)}:{port} (Mode: {mode})")
         import uvicorn
         uvicorn.run("portly.backend.app:app", host=host, port=port, log_level="info")
+
+    elif args.command == "reset-setup-token":
+        if os.environ.get("PORTLY_SETUP_TOKEN", "").strip():
+            print("PORTLY_SETUP_TOKEN is set; remove it to reset the setup token.", file=sys.stderr)
+            sys.exit(1)
+        token = auth.get_setup_token()
+        print("=" * 80, file=sys.stderr)
+        print("⚓ PORTLY SETUP TOKEN (regenerated)", file=sys.stderr)
+        print(f"Setup Token: {token}", file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
 
     elif args.command == "list":
         store = Store()
