@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "portly/frontend/src/styles/app.css"
+        ],
+        "createdAt": "2026-11-20T07:05:40.343Z",
+        "reason": "Impeccable audit triage 2026-11-20: pre-existing active-nav and selected-row indicators (2.5px inset stripe), documented in DESIGN.md Navigation & Docks; functional selection state, preserved by refinement scope"
+      }
+    ]
+  }
+}
