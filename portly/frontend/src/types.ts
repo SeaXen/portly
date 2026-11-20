@@ -101,6 +101,8 @@ export interface StatMetric {
   context: string;
   percent?: number;
   conflict_count?: number;
+  /** Disk only: false when PORTLY_HOSTFS is set but not mounted. */
+  host_visible?: boolean;
   sparkline: string;
   history: number[];
 }
@@ -148,6 +150,10 @@ export interface SystemStats {
     free_gb: number;
     percent: number;
   }>;
+  /** False when PORTLY_HOSTFS is configured but not mounted. */
+  host_visible?: boolean;
+  /** True when X-Forwarded-For arrived without PORTLY_TRUSTED_PROXIES configured. */
+  untrusted_proxy_detected?: boolean;
   interfaces: Array<{
     name: string;
     ip: string;

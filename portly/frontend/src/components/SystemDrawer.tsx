@@ -117,6 +117,15 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose }) => {
           <div style={{ color: 'var(--muted)', textAlign: 'center', paddingTop: '40px' }}>Loading system telemetry…</div>
         ) : stats ? (
           <>
+            {stats.untrusted_proxy_detected && (
+              <div role="note" style={{ padding: '10px 14px', borderRadius: '10px', background: 'rgba(251, 191, 119, 0.08)', border: '1px solid rgba(251, 191, 119, 0.22)', color: 'var(--warning)', fontSize: '12px', lineHeight: 1.5 }}>
+                <strong>Behind a proxy?</strong>
+                <div style={{ color: 'var(--muted)', marginTop: '4px' }}>
+                  Proxy headers were seen but <code>PORTLY_TRUSTED_PROXIES</code> is not set. Client IPs (login lockout) and Secure cookies are unreliable. Set it to your proxy address.
+                </div>
+              </div>
+            )}
+
             {/* Overview Box */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div style={{ padding: '14px', background: 'var(--surface-2)', borderRadius: '10px' }}>
@@ -176,6 +185,11 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose }) => {
             {/* Disks */}
             <div style={{ background: 'var(--surface-2)', borderRadius: '12px', padding: '16px' }}>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '12px' }}>Disk Storage & Mounts</div>
+              {stats.host_visible === false && (
+                <div role="note" style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
+                  Container disk shown. Mount <code>/:/hostfs:ro</code> and set <code>PORTLY_HOSTFS=/hostfs</code> for host numbers.
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {stats.disks?.map((d, i) => (
                   <div key={i} style={{ background: 'var(--surface-1)', padding: '10px', borderRadius: '8px' }}>
