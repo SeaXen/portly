@@ -12,6 +12,19 @@ All notable changes to Portly are documented in this file.
 - **Cleaner Board & Ports**: Empty board columns are hidden until a drag starts, and port numbers no longer show a leading colon.
 
 ### 🩹 Fixes
+- **Round-3 security & correctness pass (N-1 … N-12)**:
+  - SSE subscribers are registered inside the stream generator, so failed or aborted `/api/stream` requests can no longer exhaust the 64-subscriber cap.
+  - Host validation is no longer disabled by `PORTLY_ALLOW_INSECURE_BIND`; subdomains are accepted only with an explicit `*.example.com` entry in `PORTLY_ALLOWED_HOSTS`.
+  - Login lockout is keyed by username (strict) *and* IP (looser), so one client behind a proxy can no longer lock out every user; setup attempts use a separate key.
+  - First-run setup is atomic: concurrent requests create exactly one admin.
+  - The dummy bcrypt hash used for constant-time checks on unknown users is generated at import, so it is always a valid digest.
+  - Session tokens are no longer returned in browser login/setup response bodies; CLI clients opt in with `X-Portly-Client: cli`.
+  - `public_host` is cached instead of hitting SQLite on every request, and early 400/403 responses now carry the security headers.
+  - `index.html`, `sw.js` and the manifest are `no-cache`; hashed `/assets/*` are immutable.
+  - Session cookies honour `X-Forwarded-Proto: https` from `PORTLY_TRUSTED_PROXIES`, and untrusted proxy headers are surfaced in the System drawer.
+  - The default compose file no longer mounts `/` into the container; host disk stats are opt-in and the UI labels container-only disk numbers.
+  - One version source of truth (`portly.__version__`), guarded by a test.
+- **Coverage gate**: backend CI now fails under 70% coverage, and the committed `dist/` is verified against a fresh build.
 - Accent and density now persist in settings and apply on load instead of resetting on reload.
 - Serialized settings writes so rapid theme switching cannot save an older value last.
 - **Security audit fixes**: CSRF now validates Origin/Referer instead of trusting a public header; CORS is restricted to configured origins; proxy-aware client IP is used for setup/admin checks; setup token is persisted and single-use; login lockout is 15 minutes and stored in SQLite; sessions are always checked against the DB so logout/demotion take effect immediately; the last admin cannot be demoted or deleted.

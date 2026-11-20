@@ -35,9 +35,17 @@ _next_rate_cleanup: float = 0.0
 _RATE_CLEANUP_INTERVAL = 60.0
 LOGIN_LOCKOUT_SEC = 900.0  # 15 minutes, matching SECURITY.md
 
-# Precomputed valid bcrypt hash for constant-time evaluation on non-existent users
-# (prevents timing side-channel user enumeration)
-DUMMY_BCRYPT_HASH = "$2b$10$wT0lhK0GkHwD0YQxX9b7u.4g7z3q8n1v7j5e2r0t9y8u7i6o5p4a3"
+# Lockout policy: a strict per-username limit stops a distributed attacker, a
+# looser per-IP limit stops one host hammering many accounts.
+USER_MAX_ATTEMPTS = 5
+IP_MAX_ATTEMPTS = 20
+
+BCRYPT_ROUNDS = 10
+
+# Generated at import so the digest is always valid for this bcrypt build.
+# A hand-written string can be rejected as "invalid salt", silently turning the
+# constant-time guard below into a no-op.
+DUMMY_BCRYPT_HASH = bcrypt.hashpw(b"portly-dummy-password", bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode()
 
 
 def _get_store() -> Store:
@@ -141,7 +149,7 @@ def validate_password(password: str) -> Tuple[bool, str]:
 
 
 def hash_password(password: str) -> str:
-    salt = bcrypt.gensalt(rounds=10)
+    salt = bcrypt.gensalt(rounds=BCRYPT_ROUNDS)
     return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 
@@ -156,8 +164,27 @@ def verify_dummy_password(password: str):
     """Executes a bcrypt check against a dummy hash to normalize timing on missing users."""
     try:
         bcrypt.checkpw(password.encode("utf-8"), DUMMY_BCRYPT_HASH.encode("utf-8"))
-    except Exception:
-        pass
+    except Exception as e:
+        # Never silent: a broken dummy hash would remove the timing guard.
+        logger.debug(f"Dummy password verification failed: {e}")
+
+
+def check_login_rate_limits(ip: str, username: str) -> bool:
+    """Two-key lockout: strict per-username, looser per-IP. True when allowed."""
+    return (
+        check_rate_limit(f"user:{username.strip().lower()}", max_attempts=USER_MAX_ATTEMPTS)
+        and check_rate_limit(f"ip:{ip}", max_attempts=IP_MAX_ATTEMPTS)
+    )
+
+
+def record_failed_login(ip: str, username: str):
+    record_failed_attempt(f"user:{username.strip().lower()}")
+    record_failed_attempt(f"ip:{ip}")
+
+
+def clear_failed_login(username: str):
+    """A successful login clears the username counter; the IP counter decays on its own."""
+    clear_failed_attempts(f"user:{username.strip().lower()}")
 
 
 def create_session(user_id: str, username: str, role: str) -> str:

@@ -41,13 +41,16 @@ services:
       - "${DOCKER_GID:-999}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /:/hostfs:ro
       - portly-data:/app/data
+      # Opt-in: mounting all of / exposes every host file read-only. Only needed
+      # for host (not container) disk numbers.
+      # - /:/hostfs:ro
     environment:
       - PORTLY_PORT=5533
       - PORTLY_HOST=0.0.0.0
       - PORTLY_MODE=server
-      - PORTLY_HOSTFS=/hostfs
+      # Set together with the /:/hostfs:ro mount above.
+      # - PORTLY_HOSTFS=/hostfs
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5533/api/health', timeout=3)"]
       interval: 30s
@@ -55,7 +58,7 @@ services:
       retries: 3
 ```
 
-> **Accessing Portly by hostname:** set `PORTLY_ALLOWED_HOSTS` to a comma-separated list of hostnames you use (e.g. `portly.example.com,192.168.1.10`). It controls Host-header validation and CORS; IP literals are allowed automatically, but DNS names must be listed. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+> **Accessing Portly by hostname:** set `PORTLY_ALLOWED_HOSTS` to a comma-separated list of hostnames you use (e.g. `portly.example.com,192.168.1.10`). It controls Host-header validation and CORS; IP literals are allowed automatically, but DNS names must be listed. Subdomains are only accepted with an explicit wildcard entry (`*.example.com`). See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ---
 

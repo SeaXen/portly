@@ -44,7 +44,8 @@ The default `docker-compose.yml` intentionally requests broad host access. Under
 
 - **The Docker socket is root-equivalent, even when mounted `:ro`.** The `:ro` flag makes the socket *file* read-only; it does not restrict the Docker API reachable through it, which can create privileged containers and mount host paths. Treat container access as host-root access.
 - **`network_mode: host` and `pid: host`** remove network and process namespace isolation. They are required to discover host sockets and processes.
-- **`/:/hostfs:ro`** exposes the whole host filesystem read-only so disk stats reflect the host rather than container overlay storage. `:ro` limits writes but not visibility of sensitive files.
+- **`/:/hostfs:ro` is opt-in.** When enabled it exposes the whole host filesystem read-only so disk stats reflect the host rather than container overlay storage. `:ro` limits writes but not visibility of sensitive files, so enable it only if you need host disk numbers.
+- **Behind a reverse proxy,** set `PORTLY_TRUSTED_PROXIES` to the proxy address. Without it, `X-Forwarded-For` is ignored (all clients share one lockout bucket) and `X-Forwarded-Proto: https` is not trusted, so session cookies will lack the `Secure` flag unless `PORTLY_COOKIE_SECURE=1` is set.
 - **Lower-privilege option:** use a `docker-socket-proxy` (see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)). Read-only proxy endpoints support monitoring only; enabling Portly's start/stop/recreate actions requires write access, which restores the root-equivalent risk.
 - Bind to `127.0.0.1` or place Portly behind authentication and a reverse proxy; do not expose it directly to untrusted networks.
 

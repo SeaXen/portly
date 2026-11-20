@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import uuid
 from typing import Any, Dict, List, Optional
@@ -22,6 +23,7 @@ from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 from starlette.middleware.gzip import GZipMiddleware
 
+from portly import __version__
 from portly.backend import auth, favicon as favicon_module, proxy_gen, tls_inspector
 from portly.backend.actions import docker_actions, process_actions
 from portly.backend.discovery.docker_src import get_docker_client, is_docker_available, set_on_docker_event
@@ -49,6 +51,22 @@ _scan_lock = asyncio.Lock()
 _refresh_seq = 0
 _refresh_done_seq = 0
 _safe_mode_unlocked_at: Optional[float] = None
+_setup_lock = threading.Lock()
+
+# Cache for the `public_host` setting: read on every request otherwise.
+_public_host_cache: Optional[str] = None
+
+
+def _get_public_host() -> str:
+    global _public_host_cache
+    if _public_host_cache is None:
+        _public_host_cache = store.get_setting("public_host", "").strip()
+    return _public_host_cache
+
+
+def _invalidate_public_host_cache():
+    global _public_host_cache
+    _public_host_cache = None
 
 
 async def refresh_discovery():
@@ -61,7 +79,7 @@ async def refresh_discovery():
         if _refresh_done_seq >= my_seq:
             return
         covered_seq = _refresh_seq
-        public_host = store.get_setting("public_host", "")
+        public_host = _get_public_host()
         loop = asyncio.get_running_loop()
         apps, conflicts = await loop.run_in_executor(None, merge_discovered_apps, store, public_host)
         events = await loop.run_in_executor(None, detect_changes, apps, conflicts, store)
@@ -150,6 +168,10 @@ async def lifespan(app: FastAPI):
         _main_event_loop = asyncio.get_running_loop()
     except RuntimeError:
         pass
+
+    # Prime the public-host cache (also picked up lazily on first request).
+    _invalidate_public_host_cache()
+    _get_public_host()
 
     if os.getenv("PORTLY_TESTING") == "1":
         yield
@@ -266,7 +288,7 @@ async def lifespan(app: FastAPI):
         maint_task.cancel()
 
 
-app = FastAPI(title="Portly API", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="Portly API", version=__version__, lifespan=lifespan)
 
 def _dashboard_origins() -> set:
     """Origins allowed to call the dashboard: explicit config or the app's own host/port."""
@@ -281,7 +303,7 @@ def _dashboard_origins() -> set:
     bind = os.environ.get("PORTLY_HOST", "").lower()
     if bind and bind not in ("0.0.0.0", "::"):
         hosts.add(bind)
-    pub = store.get_setting("public_host", "").strip()
+    pub = _get_public_host()
     if pub:
         parsed = urlparse(f"//{pub}").hostname
         if parsed:
@@ -349,36 +371,99 @@ def _is_ip_literal(value: str) -> bool:
         return False
 
 
-# Security Headers & CSRF / Host Validation Middleware
-@app.middleware("http")
-async def security_and_csrf_middleware(request: Request, call_next):
-    # 1. Host Validation
-    host_header = _parse_host(request.headers.get("host", ""))
+def _allowed_host_set() -> tuple:
+    """Allowed Host values plus explicit `*.example.com` wildcard suffixes."""
     allowed_hosts = {"127.0.0.1", "localhost", "::1", "testserver", "testclient"}
-    
+    wildcards = set()
+
     env_allowed = os.getenv("PORTLY_ALLOWED_HOSTS", "")
     if env_allowed:
         for h in env_allowed.split(","):
-            if h.strip():
-                allowed_hosts.add(_parse_host(h.strip()))
+            entry = _parse_host(h.strip())
+            if not entry:
+                continue
+            if entry.startswith("*."):
+                wildcards.add(entry[2:])
+            else:
+                allowed_hosts.add(entry)
 
     bind_host = os.getenv("PORTLY_HOST", "")
     if bind_host and bind_host not in ("0.0.0.0", "::"):
         allowed_hosts.add(_parse_host(bind_host))
 
-    pub_host = store.get_setting("public_host", "").strip()
+    pub_host = _get_public_host()
     if pub_host:
         pub_parsed = urlparse(f"//{pub_host}").hostname
         if pub_parsed:
             allowed_hosts.add(pub_parsed.lower())
 
-    if host_header and host_header not in allowed_hosts and not _is_ip_literal(host_header) and not any(host_header.endswith(f".{ah}") for ah in allowed_hosts if "." in ah):
-        # Allow loopback/local networks if insecure bind allowed or testing
-        if os.getenv("PORTLY_ALLOW_INSECURE_BIND", "").lower() not in ("true", "1") and os.getenv("PORTLY_TESTING") != "1":
-            return JSONResponse(
-                status_code=400,
-                content={"code": "INVALID_HOST", "message": f"Host '{host_header}' is not allowed. Set PORTLY_ALLOWED_HOSTS={host_header} or set Public host in Settings."}
-            )
+    return allowed_hosts, wildcards
+
+
+def _host_is_allowed(host_header: str, allowed_hosts: set, wildcards: set) -> bool:
+    if not host_header or host_header in allowed_hosts or _is_ip_literal(host_header):
+        return True
+    # Only an explicit `*.example.com` entry matches subdomains.
+    return any(host_header.endswith(f".{w}") for w in wildcards)
+
+
+_SECURITY_HEADERS = {
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self'; "
+        "font-src 'self' data:; "
+        "object-src 'none'; "
+        "frame-ancestors 'none';"
+    ),
+}
+
+
+def _apply_security_headers(response: Response) -> Response:
+    for key, value in _SECURITY_HEADERS.items():
+        response.headers[key] = value
+    return response
+
+
+def _apply_cache_headers(request: Request, response: Response) -> Response:
+    path = request.url.path
+    if path.startswith("/assets/"):
+        # Vite emits content-hashed filenames: safe to cache forever.
+        response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+    elif not path.startswith("/api/") and (
+        path in ("/", "/index.html", "/sw.js", "/manifest.webmanifest", "/manifest.json")
+        or "." not in path.rsplit("/", 1)[-1]
+    ):
+        # SPA shell, service worker and manifest must revalidate so an upgrade
+        # is picked up; extensionless paths all serve index.html.
+        response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
+
+# Security Headers & CSRF / Host Validation Middleware
+@app.middleware("http")
+async def security_and_csrf_middleware(request: Request, call_next):
+    # 1. Host Validation (never disabled by PORTLY_ALLOW_INSECURE_BIND: that
+    # flag only says "bind without an admin", not "skip DNS-rebinding defence").
+    host_header = _parse_host(request.headers.get("host", ""))
+    allowed_hosts, wildcards = _allowed_host_set()
+
+    if not _host_is_allowed(host_header, allowed_hosts, wildcards) and os.getenv("PORTLY_TESTING") != "1":
+        return _apply_security_headers(JSONResponse(
+            status_code=400,
+            content={"code": "INVALID_HOST", "message": f"Host '{host_header}' is not allowed. Set PORTLY_ALLOWED_HOSTS={host_header} or set Public host in Settings."}
+        ))
+
+    # Proxy headers without trusted-proxy config are ignored, but surface them
+    # once so the operator knows lockout and Secure cookies are degraded.
+    if request.headers.get("x-forwarded-for") and not _trusted_proxy_ips():
+        _warn_untrusted_forwarded_for_once()
 
     # 2. CSRF Protection on Mutating Requests.
     # The public X-Portly-Client header is kept for same-origin fetch
@@ -390,10 +475,10 @@ async def security_and_csrf_middleware(request: Request, call_next):
         sec_site = (request.headers.get("sec-fetch-site") or "").lower()
 
         if sec_site == "cross-site":
-            return JSONResponse(
+            return _apply_security_headers(JSONResponse(
                 status_code=403,
                 content={"code": "CSRF_DETECTED", "message": "Cross-site request blocked."}
-            )
+            ))
         # Same-origin is always valid, even when the bound port or public host
         # differs from what was known at import time (reverse proxy, CLI port).
         own_origin = f"{request.url.scheme}://{request.headers.get('host', '')}".rstrip("/")
@@ -407,50 +492,64 @@ async def security_and_csrf_middleware(request: Request, call_next):
 
         if origin:
             if origin.strip().lower() == "null":
-                return JSONResponse(
+                return _apply_security_headers(JSONResponse(
                     status_code=403,
                     content={"code": "CSRF_DETECTED", "message": "Origin 'null' is not authorized."}
-                )
+                ))
             if (origin.rstrip("/") not in _cors_origins
                     and origin.rstrip("/") != own_origin
                     and not _same_host(origin)):
-                return JSONResponse(
+                return _apply_security_headers(JSONResponse(
                     status_code=403,
                     content={"code": "CSRF_DETECTED", "message": f"Origin '{origin}' is not authorized."}
-                )
+                ))
         elif referer:
             ref = urlparse(referer)
             ref_origin = f"{ref.scheme}://{ref.netloc}".rstrip("/")
             if (ref_origin not in _cors_origins
                     and ref_origin != own_origin
                     and not _same_host(ref_origin)):
-                return JSONResponse(
+                return _apply_security_headers(JSONResponse(
                     status_code=403,
                     content={"code": "CSRF_DETECTED", "message": f"Referer '{referer}' is not authorized."}
-                )
+                ))
 
     response = await call_next(request)
-
-    # 3. Security Headers
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data: blob:; "
-        "connect-src 'self'; "
-        "font-src 'self' data:; "
-        "object-src 'none'; "
-        "frame-ancestors 'none';"
-    )
+    _apply_security_headers(response)
+    _apply_cache_headers(request, response)
     return response
 
 
 def _trusted_proxy_ips() -> set:
     return {p.strip().lower() for p in os.getenv("PORTLY_TRUSTED_PROXIES", "").split(",") if p.strip()}
+
+
+_forwarded_for_warned = False
+_untrusted_forwarded_for_seen = False
+
+
+def _warn_untrusted_forwarded_for_once():
+    global _forwarded_for_warned, _untrusted_forwarded_for_seen
+    _untrusted_forwarded_for_seen = True
+    if _forwarded_for_warned:
+        return
+    _forwarded_for_warned = True
+    logger.warning(
+        "X-Forwarded-For received but PORTLY_TRUSTED_PROXIES is empty: client IPs "
+        "are the proxy's address, so login lockout is shared and Secure cookies "
+        "may be missing. Set PORTLY_TRUSTED_PROXIES to the proxy IP."
+    )
+
+
+def _is_secure_request(request: Request) -> bool:
+    """True when the browser reaches us over TLS (directly or via a trusted proxy)."""
+    if request.url.scheme == "https":
+        return True
+    if os.getenv("PORTLY_COOKIE_SECURE", "").lower() in ("true", "1"):
+        return True
+    peer = (request.client.host if request.client else "").lower()
+    forwarded_proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
+    return forwarded_proto == "https" and peer in _trusted_proxy_ips()
 
 
 def get_client_ip(request: Request) -> str:
@@ -470,6 +569,7 @@ def get_client_ip(request: Request) -> str:
         return peer
     # No trusted proxies configured: X-Forwarded-For is client-controlled and
     # must never influence rate-limit keys or setup-trust decisions.
+    _warn_untrusted_forwarded_for_once()
     return peer
 
 
@@ -1829,7 +1929,9 @@ async def prometheus_metrics_endpoint(
 
 @app.get("/api/system")
 async def get_system_endpoint(user: Dict[str, Any] = Depends(require_auth)):
-    return await asyncio.to_thread(get_detailed_system_stats)
+    data = await asyncio.to_thread(get_detailed_system_stats)
+    data["untrusted_proxy_detected"] = _untrusted_forwarded_for_seen
+    return data
 
 
 @app.get("/api/events")
@@ -2007,6 +2109,8 @@ async def update_settings_endpoint(settings_dict: Dict[str, Any], user: Dict[str
     global _safe_mode_unlocked_at
     for k, val_str in normalized.items():
         store.set_setting(k, val_str)
+    if "public_host" in normalized:
+        _invalidate_public_host_cache()
     if "safe_mode" in normalized:
         if normalized["safe_mode"] == "false":
             _safe_mode_unlocked_at = time.time()
@@ -2209,6 +2313,8 @@ async def import_data(backup: Dict[str, Any], user: Dict[str, Any] = Depends(req
     store.log_audit_event(user=user.get("username", "admin"), action="import_backup", target="full system restore")
 
     global _safe_mode_unlocked_at
+    if "public_host" in normalized_settings:
+        _invalidate_public_host_cache()
     if "safe_mode" in normalized_settings:
         _safe_mode_unlocked_at = time.time() if normalized_settings["safe_mode"] == "false" else None
     await refresh_discovery()
@@ -2226,6 +2332,14 @@ async def auth_me(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
     }
 
 
+def _wants_token_in_body(request: Request) -> bool:
+    """Session tokens are cookie-only for browsers; CLI clients may opt in."""
+    return (
+        request.headers.get("x-portly-client", "").strip().lower() == "cli"
+        or request.query_params.get("return_token", "").strip().lower() in ("1", "true")
+    )
+
+
 @app.post("/api/auth/setup")
 async def auth_setup(data: SetupModel, request: Request, response: Response):
     if store.get_user_count() > 0:
@@ -2239,10 +2353,10 @@ async def auth_setup(data: SetupModel, request: Request, response: Response):
 
     if (mode == "server" or host in ("0.0.0.0", "::") or is_remote) and not allow_insecure:
         ip = get_client_ip(request)
-        if not auth.check_rate_limit(ip):
+        if not auth.check_rate_limit(f"setup:{ip}"):
             raise HTTPException(status_code=429, detail={"code": "RATE_LIMITED", "message": "Too many failed setup attempts. Please wait 15 minutes."})
         if not data.setup_token or not auth.verify_setup_token(data.setup_token):
-            auth.record_failed_attempt(ip)
+            auth.record_failed_attempt(f"setup:{ip}")
             raise HTTPException(
                 status_code=403,
                 detail={"code": "INVALID_SETUP_TOKEN", "message": "Valid setup token is required to initialize server mode."}
@@ -2255,21 +2369,27 @@ async def auth_setup(data: SetupModel, request: Request, response: Response):
 
     pw_hash = await asyncio.to_thread(auth.hash_password, data.password)
     user_id = f"u_{uuid.uuid4().hex[:12]}"
-    user = store.create_user(user_id, data.username, pw_hash, role="admin")
-    auth.consume_setup_token()
+    # Atomic first-run: concurrent requests must not both create an admin.
+    with _setup_lock:
+        if store.get_user_count() > 0:
+            raise HTTPException(status_code=400, detail={"code": "SETUP_DONE", "message": "Admin account is already configured"})
+        user = store.create_user(user_id, data.username, pw_hash, role="admin")
+        auth.consume_setup_token()
+
     token = auth.create_session(user["id"], user["username"], role="admin")
-    
-    is_secure = request.url.scheme == "https" or os.getenv("PORTLY_COOKIE_SECURE", "").lower() in ("true", "1")
-    response.set_cookie(key="portly_session", value=token, httponly=True, samesite="lax", secure=is_secure, max_age=86400 * 7, path="/")
-    return {"status": "ok", "token": token, "username": user["username"], "role": "admin"}
+    response.set_cookie(key="portly_session", value=token, httponly=True, samesite="lax", secure=_is_secure_request(request), max_age=86400 * 7, path="/")
+    body = {"status": "ok", "username": user["username"], "role": "admin"}
+    if _wants_token_in_body(request):
+        body["token"] = token
+    return body
 
 
 @app.post("/api/auth/login")
 async def auth_login(data: LoginModel, request: Request, response: Response):
     ip = get_client_ip(request)
-    
-    # Rate limit check (S-1)
-    if not auth.check_rate_limit(ip):
+
+    # Rate limit: strict per username, looser per IP (S-1 / N-3)
+    if not auth.check_login_rate_limits(ip, data.username):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={"code": "RATE_LIMITED", "message": "Too many failed login attempts. Please wait 15 minutes."}
@@ -2279,20 +2399,22 @@ async def auth_login(data: LoginModel, request: Request, response: Response):
     if not user:
         # Constant-time dummy verify to prevent user enumeration
         await asyncio.to_thread(auth.verify_dummy_password, data.password)
-        auth.record_failed_attempt(ip)
+        auth.record_failed_login(ip, data.username)
         raise HTTPException(status_code=401, detail={"code": "INVALID_CREDENTIALS", "message": "Invalid username or password"})
 
     if not await asyncio.to_thread(auth.verify_password, data.password, user["password_hash"]):
-        auth.record_failed_attempt(ip)
+        auth.record_failed_login(ip, data.username)
         store.log_event("auth.login_failed", f"Failed login for '{data.username}'", actor=data.username)
         raise HTTPException(status_code=401, detail={"code": "INVALID_CREDENTIALS", "message": "Invalid username or password"})
 
-    auth.clear_failed_attempts(ip)
+    auth.clear_failed_login(data.username)
     store.log_event("auth.login", f"User '{user['username']}' logged in", actor=user["username"])
     token = auth.create_session(user["id"], user["username"], role=user.get("role", "admin"))
-    is_secure = request.url.scheme == "https" or os.getenv("PORTLY_COOKIE_SECURE", "").lower() in ("true", "1")
-    response.set_cookie(key="portly_session", value=token, httponly=True, samesite="lax", secure=is_secure, max_age=86400 * 7, path="/")
-    return {"status": "ok", "token": token, "username": user["username"], "role": user.get("role", "admin")}
+    response.set_cookie(key="portly_session", value=token, httponly=True, samesite="lax", secure=_is_secure_request(request), max_age=86400 * 7, path="/")
+    body = {"status": "ok", "username": user["username"], "role": user.get("role", "admin")}
+    if _wants_token_in_body(request):
+        body["token"] = token
+    return body
 
 
 @app.post("/api/auth/logout")
@@ -2404,8 +2526,7 @@ async def update_user_password_endpoint(
         # Keep the current browser signed in with a fresh session; all other
         # sessions (other browsers) were revoked above.
         token = auth.create_session(target_user["id"], target_user["username"], role=target_user.get("role", "admin"))
-        is_secure = request.url.scheme == "https" or os.getenv("PORTLY_COOKIE_SECURE", "").lower() in ("true", "1")
-        response.set_cookie(key="portly_session", value=token, httponly=True, samesite="lax", secure=is_secure, max_age=86400 * 7, path="/")
+        response.set_cookie(key="portly_session", value=token, httponly=True, samesite="lax", secure=_is_secure_request(request), max_age=86400 * 7, path="/")
     return {"status": "updated"}
 
 
@@ -2425,9 +2546,9 @@ async def sse_stream(request: Request, user: Dict[str, Any] = Depends(require_au
     if len(_sse_subscribers) >= 64:
         raise HTTPException(status_code=503, detail={"code": "SSE_LIMIT", "message": "Too many live subscribers. Close a tab and retry."})
     q = asyncio.Queue(maxsize=32)
-    _sse_subscribers.append(q)
 
-    # Initial snapshot
+    # Build the snapshot BEFORE registering: a failure here must not leak a
+    # queue that no generator will ever clean up.
     docker_running = sum(1 for a in _cached_apps if a.get("source") == "docker" and a.get("status") == "up")
     initial_stats = get_current_stats(containers_running=docker_running, listening_count=len(_cached_apps), conflict_count=len(_cached_conflicts))
     docker_avail, docker_err = is_docker_available()
@@ -2443,10 +2564,14 @@ async def sse_stream(request: Request, user: Dict[str, Any] = Depends(require_au
         },
         "last_scan": _last_scan_time,
     }
-    q.put_nowait(json.dumps(initial_payload))
+    initial_msg = json.dumps(initial_payload)
 
     async def event_generator():
+        # Registration and removal live in the same try/finally so an aborted
+        # stream (client gone before the first yield) cannot leak a subscriber.
+        _sse_subscribers.append(q)
         try:
+            q.put_nowait(initial_msg)
             while True:
                 if await request.is_disconnected():
                     break

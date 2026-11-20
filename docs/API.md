@@ -37,9 +37,11 @@ Portly operates under two modes:
 |---|---|---|---|
 | `GET` | `/api/health` | Minimal public liveness/health check | None |
 | `POST` | `/api/auth/setup` | Create initial admin account via setup token | Only when user count == 0 |
-| `POST` | `/api/auth/login` | Authenticate and obtain session token (Rate limited to 5 attempts/60s) | None |
+| `POST` | `/api/auth/login` | Authenticate and set the session cookie (rate limited per username and per IP) | None |
 | `POST` | `/api/auth/logout` | Revoke active session | Yes |
 | `GET` | `/api/auth/me` | Fetch active user identity, role, and setup status | Optional |
+
+Login and setup set an `HttpOnly` session cookie and do **not** return the token in the response body for browser clients. Automation may request it explicitly with the `X-Portly-Client: cli` header (or `?return_token=1`); the response then includes `"token"`.
 
 ---
 

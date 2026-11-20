@@ -57,14 +57,15 @@ And point `DOCKER_HOST=tcp://127.0.0.1:2375` in Portly's environment.
 - **Host Socket Discovery:** In bridge network mode, containers only see network namespaces isolated to that bridge. `network_mode: host` allows `psutil` and `netstat` to monitor the physical host's listening ports.
 - **Process Inspection:** `pid: host` allows Portly to resolve process names, command lines, memory RSS, and CPU utilization for listening host processes.
 - **Docker Socket Mount:** `/var/run/docker.sock` allows Portly to query the Docker Engine API and receive real-time container lifecycle events.
-- **Host Filesystem Mount:** Mounts root filesystem at `/hostfs:ro` and sets `PORTLY_HOSTFS=/hostfs` so Portly can report accurate host disk utilization rather than overlay container storage.
+- **Host Filesystem Mount (opt-in):** Mounting the host root at `/hostfs:ro` and setting `PORTLY_HOSTFS=/hostfs` makes the Disk card report host usage instead of the container overlay. It is **commented out by default** because it exposes every host file read-only. Without it, Portly still runs and the UI flags the disk figure as container-only.
 
 ### Security Notes on Host Access
 
 - **The Docker socket is root-equivalent even with `:ro`.** The flag makes the socket file read-only, not the API behind it; that API can create privileged containers and mount host paths. See [`SECURITY.md`](../SECURITY.md).
-- `network_mode: host`, `pid: host` and `/:/hostfs:ro` are deliberately broad because host socket/process discovery and real disk telemetry depend on them. Narrowing these mounts breaks those features.
+- `network_mode: host` and `pid: host` are deliberately broad because host socket/process discovery depends on them. Narrowing these mounts breaks those features.
+- `/:/hostfs:ro` is opt-in. `:ro` limits writes but not visibility of sensitive host files, so enable it only when you need host disk numbers.
 - The `docker-socket-proxy` example above is the lower-privilege option for monitoring. Read-only endpoints (`POST=0`) do not support Portly's start/stop/recreate actions; enabling those write endpoints restores the root-equivalent risk.
-- Keep Portly behind authentication and a reverse proxy; set `PORTLY_ALLOWED_HOSTS` to the hostnames it is served under.
+- Keep Portly behind authentication and a reverse proxy; set `PORTLY_ALLOWED_HOSTS` to the hostnames it is served under. Subdomains require an explicit wildcard entry (`*.example.com`).
 
 ---
 
@@ -76,8 +77,8 @@ And point `DOCKER_HOST=tcp://127.0.0.1:2375` in Portly's environment.
 | `PORTLY_MODE` | `desktop` | `server` requires a setup token on first run (printed to stderr). |
 | `PORTLY_DATA_DIR` | repo `data/` | SQLite DB, snapshots, icons, certs, stack files. |
 | `PORTLY_SETUP_TOKEN` | generated | Fixed first-run setup token (otherwise single-use, printed to stderr in server mode). |
-| `PORTLY_TRUSTED_PROXIES` | unset | Comma-separated proxy IPs allowed to set `X-Forwarded-For`. Without it, XFF is ignored and all clients behind a proxy share one rate-limit bucket. |
-| `PORTLY_ALLOWED_HOSTS` | unset | Extra hostnames accepted in Host header / CORS (reverse proxy, DNS names). |
+| `PORTLY_TRUSTED_PROXIES` | unset | Comma-separated proxy IPs allowed to set `X-Forwarded-For` and `X-Forwarded-Proto`. Without it, XFF is ignored (all clients behind a proxy share one rate-limit bucket) and `Secure` cookies need `PORTLY_COOKIE_SECURE=1`. |
+| `PORTLY_ALLOWED_HOSTS` | unset | Extra hostnames accepted in Host header / CORS (reverse proxy, DNS names). Subdomains need an explicit `*.example.com` entry. |
 | `PORTLY_CORS_ORIGINS` | derived | Explicit CORS origin allow-list (overrides derivation). |
 | `PORTLY_COOKIE_SECURE` | unset | `1` forces the Secure flag on session cookies (HTTPS deployments). |
 | `PORTLY_METRICS_TOKEN` | unset | Bearer/query token for `/api/metrics` scraping. Prefer the `Authorization: Bearer` header; query strings leak into proxy logs. |

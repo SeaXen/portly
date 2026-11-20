@@ -10,18 +10,25 @@ services:
     group_add:
       - "${DOCKER_GID:-999}"
     volumes:
-      # Docker socket is root-equivalent even with :ro — see SECURITY.md
+      # Docker socket is root-equivalent even with :ro — see SECURITY.md.
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - portly-data:/app/data
-      - /:/hostfs:ro
+      # Host disk stats: mounting all of / exposes every host file read-only.
+      # Opt in only if you want host (not container) disk numbers in the UI.
+      # - /:/hostfs:ro
     environment:
       - PORTLY_PORT=5533
       - PORTLY_HOST=0.0.0.0
       - PORTLY_MODE=server
-      - PORTLY_HOSTFS=/hostfs
+      # Set together with the /:/hostfs:ro mount above for host disk stats.
+      # - PORTLY_HOSTFS=/hostfs
       - PORTLY_ALLOW_INSECURE_BIND=false
-      # Comma-separated hostnames allowed in Host header / CORS (e.g. behind a reverse proxy)
-      # - PORTLY_ALLOWED_HOSTS=portly.example.com,192.168.1.10
+      # Comma-separated hostnames allowed in Host header / CORS (e.g. behind a reverse proxy).
+      # Subdomains need an explicit wildcard entry: *.example.com
+      # - PORTLY_ALLOWED_HOSTS=portly.example.com,*.example.com,192.168.1.10
+      # Required behind a reverse proxy so client IPs (lockout) and Secure
+      # cookies (X-Forwarded-Proto) are honoured. Use the proxy's address.
+      # - PORTLY_TRUSTED_PROXIES=172.17.0.1
     restart: unless-stopped
 
 volumes:

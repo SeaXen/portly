@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "portly"
-version = "1.1.0"
+dynamic = ["version"]
 description = "A self-hosted port, process, and container management dashboard."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,6 +35,9 @@ portly = "portly.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["portly*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "portly.__version__"}
 
 [tool.setuptools.package-data]
 portly = ["frontend/dist/**/*"]

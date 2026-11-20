@@ -21,6 +21,12 @@ _last_net_time = 0.0
 _lock = threading.RLock()
 
 
+def _host_disk_visible() -> bool:
+    """False when PORTLY_HOSTFS is configured but not mounted."""
+    hostfs = os.getenv("PORTLY_HOSTFS")
+    return not hostfs or os.path.isdir(hostfs)
+
+
 def _format_bytes(bytes_val: float) -> str:
     gb = bytes_val / (1024 ** 3)
     if gb >= 1.0:
@@ -80,9 +86,10 @@ def collect_snapshot(containers_running: int = 0, listening_count: int = 0, conf
     mem_pct = mem.percent
 
     # Disk - inspect host root via PORTLY_HOSTFS if inside container
+    host_visible = _host_disk_visible()
     try:
         hostfs = os.getenv("PORTLY_HOSTFS")
-        root_path = hostfs if (hostfs and os.path.isdir(hostfs)) else os.path.abspath(os.sep)
+        root_path = hostfs if host_visible and hostfs else os.path.abspath(os.sep)
         disk = psutil.disk_usage(root_path)
         disk_used_gb = round(disk.used / (1024 ** 3), 1)
         disk_total_gb = round(disk.total / (1024 ** 3), 1)
@@ -92,6 +99,7 @@ def collect_snapshot(containers_running: int = 0, listening_count: int = 0, conf
         disk_used_gb = 0.0
         disk_total_gb = 100.0
         disk_pct = 0.0
+        host_visible = False
 
     # Network rate
     net_now = psutil.net_io_counters()
@@ -115,6 +123,7 @@ def collect_snapshot(containers_running: int = 0, listening_count: int = 0, conf
         "disk_used_gb": disk_used_gb,
         "disk_total_gb": disk_total_gb,
         "disk_pct": disk_pct,
+        "disk_host_visible": host_visible,
         "net_down_bps": net_down_bps,
         "net_up_bps": net_up_bps,
         "containers_running": containers_running,
@@ -169,6 +178,7 @@ def get_current_stats(containers_running: int = 0, listening_count: int = 0, con
             "value": f"{latest['disk_used_gb']} GB",
             "context": f"of {latest['disk_total_gb']} GB",
             "percent": latest["disk_pct"],
+            "host_visible": latest.get("disk_host_visible", True),
             "sparkline": _generate_sparkline_points(disk_hist),
             "history": disk_hist,
         },
@@ -280,5 +290,6 @@ def get_detailed_system_stats() -> Dict[str, Any]:
             "percent": swap.percent,
         },
         "disks": partitions,
+        "host_visible": _host_disk_visible(),
         "interfaces": interfaces,
     }
