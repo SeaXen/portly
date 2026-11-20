@@ -60,7 +60,7 @@ Unlike generic container dashboards (Portainer) or static bookmark launchpads (H
 
 ## Accessibility & Inclusion
 
-- Designed with WCAG 2.1 AA in mind; accessibility is an ongoing effort. An axe audit script (`portly/frontend/scripts/axe-audit.mjs`) checks serious/critical violations in dark and light themes; it does not yet pass cleanly.
+- Designed with WCAG 2.1 AA in mind; accessibility is an ongoing effort. The axe audit script (`portly/frontend/scripts/axe-audit.mjs`) checks serious/critical violations in dark and light themes and passes cleanly: 0 violations across landing, ports, table, grid, list, board, and the add-app modal in both themes.
 - Full keyboard navigation across all views (Table, Grid, List, Board) and global command palette (`Ctrl+K` / `Cmd+K` accessible anywhere).
 - Accessible Toasts (`role="status"`, `role="alert"`) and modal dialogs (`role="dialog"`, `aria-modal="true"`, focus trapped, ESC to dismiss).
 - Strict 4.5:1 text contrast on all text elements and interactive controls.

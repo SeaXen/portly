@@ -17,6 +17,17 @@ colors:
   border-subtle: "rgba(255, 255, 255, 0.04)"
   text-primary: "#ECEEF3"
   text-muted: "#8D95A5"
+  light-bg: "#F8FAFC"
+  light-surface-1: "#FFFFFF"
+  light-surface-2: "#F1F5F9"
+  light-surface-3: "#E2E8F0"
+  light-text: "#0F172A"
+  light-muted: "#475569"
+  light-accent: "#4F63D2"
+  light-accent-deep: "#3B4EC0"
+  light-success: "#0F766E"
+  light-warning: "#B45309"
+  light-danger: "#B91C1C"
 typography:
   display:
     fontFamily: "Inter, system-ui, -apple-system, sans-serif"
@@ -90,7 +101,7 @@ components:
 
 Portly is an industrial, precision-engineered observatory for local networks, containers, and background services. Built for operators who inspect dozens of concurrent workloads, its aesthetic rejects both the flat sterility of generic admin templates and the noisy neon oversaturation of hobbyist dashboards. Like the flight deck or shipping harbor control tower at night, the interface stays calm, deep, and dark, using light with surgical intention to communicate status, bandwidth flow, and system pressure.
 
-Surfaces exist on a disciplined three-tier tonal scale: deep void black (`#0A0B0F`) for global canvases, midnight stone (`#101218`) for sidebar docks and toolbars, and elevated obsidian (`#151821`) for cards, dialog panels, and table rows. Accent colors are sparse and semantic: Periwinkle Harbor (`#8C9EFF`) anchors focus and primary actions, Seafoam Teal (`#5EEAD4`) signals verified healthy uptime, while Coral Red (`#FF8A8A`) and Amber Gold (`#FBBF77`) flag collisions and resource bottlenecks.
+Surfaces exist on a disciplined three-tier tonal scale: deep void black (`#0A0B0F`) for global canvases, midnight stone (`#101218`) for sidebar docks and toolbars, and elevated obsidian (`#151821`) for cards, dialog panels, and table rows. Accent colors are sparse and semantic: Periwinkle Harbor (`#8C9EFF`) anchors focus and primary actions, Seafoam Teal (`#5EEAD4`) signals verified healthy uptime, while Coral Red (`#FF8A8A`) and Amber Gold (`#FBBF77`) flag collisions and resource bottlenecks. A daylight variant (`light`) and a pure-black variant (`oled`) ship alongside the default dark theme; they remap the same semantic tokens rather than inventing a second visual language.
 
 **Key Characteristics:**
 - Un-wrapping horizontal telemetry strips with live 60-point inline vector sparklines.
@@ -100,7 +111,7 @@ Surfaces exist on a disciplined three-tier tonal scale: deep void black (`#0A0B0
 
 ## Colors
 
-The palette is tuned for prolonged dark-room monitoring with zero eye strain, exceeding WCAG 2.1 AA text contrast across all states.
+The palette is tuned for prolonged dark-room monitoring with zero eye strain. WCAG 2.1 AA text contrast is verified in dark and light themes by the axe audit (`portly/frontend/scripts/axe-audit.mjs`, serious/critical violations = 0 across all views).
 
 ### Primary
 - **Periwinkle Harbor** (`#8C9EFF`): Used for primary action buttons, active tab indicators, selected item checkboxes, and command palette focus boundaries. Renders with high clarity against dark slate backdrops.
@@ -124,9 +135,13 @@ The palette is tuned for prolonged dark-room monitoring with zero eye strain, ex
 - **Muted Slate** (`#8D95A5`): Secondary descriptions, socket protocols, timestamps, and column header labels.
 - **Hairline Border** (`rgba(255, 255, 255, 0.07)`): Single-pixel card and divider boundaries.
 
+### Light Theme
+The light variant keeps the same roles with daylight values: Harbor Mist (`#F8FAFC`) canvas, white docks and cards, Slate Ink (`#0F172A`) text, and a deepened indigo accent (`#4F63D2`) because periwinkle fails contrast on white. Semantic status colors deepen to `#0F766E` (success), `#B45309` (warning), `#B91C1C` (danger). Badge text on accent tints uses `#3B4EC0`. The light accent is fixed: user accent customization applies to dark/oled only. Category-colored text (`.cat-text`) darkens any user-picked category color via `color-mix(in srgb, var(--cat-color) 50%, #000)` so it stays ≥4.5:1 on the pale badge tint. `color-scheme` flips with the theme so native checkboxes, scrollbars, and form controls follow.
+
 ### Named Rules
 **The Single-Voice Accent Rule.** Primary periwinkle (`#8C9EFF`) is reserved strictly for interactive state and primary affordances. It covers ≤5% of screen area at rest.
 **The Status Sovereignty Rule.** Semantic colors (Teal, Amber, Coral) are never used for arbitrary aesthetic decoration. A red dot must always denote a dead process or port collision.
+**The Semantic Token Rule.** Component text uses `var(--text)`, `var(--muted)`, `var(--accent)`, and the status tokens — never hard-coded palette hexes — so every theme remaps it correctly. Inline hex colors are a defect unless caught by a theme override.
 
 ## Typography
 
@@ -151,12 +166,12 @@ The palette is tuned for prolonged dark-room monitoring with zero eye strain, ex
 
 The spatial model uses an 8px modular baseline (`--space: 8px`) across all views.
 - **Sidebar Navigation**: Fixed 220px dock (collapsible to 60px icon strip on compact screens).
-- **One-Row Stats Strip**: A single horizontal flex container (`.c081`) with `flex-wrap: nowrap` and `overflow-x: auto`. Segments display real-time SVG sparklines alongside telemetry without wrapping.
-- **Single-Row Toolbar**: Filter chips, view mode switches (Table, Grid, List, Board), density toggles, and sorting options sit on a single non-wrapping bar with horizontal scroll overflow.
+- **One-Row Stats Strip**: A single horizontal flex container (`.c081`) with `flex-wrap: nowrap` and `overflow-x: auto`. Segments display real-time SVG sparklines alongside telemetry without wrapping. Below 900px it reflows to a 3×2 grid (D-6) so values stay legible.
+- **Single-Row Toolbar**: Filter chips, view mode switches (Table, Grid, List, Board), density toggles, and sorting options sit on one bar with horizontal scroll overflow; control groups may wrap to a second row at narrow widths.
 - **Viewports**:
   - Desktop (>1024px): Full multi-column table and responsive kanban grid.
   - Tablet (768px–1023px): Flexible 2-3 column tile grid, responsive table horizontal scrolling with frozen port columns.
-  - Mobile (<768px): Sidebar collapses into bottom drawer/header menu, touch target floors enforced at 44px, full-width cards.
+  - Mobile (<768px): Sidebar collapses to a top icon rail, rows keep ≥44px click areas (name buttons get a 24px floor on coarse pointers), full-width cards. The footer status line wraps; the stats strip and tab bar never push the document wider than the viewport.
 
 ## Elevation & Depth
 
@@ -181,13 +196,16 @@ Portly employs clean tonal layering combined with crisp hairlines (`rgba(255, 25
 
 ### Buttons
 - **Shape:** 9px border radius (`--radius-control`).
-- **Primary Hero Button:** Background `#8C9EFF`, text `#0A0B0F`, font-weight 600, padding `7px 14px`. Hover shifts to `#6875DF`.
+- **Primary Hero Button:** Background `#8C9EFF`, text `#0A0B0F`, font-weight 600, padding `7px 14px`. Hover shifts to `#6875DF`. In the light theme the fill is `#4F63D2` with white text (dark text fails contrast on the deeper fill).
 - **Secondary Ghost Button:** Background `rgba(255, 255, 255, 0.04)`, text `#ECEEF3`, border `1px solid rgba(255, 255, 255, 0.08)`, padding `7px 12px`. Hover shifts to `rgba(255, 255, 255, 0.08)`.
-- **Icon Actions:** 30px x 30px square buttons (`.row-action-btn`) with inline SVG iconography, stroke width 2px.
+- **Icon Actions:** 28px x 28px square buttons (`.row-action-btn`) with inline SVG iconography, stroke width 2px.
+
+### Rows & Cards: Interaction Model
+Table rows, grid tiles, list rows, and board cards open the detail modal on click, but the container carries **no interactive role** — nested checkboxes, action buttons, and links stay legal. The app name is a real button (`.app-name-btn`, ellipsized, inherits the row's type styles) and is the keyboard/AT path: Tab to it, Enter opens details; the click bubbles to the container handler. Grid card hover lift is CSS (`.c026:hover`), disabled under `prefers-reduced-motion`.
 
 ### Chips & Badges
 - **Status Badges:** Circular 7px pulsing status dot + uppercase 11px monospaced text.
-- **Category Badges:** Colored pill carrying subtle semi-transparent background (`rgba(color, 0.15)`) with matching solid border and label.
+- **Category Badges:** Colored pill carrying subtle semi-transparent background (`rgba(color, 0.15)`) with matching solid border; label text uses `.cat-text` so the light theme darkens it automatically.
 
 ### Cards & Tiles
 - **Grid Tile:** 14px border radius, 16px internal padding, prominent 22px port identifier typography in periwinkle accent.
@@ -197,7 +215,7 @@ Portly employs clean tonal layering combined with crisp hairlines (`rgba(255, 25
 - **Search & Filter Inputs:** Background `#101218`, border `1px solid rgba(255, 255, 255, 0.09)`, text `#ECEEF3`, height 34px. Focus visible introduces 2px outline in `#8C9EFF`.
 
 ### Navigation & Docks
-- **Sidebar Nav Button:** Height 36px, border radius 8px, 12px horizontal padding, active state displays `#8C9EFF` text with `rgba(140, 158, 255, 0.12)` background.
+- **Sidebar Nav Button:** Height 36px, border radius 8px, 12px horizontal padding. Active state: `rgba(140, 158, 255, 0.14)` background, 2.5px inset accent stripe on the leading edge, accent-colored icon; light theme swaps text to `#0F172A`. The Conflicts button's accessible name comes from its content (label + count badge) so visible text and name always match.
 
 ### Signature Component: Telemetry Sparkline
 - **Inline SVG Sparkline:** 60px x 20px polyline rendered with smooth exponential curves, 1.8px stroke width, showing 60 data points of real-time utilization history.
@@ -210,6 +228,8 @@ Portly employs clean tonal layering combined with crisp hairlines (`rgba(255, 25
 - **Do** verify port availability before prompting users with port change migration dialogs.
 - **Do** respect `prefers-reduced-motion` by disabling translation animations while preserving subtle opacity transitions.
 - **Do** maintain safe mode by default for all destructive process and container actions.
+- **Do** route category-colored text through `.cat-text` and set `color-scheme` per theme so native controls follow.
+- **Do** make the app name the keyboard-focusable button inside clickable rows/cards; keep containers role-free.
 
 ### Don't:
 - **Don't** use decorative gradient text or multi-color glow halos outside semantic statuses.
@@ -217,3 +237,5 @@ Portly employs clean tonal layering combined with crisp hairlines (`rgba(255, 25
 - **Don't** wrap the stats strip or toolbars onto multiple vertical rows.
 - **Don't** perform destructive Docker container recreation without an automatic rollback snapshot.
 - **Don't** use raw emoji in place of authored, accessible SVG iconography.
+- **Don't** put `role="button"` on a container that nests checkboxes, buttons, or links.
+- **Don't** hard-code dark-palette hexes as component text colors; use the semantic tokens.

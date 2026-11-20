@@ -362,7 +362,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                     {r.field} {r.operator} {r.value}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: cat?.color || 'var(--accent)', fontWeight: 600 }}>
+                    <span className="cat-text" style={{ '--cat-color': cat?.color || 'var(--accent)', fontWeight: 600 } as React.CSSProperties}>
                       → {cat?.name || r.category_id}
                     </span>
                     {!readOnly && (

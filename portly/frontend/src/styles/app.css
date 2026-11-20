@@ -2,12 +2,14 @@
 
 :root {
   --app-accent: var(--accent);
+  color-scheme: dark;
 }
 
 /* app shell stays on one row; the mobile media query below still stacks it vertically */
 .c042 { flex-wrap: nowrap !important; }
 
 [data-theme="light"] {
+  color-scheme: light;
   --bg: #F8FAFC;
   --surface-1: #FFFFFF;
   --surface-2: #F1F5F9;
@@ -15,10 +17,12 @@
   --border: rgba(0, 0, 0, 0.09);
   --text: #0F172A;
   --muted: #475569;
-  --accent: #4F63D2;
-  --success: #0D9488;
+  /* !important beats the inline user-accent custom property, which otherwise
+     survives system-theme flips and forced data-theme changes. */
+  --accent: #4F63D2 !important;
+  --success: #0F766E;
   --warning: #B45309;
-  --danger: #DC2626;
+  --danger: #B91C1C;
 }
 
 [data-theme="light"] body {
@@ -139,6 +143,18 @@
 [data-theme="light"] .c026 .c038 {
   color: #475569;
 }
+/* Grid-card badges, links and icon tile carry dark-palette hexes */
+[data-theme="light"] .c036 { color: #6D28D9; border-color: rgba(0, 0, 0, 0.12); }
+[data-theme="light"] .c040 { color: var(--accent); border-color: rgba(0, 0, 0, 0.12); }
+[data-theme="light"] .c037 { color: #475569; border-color: rgba(0, 0, 0, 0.12); }
+[data-theme="light"] .c039 { color: var(--accent); }
+[data-theme="light"] .c028 { background: #E2E8F0; color: var(--accent); }
+[data-theme="light"] .c013 { color: #475569; }
+[data-theme="light"] .c094 { background: #E2E8F0; color: #0F172A; }
+[data-theme="light"] .c109,
+[data-theme="light"] .c111 { color: #3B4EC0; }
+[data-theme="light"] .c080,
+[data-theme="light"] .c045 { color: #FFFFFF; }
 [data-theme="oled"] .c026 {
   background: #050505;
   border-color: rgba(255, 255, 255, 0.10);
@@ -288,6 +304,9 @@ button, a, input, select, textarea {
   .stat-sparkline path {
     transition: none !important;
   }
+  .c026:hover {
+    transform: none !important;
+  }
 }
 
 /* Telemetry strip: keep values inside their cells when the window is narrow */
@@ -313,6 +332,9 @@ button, a, input, select, textarea {
 ::selection {
   background: color-mix(in srgb, var(--accent) 35%, transparent);
   color: #ECEEF3;
+}
+[data-theme="light"] ::selection {
+  color: #0F172A;
 }
 
 input, textarea {
@@ -929,6 +951,13 @@ kbd,
   white-space: nowrap;
 }
 
+/* Category-colored text: darkened via color-mix in light theme so any
+   user-picked category color keeps ≥4.5:1 on the pale badge tint. */
+.cat-text { color: var(--cat-color, var(--accent)); }
+[data-theme="light"] .cat-text {
+  color: color-mix(in srgb, var(--cat-color, var(--accent)) 50%, #000);
+}
+
 /* Bind Text */
 .table-bind-text {
   font-family: 'JetBrains Mono', monospace;
@@ -990,6 +1019,29 @@ kbd,
   background: #8D95A5;
 }
 
+/* Name-as-button: the keyboard/AT path into row/card detail. Containers keep
+   their mouse click but no interactive role, so nested controls are legal. */
+.app-name-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.c026:hover {
+  border-color: rgba(140, 158, 255, 0.4);
+  transform: translateY(-2px);
+}
+[data-theme="light"] .c026:hover { border-color: rgba(79, 99, 210, 0.45); }
+
 /* Row Action Buttons */
 .row-action-btn {
   width: 28px;
@@ -998,7 +1050,7 @@ kbd,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #8D95A5;
+  color: var(--muted);
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
@@ -1236,6 +1288,35 @@ button.c088 {
 [data-theme="light"] [style*="#8C9EFF"] {
   color: var(--accent) !important;
 }
+[data-theme="light"] [style*="#C4B5FD"],
+[data-theme="light"] [style*="rgb(196, 181, 253)"] { color: #6D28D9 !important; }
+[data-theme="light"] [style*="#9AA4B2"],
+[data-theme="light"] [style*="rgb(154, 164, 178)"],
+[data-theme="light"] [style*="#64748B"],
+[data-theme="light"] [style*="rgb(100, 116, 139)"] { color: #475569 !important; }
+[data-theme="light"] [style*="#7AA8FF"],
+[data-theme="light"] [style*="rgb(122, 168, 255)"] { color: var(--accent) !important; }
+[data-theme="light"] [style*="#E6EAF0"],
+[data-theme="light"] [style*="rgb(230, 234, 240)"] { color: #0F172A !important; }
+[data-theme="light"] [style*="#5EEAD4"],
+[data-theme="light"] [style*="rgb(94, 234, 212)"] { color: var(--success) !important; }
+[data-theme="light"] [style*="#FBBF77"],
+[data-theme="light"] [style*="rgb(251, 191, 119)"] { color: var(--warning) !important; }
+[data-theme="light"] [style*="#FF8A8A"],
+[data-theme="light"] [style*="rgb(255, 138, 138)"] { color: var(--danger) !important; }
+[data-theme="light"] [style*="#F5A3D0"],
+[data-theme="light"] [style*="rgb(245, 163, 208)"] { color: #BE185D !important; }
+[data-theme="light"] [style*="#B6E36B"],
+[data-theme="light"] [style*="rgb(182, 227, 107)"] { color: #4D7C0F !important; }
+[data-theme="light"] [style*="#C9CFDB"],
+[data-theme="light"] [style*="rgb(201, 207, 219)"] { color: #334155 !important; }
+[data-theme="light"] [style*="#F5C2C2"],
+[data-theme="light"] [style*="rgb(245, 194, 194)"] { color: #991B1B !important; }
+/* Dark text reserved for accent-filled buttons; white keeps ≥4.5:1 in light */
+[data-theme="light"] [style*="#0B1220"],
+[data-theme="light"] [style*="rgb(11, 18, 32)"],
+[data-theme="light"] [style*="#0A0D14"],
+[data-theme="light"] [style*="rgb(10, 13, 20)"] { color: #FFFFFF !important; }
 [data-theme="light"] [style*="rgb(21, 24, 33)"],
 [data-theme="light"] [style*="#151821"] {
   background: #F8FAFC !important;
@@ -1265,6 +1346,12 @@ button.c088 {
   .c086 { display: none; }
   .c085 { font-size: 14px; }
   .c084 { font-size: 10px; }
+  /* Footer status line is not a toolbar: let it wrap instead of overflowing */
+  .c145 { flex-wrap: wrap; row-gap: 4px; }
+}
+
+@media (pointer: coarse) {
+  .app-name-btn { min-height: 24px; }
 }
 
 /* D-6: two rows of three tiles on narrow/tablet screens so values fit */

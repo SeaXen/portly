@@ -1,0 +1,550 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-20T06:58:47+00:00",
+  "title": "Design System: Portly",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Periwinkle Harbor",
+        "canonical": "#8C9EFF",
+        "tonalRamp": [
+          "#232840",
+          "#383f66",
+          "#4d578c",
+          "#626fb2",
+          "#7786d9",
+          "#8c9eff",
+          "#c0caff",
+          "#e2e7ff"
+        ]
+      },
+      "primary-deep": {
+        "role": "primary",
+        "displayName": "Deep Periwinkle",
+        "canonical": "#6875DF",
+        "tonalRamp": [
+          "#1a1d38",
+          "#2a2f59",
+          "#39407b",
+          "#49529c",
+          "#5863be",
+          "#6875df",
+          "#acb3ed",
+          "#d9dcf7"
+        ]
+      },
+      "accent-teal": {
+        "role": "secondary",
+        "displayName": "Seafoam Teal",
+        "canonical": "#5EEAD4",
+        "tonalRamp": [
+          "#183a35",
+          "#265e55",
+          "#348175",
+          "#42a494",
+          "#50c7b4",
+          "#5eead4",
+          "#a6f3e7",
+          "#d7faf4"
+        ]
+      },
+      "accent-coral": {
+        "role": "tertiary",
+        "displayName": "Coral Danger",
+        "canonical": "#FF8A8A",
+        "tonalRamp": [
+          "#402222",
+          "#663737",
+          "#8c4c4c",
+          "#b26161",
+          "#d97575",
+          "#ff8a8a",
+          "#ffbfbf",
+          "#ffe2e2"
+        ]
+      },
+      "accent-amber": {
+        "role": "tertiary",
+        "displayName": "Amber Warning",
+        "canonical": "#FBBF77",
+        "tonalRamp": [
+          "#3f301e",
+          "#644c30",
+          "#8a6941",
+          "#b08653",
+          "#d5a265",
+          "#fbbf77",
+          "#fddcb4",
+          "#feefdd"
+        ]
+      },
+      "accent-rose": {
+        "role": "tertiary",
+        "displayName": "Orchid Pink",
+        "canonical": "#F5A3D0",
+        "tonalRamp": [
+          "#3d2934",
+          "#624153",
+          "#875a72",
+          "#ac7292",
+          "#d08bb1",
+          "#f5a3d0",
+          "#facce5",
+          "#fce8f3"
+        ]
+      },
+      "accent-lime": {
+        "role": "tertiary",
+        "displayName": "Lime Spring",
+        "canonical": "#B6E36B",
+        "tonalRamp": [
+          "#2e391b",
+          "#495b2b",
+          "#647d3b",
+          "#7f9f4b",
+          "#9bc15b",
+          "#b6e36b",
+          "#d7f0ae",
+          "#edf8da"
+        ]
+      },
+      "neutral-bg": {
+        "role": "neutral",
+        "displayName": "Void Canvas",
+        "canonical": "#0A0B0F",
+        "tonalRamp": [
+          "#020304",
+          "#040406",
+          "#060608",
+          "#07080a",
+          "#08090d",
+          "#0a0b0f",
+          "#78797b",
+          "#c2c2c3"
+        ]
+      },
+      "surface-1": {
+        "role": "neutral",
+        "displayName": "Surface Dock",
+        "canonical": "#101218",
+        "tonalRamp": [
+          "#040406",
+          "#06070a",
+          "#090a0d",
+          "#0b0d11",
+          "#0e0f14",
+          "#101218",
+          "#7c7d80",
+          "#c3c4c5"
+        ]
+      },
+      "surface-2": {
+        "role": "neutral",
+        "displayName": "Surface Card",
+        "canonical": "#151821",
+        "tonalRamp": [
+          "#050608",
+          "#080a0d",
+          "#0c0d12",
+          "#0f1117",
+          "#12141c",
+          "#151821",
+          "#7e8085",
+          "#c4c5c8"
+        ]
+      },
+      "surface-3": {
+        "role": "neutral",
+        "displayName": "Surface Hover",
+        "canonical": "#1C2030",
+        "tonalRamp": [
+          "#07080c",
+          "#0b0d13",
+          "#0f121a",
+          "#141622",
+          "#181b29",
+          "#1c2030",
+          "#82848d",
+          "#c6c7cb"
+        ]
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "Crisp Text",
+        "canonical": "#ECEEF3",
+        "tonalRamp": [
+          "#3b3c3d",
+          "#5e5f61",
+          "#828386",
+          "#a5a7aa",
+          "#c9cacf",
+          "#eceef3",
+          "#f5f6f8",
+          "#fafbfc"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Muted Slate",
+        "canonical": "#8D95A5",
+        "tonalRamp": [
+          "#232529",
+          "#383c42",
+          "#4e525b",
+          "#636873",
+          "#787f8c",
+          "#8d95a5",
+          "#c0c5ce",
+          "#e2e4e8"
+        ]
+      },
+      "light-bg": {
+        "role": "neutral",
+        "displayName": "Harbor Mist",
+        "canonical": "#F8FAFC",
+        "tonalRamp": [
+          "#3e3e3f",
+          "#636465",
+          "#888a8b",
+          "#aeafb0",
+          "#d3d4d6",
+          "#f8fafc",
+          "#fbfcfd",
+          "#fdfefe"
+        ]
+      },
+      "light-surface-1": {
+        "role": "neutral",
+        "displayName": "White Dock",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#404040",
+          "#666666",
+          "#8c8c8c",
+          "#b2b2b2",
+          "#d9d9d9",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "light-surface-2": {
+        "role": "neutral",
+        "displayName": "Light Card",
+        "canonical": "#F1F5F9",
+        "tonalRamp": [
+          "#3c3d3e",
+          "#606264",
+          "#858789",
+          "#a9acae",
+          "#cdd0d4",
+          "#f1f5f9",
+          "#f7fafc",
+          "#fcfcfe"
+        ]
+      },
+      "light-surface-3": {
+        "role": "neutral",
+        "displayName": "Light Hover",
+        "canonical": "#E2E8F0",
+        "tonalRamp": [
+          "#383a3c",
+          "#5a5d60",
+          "#7c8084",
+          "#9ea2a8",
+          "#c0c5cc",
+          "#e2e8f0",
+          "#eff2f7",
+          "#f8f9fb"
+        ]
+      },
+      "light-text": {
+        "role": "neutral",
+        "displayName": "Slate Ink",
+        "canonical": "#0F172A",
+        "tonalRamp": [
+          "#04060a",
+          "#060911",
+          "#080d17",
+          "#0a101d",
+          "#0d1424",
+          "#0f172a",
+          "#7b7f8a",
+          "#c3c5ca"
+        ]
+      },
+      "light-muted": {
+        "role": "neutral",
+        "displayName": "Light Muted",
+        "canonical": "#475569",
+        "tonalRamp": [
+          "#12151a",
+          "#1c222a",
+          "#272f3a",
+          "#323b4a",
+          "#3c4859",
+          "#475569",
+          "#9aa2ac",
+          "#d1d4da"
+        ]
+      },
+      "light-accent": {
+        "role": "primary",
+        "displayName": "Daylight Indigo",
+        "canonical": "#4F63D2",
+        "tonalRamp": [
+          "#141934",
+          "#202854",
+          "#2b3674",
+          "#374593",
+          "#4354b2",
+          "#4f63d2",
+          "#9ea9e6",
+          "#d3d8f4"
+        ]
+      },
+      "light-accent-deep": {
+        "role": "primary",
+        "displayName": "Badge Indigo",
+        "canonical": "#3B4EC0",
+        "tonalRamp": [
+          "#0f1430",
+          "#181f4d",
+          "#202b6a",
+          "#293786",
+          "#3242a3",
+          "#3b4ec0",
+          "#939edc",
+          "#ced3ef"
+        ]
+      },
+      "light-success": {
+        "role": "secondary",
+        "displayName": "Daylight Teal",
+        "canonical": "#0F766E",
+        "tonalRamp": [
+          "#041e1c",
+          "#062f2c",
+          "#08413d",
+          "#0a534d",
+          "#0d645e",
+          "#0f766e",
+          "#7bb4af",
+          "#c3dddb"
+        ]
+      },
+      "light-warning": {
+        "role": "tertiary",
+        "displayName": "Daylight Amber",
+        "canonical": "#B45309",
+        "tonalRamp": [
+          "#2d1502",
+          "#482104",
+          "#632e05",
+          "#7e3a06",
+          "#994708",
+          "#b45309",
+          "#d6a078",
+          "#ecd4c2"
+        ]
+      },
+      "light-danger": {
+        "role": "tertiary",
+        "displayName": "Daylight Coral",
+        "canonical": "#B91C1C",
+        "tonalRamp": [
+          "#2e0707",
+          "#4a0b0b",
+          "#660f0f",
+          "#821414",
+          "#9d1818",
+          "#b91c1c",
+          "#d88282",
+          "#eec6c6"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Modal titles and drawer headers."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Category headers and dialog headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "App names, row labels, palette items."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Descriptions, command lines, telemetry subtext."
+      },
+      "label": {
+        "displayName": "Label / Mono",
+        "purpose": "Ports, PIDs, binds, metric values; tabular-nums."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card-rest",
+        "value": "0 1px 3px rgba(0,0,0,0.4)",
+        "purpose": "Base elevation for rows and tiles."
+      },
+      {
+        "name": "hover-lift",
+        "value": "0 4px 16px rgba(0,0,0,0.5), 0 0 0 1px rgba(140,158,255,0.3)",
+        "purpose": "Interactive hover on cards."
+      },
+      {
+        "name": "modal",
+        "value": "0 20px 48px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1)",
+        "purpose": "Dialogs and command palette."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-transition",
+        "value": "120-180ms ease",
+        "purpose": "Color/background state changes; translations disabled under prefers-reduced-motion."
+      },
+      {
+        "name": "modal-enter",
+        "value": "180ms cubic-bezier(0.16,1,0.3,1)",
+        "purpose": "Dialog slide-up entrance."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "768px"
+      },
+      {
+        "name": "stats-reflow",
+        "value": "900px"
+      },
+      {
+        "name": "desktop",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button (dark)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary action on dark surfaces; periwinkle fill, near-black text.",
+      "html": "<button class=\"ds-btn-primary\">Add app</button>",
+      "css": ".ds-btn-primary{background:#8C9EFF;color:#0B0F1E;border:0;border-radius:9px;padding:7px 14px;font:600 13px Inter,system-ui,sans-serif;cursor:pointer;transition:background .15s}.ds-btn-primary:hover{background:#6875DF}.ds-btn-primary:focus-visible{outline:2px solid #8C9EFF;outline-offset:2px}"
+    },
+    {
+      "name": "Primary Button (light)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Light theme flips to the deeper fixed indigo with white text.",
+      "html": "<button class=\"ds-btn-primary-light\">Add app</button>",
+      "css": ".ds-btn-primary-light{background:#4F63D2;color:#FFFFFF;border:0;border-radius:9px;padding:7px 14px;font:600 13px Inter,system-ui,sans-serif;cursor:pointer;transition:background .15s}.ds-btn-primary-light:hover{background:#3B4EC0}.ds-btn-primary-light:focus-visible{outline:2px solid #4F63D2;outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ghost control for toolbar and dialog actions.",
+      "html": "<button class=\"ds-btn-secondary\">Export</button>",
+      "css": ".ds-btn-secondary{background:#151821;color:#ECEEF3;border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:7px 12px;font:500 13px Inter,system-ui,sans-serif;cursor:pointer;transition:background .15s}.ds-btn-secondary:hover{background:#1C2030}.ds-btn-secondary:focus-visible{outline:2px solid #8C9EFF;outline-offset:2px}"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Docked search field with mono shortcut hint.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search ports, apps, containers\u2026\">",
+      "css": ".ds-input{background:#101218;color:#ECEEF3;border:1px solid rgba(255,255,255,.09);border-radius:9px;height:34px;padding:0 12px;font:400 13px Inter,system-ui,sans-serif;width:260px}.ds-input::placeholder{color:#8D95A5}.ds-input:focus-visible{outline:2px solid #8C9EFF;outline-offset:2px}"
+    },
+    {
+      "name": "Sidebar Nav Item (active)",
+      "kind": "nav",
+      "description": "Active destination: tinted pill plus 2.5px leading accent stripe.",
+      "html": "<button class=\"ds-nav-active\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#8C9EFF\" stroke-width=\"1.8\" stroke-linecap=\"round\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 7v5l3 2\"/></svg>Ports</button>",
+      "css": ".ds-nav-active{display:flex;align-items:center;gap:12px;height:36px;padding:0 12px;border:0;border-radius:8px;background:rgba(140,158,255,.14);box-shadow:inset 2.5px 0 0 #8C9EFF;color:#ECEEF3;font:600 13.5px Inter,system-ui,sans-serif;cursor:pointer;width:200px;text-align:left}.ds-nav-active:focus-visible{outline:2px solid #8C9EFF;outline-offset:2px}"
+    },
+    {
+      "name": "Category Badge",
+      "kind": "chip",
+      "description": "Category pill; light theme darkens the label via color-mix.",
+      "html": "<span class=\"ds-cat-badge\">Databases</span>",
+      "css": ".ds-cat-badge{display:inline-flex;align-items:center;font:500 12px Inter,system-ui,sans-serif;line-height:20px;padding:1px 9px;border-radius:999px;color:#5EEAD4;background:rgba(94,234,212,.08);border:1px solid rgba(94,234,212,.21)}"
+    },
+    {
+      "name": "Grid Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "App tile: name-as-button, big mono port, hover lift via CSS.",
+      "html": "<div class=\"ds-card\"><button class=\"ds-card-name\">searxng</button><div class=\"ds-card-port\">8080</div><div class=\"ds-card-meta\">CPU 0.4% \u00b7 RAM 128 MB</div></div>",
+      "css": ".ds-card{background:#151821;border:1px solid #242C37;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;width:240px;transition:border-color .15s,transform .1s}.ds-card:hover{border-color:rgba(140,158,255,.4);transform:translateY(-2px)}.ds-card-name{background:none;border:0;padding:0;color:#ECEEF3;font:600 15px Inter,system-ui,sans-serif;text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-card-name:focus-visible{outline:2px solid #8C9EFF;outline-offset:2px}.ds-card-port{font:600 30px 'JetBrains Mono',monospace;color:#ECEEF3;font-variant-numeric:tabular-nums}.ds-card-meta{font:400 12px Inter,system-ui,sans-serif;color:#8D95A5}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Obsidian Harbor",
+    "overview": "Portly is an industrial, precision-engineered observatory for local networks, containers, and background services. Like the flight deck or shipping harbor control tower at night, the interface stays calm, deep, and dark, using light with surgical intention to communicate status, bandwidth flow, and system pressure. A daylight variant and a pure-black variant remap the same semantic tokens rather than inventing a second visual language.",
+    "keyCharacteristics": [
+      "Un-wrapping horizontal telemetry strips with live 60-point inline vector sparklines.",
+      "Dual-font typography hierarchy: Inter for controls and metadata; JetBrains Mono tabular figures for sockets, ports, and metrics.",
+      "High-contrast, tactile micro-interactions with visible focus rings and restrained 120-180ms transitions.",
+      "Intentional density: Compact for high-volume sysadmin auditing, Comfy for glanceable wallboard displays."
+    ],
+    "rules": [
+      {
+        "name": "The Single-Voice Accent Rule",
+        "body": "Primary periwinkle is reserved strictly for interactive state and primary affordances. It covers \u22645% of screen area at rest.",
+        "section": "colors"
+      },
+      {
+        "name": "The Status Sovereignty Rule",
+        "body": "Semantic colors are never used for arbitrary aesthetic decoration. A red dot must always denote a dead process or port collision.",
+        "section": "colors"
+      },
+      {
+        "name": "The Semantic Token Rule",
+        "body": "Component text uses var(--text), var(--muted), var(--accent), and the status tokens \u2014 never hard-coded palette hexes \u2014 so every theme remaps it correctly.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Number Rule",
+        "body": "All numerical readouts strictly enforce font-variant-numeric: tabular-nums to guarantee jitter-free rendering during real-time streaming updates.",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Kicker Rule",
+        "body": "Section titles and cards never display uppercase micro-eyebrows or kickers above headings.",
+        "section": "typography"
+      },
+      {
+        "name": "The Boundary Hairline Rule",
+        "body": "Deep black overlays always feature an interior 1px semi-transparent border simulating an illuminated edge.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do preserve single-line horizontal layouts for the stats strip and toolbar at all screen widths.",
+      "Do use font-variant-numeric: tabular-nums for any container holding ports, PIDs, bytes, or percentages.",
+      "Do verify port availability before prompting users with port change migration dialogs.",
+      "Do respect prefers-reduced-motion by disabling translation animations while preserving subtle opacity transitions.",
+      "Do maintain safe mode by default for all destructive process and container actions.",
+      "Do route category-colored text through .cat-text and set color-scheme per theme so native controls follow.",
+      "Do make the app name the keyboard-focusable button inside clickable rows/cards; keep containers role-free."
+    ],
+    "donts": [
+      "Don't use decorative gradient text or multi-color glow halos outside semantic statuses.",
+      "Don't hide critical telemetry behind hover tooltips; prioritize glanceable numbers with inline context.",
+      "Don't wrap the stats strip or toolbars onto multiple vertical rows.",
+      "Don't perform destructive Docker container recreation without an automatic rollback snapshot.",
+      "Don't use raw emoji in place of authored, accessible SVG iconography.",
+      "Don't put role=\"button\" on a container that nests checkboxes, buttons, or links.",
+      "Don't hard-code dark-palette hexes as component text colors; use the semantic tokens."
+    ]
+  }
+}

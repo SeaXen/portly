@@ -1,3 +1,4 @@
+/* impeccable-disable overused-font -- Inter is brand-pinned in PRODUCT.md/DESIGN.md */
 @font-face{
   font-family:Inter;
   src:url('/fonts/inter-latin.woff2') format('woff2');

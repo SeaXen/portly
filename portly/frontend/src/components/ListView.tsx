@@ -13,9 +13,6 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail }) => {
       {apps.map((app) => (
         <div
           key={app.id}
-          role="button"
-          tabIndex={0}
-          aria-label={`View details for ${app.name}`}
           className="c053"
           style={{
             height: '40px',
@@ -29,12 +26,6 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail }) => {
             cursor: 'pointer',
           }}
           onClick={() => onOpenDetail(app)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              onOpenDetail(app);
-            }
-          }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span
@@ -45,7 +36,7 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail }) => {
                 backgroundColor: app.status === 'unknown' ? 'var(--muted)' : (app.status === 'up' ? 'var(--success)' : 'var(--danger)'),
               }}
             />
-            <span style={{ fontWeight: 600, color: 'var(--text)' }}>{app.name}</span>
+            <button type="button" className="app-name-btn" style={{ fontWeight: 600, color: 'var(--text)', fontSize: '14px' }}>{app.name}</button>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)', fontWeight: 600 }}>
               {app.port || '—'}
             </span>

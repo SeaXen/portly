@@ -20,37 +20,20 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, visibleF
         return (
           <div
             key={app.id}
-            role="button"
-            tabIndex={0}
-            aria-label={`View details for ${app.name}`}
             className="c026"
             style={{
               cursor: 'pointer',
               transition: 'border-color 0.15s, transform 0.1s',
             }}
             onClick={() => onOpenDetail(app)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onOpenDetail(app);
-              }
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(140, 158, 255, 0.4)';
-              e.currentTarget.style.transform = 'translateY(-2px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#242C37';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
           >
             {/* Top row */}
             <div className="c027">
               <AppIcon appId={app.id} name={app.name} source={app.source} size={36} className="c028" />
               <div className="c029">
-                <div className="c030" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <button type="button" className="c030 app-name-btn" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {app.name}
-                </div>
+                </button>
                 <div className="c013" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {app.source === 'docker' ? (app.image || app.container_name) : (app.process_name || app.cmdline || 'Host')}
                 </div>
@@ -59,7 +42,7 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, visibleF
                 <span
                   className="c032"
                   style={{
-                    backgroundColor: app.status === 'unknown' ? 'var(--muted)' : (app.status === 'up' ? '#4ADE80' : (app.status === 'down' ? '#F87171' : 'var(--warning)')),
+                    backgroundColor: app.status === 'unknown' ? 'var(--muted)' : (app.status === 'up' ? 'var(--success)' : (app.status === 'down' ? 'var(--danger)' : 'var(--warning)')),
                   }}
                 />
                 <span style={{ textTransform: 'capitalize' }}>{app.status}</span>
@@ -166,7 +149,7 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, visibleF
                     Open ↗
                   </a>
                 ) : (
-                  <span className="c039">Details</span>
+                  <button type="button" className="c039 app-name-btn">Details</button>
                 )}
               </div>
             </div>

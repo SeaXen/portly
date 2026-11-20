@@ -67,7 +67,7 @@ export const TableView: React.FC<TableViewProps> = ({
     '110px',
     showBind ? '105px' : null,
     '70px',
-    showCpuRam ? '70px' : null,
+    showCpuRam ? '86px' : null,
     showCpuRam ? '70px' : null,
     showUptime ? '90px' : null,
     '140px',
@@ -163,17 +163,9 @@ export const TableView: React.FC<TableViewProps> = ({
                 return (
                   <div
                     key={app.id}
-                    role="button"
-                    tabIndex={0}
                     className={`portly-table-row ${isSelected ? 'selected' : ''}`}
                     style={{ ...padStyle, gridTemplateColumns: gridCols }}
                     onClick={() => onOpenDetail(app)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onOpenDetail(app);
-                      }
-                    }}
                   >
                     {/* Checkbox */}
                     <div className="table-cell" onClick={(e) => e.stopPropagation()}>
@@ -203,10 +195,10 @@ export const TableView: React.FC<TableViewProps> = ({
                     <div className="table-cell" style={{ gap: '10px' }}>
                       <AppIcon appId={app.id} name={app.name} source={app.source} size={30} />
                       <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                        <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '13.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <button type="button" className="app-name-btn" style={{ fontWeight: 600, color: 'var(--text)', fontSize: '13.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {app.name}
                           {app.pinned && <span style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--warning)' }}>★</span>}
-                        </div>
+                        </button>
                         <div style={{ fontSize: '11.5px', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {app.source === 'docker'
                             ? (app.image || app.container_name)
@@ -292,12 +284,12 @@ export const TableView: React.FC<TableViewProps> = ({
                     {/* Category Badge */}
                     <div className="table-cell" style={{ gap: '6px' }}>
                       <span
-                        className="table-cat-badge"
+                        className="table-cat-badge cat-text"
                         style={{
                           borderColor: `${catColor}35`,
                           background: `${catColor}14`,
-                          color: catColor,
-                        }}
+                          '--cat-color': catColor,
+                        } as React.CSSProperties}
                         title={catName}
                       >
                         {catName}
@@ -356,13 +348,13 @@ export const TableView: React.FC<TableViewProps> = ({
                       <div style={{ width: '42px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
                         <div style={{ width: `${cpuVal === null ? 0 : Math.max(4, cpuVal)}%`, height: '100%', background: 'var(--accent)', borderRadius: '2px' }} />
                       </div>
-                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: statsStale ? 'var(--muted)' : 'var(--muted)' }} title={statsStale ? 'Stale or unavailable stats' : undefined}>
-                        {cpuVal === null ? '—' : `${cpuVal}%`}{statsStale ? ' (stale)' : ''}
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--muted)' }} title={statsStale ? 'Stale or unavailable stats' : undefined}>
+                        {cpuVal === null ? '—' : `${cpuVal}%`}{statsStale ? '*' : ''}
                       </span>
                     </div>
 
                     {/* RAM */}
-                    <div className="table-cell" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: statsStale ? 'var(--muted)' : 'var(--muted)', display: hide(showCpuRam) }} title={statsStale ? 'Stale or unavailable stats' : undefined}>
+                    <div className="table-cell" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--muted)', display: hide(showCpuRam) }} title={statsStale ? 'Stale or unavailable stats' : undefined}>
                       {app.ram_mb == null ? '—' : app.ram_mb > 0 ? `${app.ram_mb} MB` : '0 MB'}
                     </div>
 

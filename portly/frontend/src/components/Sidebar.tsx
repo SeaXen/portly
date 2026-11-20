@@ -143,7 +143,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           <button
             type="button"
-            aria-label="Conflicts"
             className={`sidebar-nav-btn ${activeNav === 'conflicts' ? 'active' : ''}`}
             onClick={() => { onSelectNav('conflicts'); onSelectCategory(null); }}
           >

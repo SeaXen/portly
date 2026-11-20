@@ -100,19 +100,10 @@ export const BoardView: React.FC<BoardViewProps> = ({
               {categoryApps.map((app) => (
                 <div
                   key={app.id}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`View details for ${app.name}`}
                   className="c153 draggable-card"
                   draggable={!readOnly}
                   onDragStart={(e) => handleDragStart(e, app.id)}
                   onClick={() => onOpenDetail(app)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onOpenDetail(app);
-                    }
-                  }}
                   style={{
                     background: 'var(--surface-2)',
                     border: '1px solid rgba(255,255,255,0.07)',
@@ -137,9 +128,9 @@ export const BoardView: React.FC<BoardViewProps> = ({
                           </svg>
                         </span>
                       )}
-                      <span className="c154" style={{ fontWeight: 600, color: 'var(--text)' }}>
+                      <button type="button" className="c154 app-name-btn" style={{ fontWeight: 600, color: 'var(--text)' }}>
                         {app.name}
-                      </span>
+                      </button>
                     </div>
                     <span
                       className="c122"

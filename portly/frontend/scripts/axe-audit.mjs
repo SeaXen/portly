@@ -10,11 +10,13 @@ const themes = ['dark', 'light'];
 
 const targets = [
   { name: 'landing', open: async () => {} },
-  { name: 'ports', open: async (p) => p.getByRole('button', { name: 'Ports' }).first().click() },
-  { name: 'table', open: async (p) => p.getByRole('button', { name: 'Table' }).first().click() },
-  { name: 'grid', open: async (p) => p.getByRole('button', { name: 'Grid' }).first().click() },
-  { name: 'list', open: async (p) => p.getByRole('button', { name: 'List' }).first().click() },
-  { name: 'board', open: async (p) => p.getByRole('button', { name: 'Board' }).first().click() },
+  { name: 'ports', open: async (p) => p.getByRole('button', { name: 'Ports', exact: true }).first().click() },
+  { name: 'table', open: async (p) => p.getByRole('button', { name: 'Table', exact: true }).first().click() },
+  { name: 'grid', open: async (p) => p.getByRole('button', { name: 'Grid', exact: true }).first().click() },
+  { name: 'list', open: async (p) => p.getByRole('button', { name: 'List', exact: true }).first().click() },
+  // exact: 'Board' otherwise substring-matches the "Portly Dashboard" brand
+  // button, which opens a drawer whose backdrop blocks every later target.
+  { name: 'board', open: async (p) => p.getByRole('button', { name: 'Board', exact: true }).first().click() },
   { name: 'add-app modal', open: async (p) => p.getByRole('button', { name: 'Add app' }).first().click() },
 ];
 
@@ -45,7 +47,9 @@ try {
 
     for (const theme of themes) {
       await page.evaluate((t) => document.documentElement.setAttribute('data-theme', t), theme);
-      await page.waitForTimeout(100);
+      // Sidebar/toolbar color transitions run 150ms; measuring sooner reads
+      // mid-transition colors and reports phantom contrast violations.
+      await page.waitForTimeout(400);
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
         .analyze();
