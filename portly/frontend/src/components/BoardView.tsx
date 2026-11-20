@@ -151,7 +151,7 @@ export const BoardView: React.FC<BoardViewProps> = ({
 
                   <div className="c155" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span className="c156" style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)', fontWeight: 600, fontSize: '15px' }}>
-                      {app.port}
+                      {app.port || '—'}
                     </span>
                     <span className={app.source === 'docker' ? 'c111' : 'c109'} style={{ textTransform: 'capitalize' }}>
                       {app.source}

@@ -129,6 +129,8 @@ class Store:
                 update_cmd TEXT,
                 expected_status TEXT DEFAULT '200,204,301,302',
                 custom_headers TEXT DEFAULT '{}',
+                managed_pid INTEGER,
+                managed_pid_started REAL,
                 created_at REAL NOT NULL
             );
             """)
@@ -239,9 +241,13 @@ class Store:
 
             conn.commit()
 
+            # Seed defaults only for a freshly created database; re-seeding on
+            # every startup would resurrect categories/rules the user deleted.
+            fresh_db = conn.execute("PRAGMA user_version").fetchone()[0] == 0
+
             # Seed default categories if empty
             cur = conn.execute("SELECT COUNT(*) as cnt FROM categories")
-            if cur.fetchone()["cnt"] == 0:
+            if fresh_db and cur.fetchone()["cnt"] == 0:
                 defaults = [
                     ("development", "Development", "#8C9EFF", "auto", 1),
                     ("databases", "Databases", "#5EEAD4", "auto", 2),
@@ -257,7 +263,7 @@ class Store:
 
             # Seed default rules if empty
             cur = conn.execute("SELECT COUNT(*) as cnt FROM rules")
-            if cur.fetchone()["cnt"] == 0:
+            if fresh_db and cur.fetchone()["cnt"] == 0:
                 rule_defaults = [
                     ("r1", "databases", "image", "contains", "postgres", 10),
                     ("r2", "databases", "image", "contains", "redis", 10),
@@ -293,7 +299,7 @@ class Store:
                 "notify_new_ports": "true",
                 "auto_refresh": "true",
                 "public_host": "",
-                "auto_relock_seconds": "0",
+                "auto_relock_seconds": "300",
                 "webhook_enabled": "false",
                 "webhook_url": "",
                 "webhook_type": "generic",
@@ -399,6 +405,25 @@ class Store:
                     conn.execute("ALTER TABLE setup_token_v4 RENAME TO setup_token;")
                 conn.execute("PRAGMA user_version = 4;")
                 conn.commit()
+
+            if current_ver < 5:
+                # Persist custom-app process ownership across Portly restarts.
+                cur = conn.execute("PRAGMA table_info(custom_apps);")
+                ca_cols = [c["name"] for c in cur.fetchall()]
+                if "managed_pid" not in ca_cols:
+                    conn.execute("ALTER TABLE custom_apps ADD COLUMN managed_pid INTEGER;")
+                if "managed_pid_started" not in ca_cols:
+                    conn.execute("ALTER TABLE custom_apps ADD COLUMN managed_pid_started REAL;")
+                conn.execute("PRAGMA user_version = 5;")
+                conn.commit()
+
+    def set_custom_app_pid(self, app_id: str, pid, started):
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE custom_apps SET managed_pid = ?, managed_pid_started = ? WHERE id = ?",
+                (pid, started, app_id),
+            )
+            conn.commit()
 
     # App overrides
     def get_app(self, app_id: str) -> Optional[Dict[str, Any]]:
@@ -544,7 +569,7 @@ class Store:
             res = []
             for r in cur.fetchall():
                 d = dict(r)
-                d["env"] = json.loads(d.get("env_json") or "{}")
+                d["env"] = json.loads(d.pop("env_json", None) or "{}")
                 d["custom_headers"] = json.loads(d.get("custom_headers") or "{}")
                 d["expected_status"] = d.get("expected_status") or "200,204,301,302"
                 d["start_on_boot"] = bool(d.get("start_on_boot"))
@@ -558,7 +583,7 @@ class Store:
             if not r:
                 return None
             d = dict(r)
-            d["env"] = json.loads(d.get("env_json") or "{}")
+            d["env"] = json.loads(d.pop("env_json", None) or "{}")
             d["custom_headers"] = json.loads(d.get("custom_headers") or "{}")
             d["expected_status"] = d.get("expected_status") or "200,204,301,302"
             d["start_on_boot"] = bool(d.get("start_on_boot"))
@@ -616,30 +641,10 @@ class Store:
     def create_custom_app(self, app_id: str, name: str, port: int, host: str = "localhost", **kwargs) -> Dict[str, Any]:
         return self.upsert_custom_app(app_id=app_id, name=name, host=host, port=port, **kwargs)
 
-    def save_custom_app(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        app_id = data.get("id") or f"custom_{int(time.time()*1000)}"
-        return self.upsert_custom_app(
-            app_id=app_id,
-            name=data.get("name", "Custom App"),
-            host=data.get("host", "localhost"),
-            port=int(data.get("port", 80)),
-            health_path=data.get("health_path"),
-            health_interval=data.get("health_interval", 30),
-            start_cmd=data.get("start_cmd"),
-            stop_cmd=data.get("stop_cmd"),
-            workdir=data.get("workdir"),
-            log_file=data.get("log_file"),
-            start_on_boot=bool(data.get("start_on_boot")),
-            env=data.get("env") or {},
-            update_cmd=data.get("update_cmd"),
-            expected_status=data.get("expected_status", "200,204,301,302"),
-            custom_headers=data.get("custom_headers") or {},
-        )
-
     def delete_custom_app(self, app_id: str):
         with self._get_connection() as conn:
             conn.execute("DELETE FROM custom_apps WHERE id = ?", (app_id,))
-            conn.execute("DELETE FROM apps WHERE id = ?", (app_id,))
+            conn.execute("DELETE FROM apps WHERE id = ? OR id = ?", (app_id, f"custom:{app_id}"))
             conn.commit()
 
     # Views
@@ -692,11 +697,22 @@ class Store:
                 INSERT INTO events (ts, type, app_id, message, actor)
                 VALUES (?, ?, ?, ?, ?)
             """, (now, event_type, app_id, message, actor))
+            # Prune discovery noise and audit trails separately so busy-host
+            # port churn cannot evict human audit records.
             conn.execute("""
-                DELETE FROM events WHERE id NOT IN (
-                    SELECT id FROM events ORDER BY id DESC LIMIT ?
+                DELETE FROM events WHERE type IN ('port_opened','port_closed','container_state','port_conflict')
+                AND id NOT IN (
+                    SELECT id FROM events WHERE type IN ('port_opened','port_closed','container_state','port_conflict')
+                    ORDER BY id DESC LIMIT ?
                 )
             """, (max_events,))
+            conn.execute("""
+                DELETE FROM events WHERE type NOT IN ('port_opened','port_closed','container_state','port_conflict')
+                AND id NOT IN (
+                    SELECT id FROM events WHERE type NOT IN ('port_opened','port_closed','container_state','port_conflict')
+                    ORDER BY id DESC LIMIT 5000
+                )
+            """)
             conn.commit()
             return {"id": cur.lastrowid, "ts": now, "type": event_type, "app_id": app_id, "message": message, "actor": actor}
 
@@ -869,7 +885,11 @@ class Store:
         with self._get_connection() as conn:
             cur = conn.execute("SELECT * FROM sessions WHERE token = ? OR token = ?", (token_hash, token))
             row = cur.fetchone()
-            return dict(row) if row else None
+            if not row:
+                return None
+            d = dict(row)
+            d.pop("token", None)  # stored hash is credential-equivalent; never expose
+            return d
 
     def delete_session(self, token: str):
         token_hash = _hash_token(token)
@@ -1016,8 +1036,18 @@ class Store:
                         operator = excluded.operator, value = excluded.value, priority = excluded.priority
                 """, (r["id"], r["category_id"], r["field"], r["operator"], r["value"], r.get("priority", 10)))
             for ca in data.get("custom_apps", []):
-                env_json = json.dumps(ca.get("env") or {})
-                headers_json = json.dumps(ca.get("custom_headers") or {})
+                env_in = ca.get("env") or {}
+                headers_in = ca.get("custom_headers") or {}
+                # Masked backups ("********") keep the existing secret on restore.
+                if any(v == "********" for v in env_in.values()) or any(v == "********" for v in headers_in.values()):
+                    cur = conn.execute("SELECT env_json, custom_headers FROM custom_apps WHERE id = ?", (ca["id"],))
+                    row = cur.fetchone()
+                    old_env = json.loads(row["env_json"] or "{}") if row else {}
+                    old_hdr = json.loads(row["custom_headers"] or "{}") if row else {}
+                    env_in = {k: (old_env.get(k, v) if v == "********" else v) for k, v in env_in.items()}
+                    headers_in = {k: (old_hdr.get(k, v) if v == "********" else v) for k, v in headers_in.items()}
+                env_json = json.dumps(env_in)
+                headers_json = json.dumps(headers_in)
                 log_file = ca.get("log_file")
                 if log_file:
                     from portly.backend.actions import process_actions
@@ -1083,7 +1113,25 @@ class Store:
                           1 if ov.get("pinned") is True else (0 if ov.get("pinned") is False else None),
                           1 if ov.get("hidden") is True else (0 if ov.get("hidden") is False else None),
                           ov.get("sort_order", 0), ov.get("url_override"), now))
+            for pr in data.get("port_reservations", []):
+                conn.execute("""
+                    INSERT INTO port_reservations (id, port, proto, name, service, description, created_by, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET port = excluded.port, proto = excluded.proto,
+                        name = excluded.name, service = excluded.service, description = excluded.description
+                """, (pr["id"], int(pr["port"]), pr.get("proto", "tcp"), pr["name"],
+                      pr.get("service", ""), pr.get("description", ""), pr.get("created_by", "admin"),
+                      pr.get("created_at", now)))
+            for cs in data.get("compose_stacks", []):
+                conn.execute("""
+                    INSERT INTO compose_stacks (name, compose_yaml, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(name) DO UPDATE SET compose_yaml = excluded.compose_yaml,
+                        status = excluded.status, updated_at = excluded.updated_at
+                """, (cs["name"], cs["compose_yaml"], cs.get("status", "stopped"), cs.get("created_at", now), now))
             for k, val in data.get("settings", {}).items():
+                if k == "webhook_url" and isinstance(val, str) and "********" in val:
+                    continue  # masked export value: keep the configured URL
                 conn.execute("""
                     INSERT INTO settings (key, value) VALUES (?, ?)
                     ON CONFLICT(key) DO UPDATE SET value = excluded.value

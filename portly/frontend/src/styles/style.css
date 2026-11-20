@@ -86,13 +86,13 @@ button{background:transparent;border:0;outline:none;cursor:pointer}
 .c079{height:34px;flex:none;white-space:nowrap;border-radius:9px;border:1px solid color-mix(in srgb, var(--accent) 40%, transparent);background:color-mix(in srgb, var(--accent) 12%, transparent);color:#ECEEF3;font:inherit;font-size:13px;display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.04);padding:0 12px}
 .c080{height:34px;flex:none;white-space:nowrap;border-radius:9px;border:0;background:var(--accent);color:#0B0F1E;font:inherit;font-size:13px;font-weight:600;padding:0 14px;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
 .c081{display:flex;flex-wrap:nowrap;background:#101218;border:1px solid rgba(255,255,255,.07);border-radius:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
-.c082{flex:1 1 0;min-width:0;box-sizing:border-box;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.c082{flex:1 1 0;min-width:0;box-sizing:border-box;padding:12px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .c083{min-width:0}
-.c084{font-size:11px;color:#8D95A5;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.c084{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
 .c085{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-size:17px;font-weight:600;margin:2px 0;white-space:nowrap}
-.c086{font-size:12px;color:#8D95A5;white-space:nowrap}
+.c086{font-size:12px;color:var(--muted);white-space:nowrap}
 .c087{flex:none}
-.c088{flex:1 1 0;min-width:0;box-sizing:border-box;padding:12px 14px;border-left:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.c088{flex:1 1 0;min-width:0;box-sizing:border-box;padding:12px 10px;border-left:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .c089{display:flex;flex-wrap:nowrap;gap:22px;border-bottom:1px solid rgba(255,255,255,.07)}
 .c090{flex:none;padding:10px 0;font-size:14px;color:#ECEEF3;text-decoration:none;border-bottom:2px solid var(--accent);margin-bottom:-1px;white-space:nowrap}
 .c091{flex:none;padding:10px 0;font-size:14px;color:#8D95A5;text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
@@ -113,7 +113,7 @@ button{background:transparent;border:0;outline:none;cursor:pointer}
 .c106{width:32px;height:32px;border-radius:9px;background:color-mix(in srgb, var(--accent) 12%, transparent);border:1px solid color-mix(in srgb, var(--accent) 25%, transparent);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:15px;flex:none}
 .c107{font-weight:500}
 .c108{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent)}
-.c109{font-size:12px;line-height:20px;color:#C4B5FD;background:#C4B5FD1F;border:1px solid #C4B5FD40;border-radius:999px;padding:0 9px;white-space:nowrap;flex:none}
+.c109{font-size:12px;line-height:20px;color:var(--accent);background:color-mix(in srgb, var(--accent) 12%, transparent);border:1px solid color-mix(in srgb, var(--accent) 25%, transparent);border-radius:999px;padding:0 9px;white-space:nowrap;flex:none}
 .c110{display:flex;align-items:center;gap:8px}
 .c111{font-size:12px;line-height:20px;color:var(--accent);background:color-mix(in srgb, var(--accent) 12%, transparent);border:1px solid color-mix(in srgb, var(--accent) 25%, transparent);border-radius:999px;padding:0 9px;white-space:nowrap;flex:none}
 .c112{font-size:11px;color:#8D95A5}

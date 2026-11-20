@@ -50,8 +50,8 @@ Thank you for contributing to Portly! We welcome bug reports, feature suggestion
 Before opening a pull request, ensure all tests pass:
 
 ```bash
-# 1. Run Python unit and integration tests:
-$env:PORTLY_TESTING="1"; python -m pytest tests -q --ignore=tests/e2e
+# 1. Run Python unit and integration tests (conftest sets PORTLY_TESTING itself):
+python -m pytest tests -q --ignore=tests/e2e
 
 # 2. Verify Frontend TypeScript types and production build:
 npm --prefix portly/frontend run build

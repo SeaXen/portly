@@ -41,6 +41,10 @@ services:
       - CONTAINERS=1
       - INFO=1
       - NETWORKS=1
+      - IMAGES=1
+      - VOLUMES=1
+      - SYSTEM=1
+      - EVENTS=1   # required for live Docker event streaming
       - POST=0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -61,6 +65,26 @@ And point `DOCKER_HOST=tcp://127.0.0.1:2375` in Portly's environment.
 - `network_mode: host`, `pid: host` and `/:/hostfs:ro` are deliberately broad because host socket/process discovery and real disk telemetry depend on them. Narrowing these mounts breaks those features.
 - The `docker-socket-proxy` example above is the lower-privilege option for monitoring. Read-only endpoints (`POST=0`) do not support Portly's start/stop/recreate actions; enabling those write endpoints restores the root-equivalent risk.
 - Keep Portly behind authentication and a reverse proxy; set `PORTLY_ALLOWED_HOSTS` to the hostnames it is served under.
+
+---
+
+## Operator Environment Variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORTLY_PORT` / `PORTLY_HOST` | `5533` / `127.0.0.1` | Bind address. Non-loopback binds require server mode or `PORTLY_ALLOW_INSECURE_BIND=1`. |
+| `PORTLY_MODE` | `desktop` | `server` requires a setup token on first run (printed to stderr). |
+| `PORTLY_DATA_DIR` | repo `data/` | SQLite DB, snapshots, icons, certs, stack files. |
+| `PORTLY_SETUP_TOKEN` | generated | Fixed first-run setup token (otherwise single-use, printed to stderr in server mode). |
+| `PORTLY_TRUSTED_PROXIES` | unset | Comma-separated proxy IPs allowed to set `X-Forwarded-For`. Without it, XFF is ignored and all clients behind a proxy share one rate-limit bucket. |
+| `PORTLY_ALLOWED_HOSTS` | unset | Extra hostnames accepted in Host header / CORS (reverse proxy, DNS names). |
+| `PORTLY_CORS_ORIGINS` | derived | Explicit CORS origin allow-list (overrides derivation). |
+| `PORTLY_COOKIE_SECURE` | unset | `1` forces the Secure flag on session cookies (HTTPS deployments). |
+| `PORTLY_METRICS_TOKEN` | unset | Bearer/query token for `/api/metrics` scraping. Prefer the `Authorization: Bearer` header; query strings leak into proxy logs. |
+| `PORTLY_LOG_DIRS` | unset | Extra directories allowed for custom-app log files. |
+| `PORTLY_HOSTFS` | unset | Host root mount inside Docker (e.g. `/hostfs`) for accurate disk stats. |
+| `PORTLY_ALLOW_INSECURE_BIND` | `false` | `1` skips the setup-token requirement on non-loopback binds — trusted single-user machines only. |
+| `PORTLY_ALLOW_INTERNAL_WEBHOOKS` | unset | `1` permits webhooks to private/loopback hosts. |
 
 ---
 

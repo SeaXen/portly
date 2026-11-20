@@ -1,5 +1,6 @@
 // Portly Progressive Web App Service Worker
-const CACHE_NAME = 'portly-v3';
+const CACHE_NAME = 'portly-v4';
+const MAX_ASSET_ENTRIES = 60;
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -50,7 +51,18 @@ self.addEventListener('fetch', (event) => {
       return fetch(event.request).then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
           const toCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, toCache));
+          caches.open(CACHE_NAME).then(async (cache) => {
+            await cache.put(event.request, toCache);
+            // Hashed assets change every build; evict oldest so the cache
+            // cannot grow without bound across deploys.
+            const keys = await cache.keys();
+            if (keys.length > MAX_ASSET_ENTRIES) {
+              const excess = keys.length - MAX_ASSET_ENTRIES;
+              await Promise.all(
+                keys.slice(PRECACHE_URLS.length, PRECACHE_URLS.length + excess).map((k) => cache.delete(k))
+              );
+            }
+          });
         }
         return networkResponse;
       });

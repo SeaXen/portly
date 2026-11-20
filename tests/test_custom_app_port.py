@@ -72,7 +72,7 @@ def test_custom_app_port_preserves_configuration(tmp_path):
     store.set_setting("safe_mode", "true")
 
 
-def test_custom_app_health_headers_and_status(tmp_path):
+def test_custom_app_health_headers_and_status(tmp_path, monkeypatch):
     store.set_setting("safe_mode", "false")
 
     app_id = "test_custom_health_adv"
@@ -97,9 +97,12 @@ def test_custom_app_health_headers_and_status(tmp_path):
     assert saved["custom_headers"].get("X-Custom") == "True"
 
     # Verify custom app appears in summary discovery merge with health metadata
-    apps_res = client.get("/api/apps")
-    assert apps_res.status_code == 200
-    custom_in_list = next((a for a in apps_res.json()["apps"] if a["id"] == f"custom:{app_id}"), None)
+    # (run the merge directly with fixed discoverer tables — hermetic, no live scan)
+    from portly.backend.discovery import merge as merge_mod
+    monkeypatch.setattr(merge_mod, "discover_host_ports", lambda: [])
+    monkeypatch.setattr(merge_mod, "discover_docker_containers", lambda: [])
+    apps, _ = merge_mod.merge_discovered_apps(store, "")
+    custom_in_list = next((a for a in apps if a["id"] == f"custom:{app_id}"), None)
     assert custom_in_list is not None
     assert custom_in_list["expected_status"] == "200,204,301,302"
 

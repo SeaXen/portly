@@ -37,6 +37,7 @@ class FakeContainer:
             ],
             "State": {
                 "Status": "running",
+                "Running": True,
                 "Health": {"Status": "healthy"}
             }
         }
@@ -59,6 +60,9 @@ class FakeContainer:
 
     def rename(self, new_name):
         self.name = new_name
+
+    def reload(self):
+        pass
 
     def logs(self, tail=500, timestamps=True, stream=False, follow=False):
         return b"2026-11-14T10:00:00Z [INFO] Server started\n2026-11-14T10:00:01Z [INFO] Ready\n"
@@ -202,3 +206,108 @@ def test_docker_container_lifecycle(tmp_path, monkeypatch):
     logs = docker_actions.get_container_logs("worker")
     assert len(logs) == 2
     assert "Server started" in logs[0]
+
+
+# --- Review round 2: recreate paths must not drop mounts or runtime config ---
+
+def test_binds_with_mounts_dedupes_and_preserves_volumes():
+    host_config = {"Binds": ["/host/data:/var/lib/data:rw"]}
+    attrs = {"Mounts": [
+        {"Type": "volume", "Name": "dbdata", "Destination": "/var/lib/postgresql/data", "RW": True},
+        {"Type": "bind", "Source": "/host/data", "Destination": "/var/lib/data", "Mode": "rw"},
+        {"Type": "bind", "Source": "/etc/ssl", "Destination": "/certs", "Mode": "ro", "RW": False},
+        {"Type": "tmpfs", "Destination": "/tmp"},  # no source: not expressible as a bind
+    ]}
+    binds = docker_actions._binds_with_mounts(host_config, attrs)
+    assert "dbdata:/var/lib/postgresql/data:rw" in binds
+    assert "/etc/ssl:/certs:ro" in binds
+    assert binds.count("/host/data:/var/lib/data:rw") == 1
+    assert not any(b.startswith("/tmp") for b in binds)
+
+
+def test_image_update_preserves_mounts_and_limits(tmp_path, monkeypatch):
+    store = Store(str(tmp_path / "test_imgupd.db"))
+    store.set_setting("safe_mode", "false")
+    fake_old = FakeContainer("db", "postgres:15")
+    fake_old.attrs["HostConfig"]["Memory"] = 536870912
+    fake_old.attrs["Config"]["Healthcheck"] = {"Test": ["CMD", "pg_isready"]}
+    fake_new = FakeContainer("db", "postgres:15")
+    mock_client = MagicMock()
+    mock_client.containers.get.return_value = fake_old
+    mock_client.containers.run.return_value = fake_new
+    monkeypatch.setattr(docker_actions, "get_docker_client", lambda: mock_client)
+
+    res = docker_actions.apply_image_update("db", store)
+    assert res["status"] == "updated"
+    kw = mock_client.containers.run.call_args[1]
+    # The named volume from Mounts must survive the recreate (data loss bug).
+    assert "named_vol_data:/var/lib/data:rw" in kw["volumes"]
+    assert kw["mem_limit"] == 536870912
+    assert kw["healthcheck"] == {"Test": ["CMD", "pg_isready"]}
+
+
+def test_multi_port_change_preserves_mounts_and_snapshot_raw(tmp_path, monkeypatch):
+    store = Store(str(tmp_path / "test_multi.db"))
+    store.set_setting("safe_mode", "false")
+    fake_old = FakeContainer("svc", "nginx:alpine")
+    fake_new = FakeContainer("svc", "nginx:alpine")
+    mock_client = MagicMock()
+    mock_client.containers.get.return_value = fake_old
+    mock_client.containers.run.return_value = fake_new
+    monkeypatch.setattr(docker_actions, "get_docker_client", lambda: mock_client)
+
+    res = docker_actions.apply_multi_port_change_docker(
+        "svc", [{"container_port": "80/tcp", "host_port": 9090, "bind": "0.0.0.0"}], store
+    )
+    assert res["status"] == "recreated"
+    kw = mock_client.containers.run.call_args[1]
+    assert "named_vol_data:/var/lib/data:rw" in kw["volumes"]
+    snap = store.get_port_snapshot("docker:svc:multi")
+    assert snap is not None
+    assert "host_config_raw" in snap["config"] and "networks_raw" in snap["config"]
+
+
+def test_rollback_finds_multi_port_snapshot_and_clears_it(tmp_path, monkeypatch):
+    store = Store(str(tmp_path / "test_rb_multi.db"))
+    store.set_setting("safe_mode", "false")
+    store.save_port_snapshot("docker:web_app:multi", 8080, 9090, {
+        "image": "nginx:latest",
+        "ports": {"80/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8080"}]},
+        "env": [], "binds": [],
+    })
+    fake_c = FakeContainer("web_app", "nginx:latest")
+    mock_client = MagicMock()
+    mock_client.containers.get.return_value = fake_c
+    mock_client.containers.run.return_value = FakeContainer("web_app", "nginx:latest")
+    monkeypatch.setattr(docker_actions, "get_docker_client", lambda: mock_client)
+
+    # Request uses the per-port app id; snapshot lives under :multi.
+    res = docker_actions.rollback_port_change_docker("docker:web_app:80/tcp", store)
+    assert res["status"] == "rolled_back"
+    assert store.get_port_snapshot("docker:web_app:multi") is None
+
+
+def test_rollback_restores_legacy_snapshot_limits(tmp_path, monkeypatch):
+    store = Store(str(tmp_path / "test_rb_legacy.db"))
+    store.set_setting("safe_mode", "false")
+    store.save_port_snapshot("docker:lim:80/tcp", 8080, 8081, {
+        "image": "nginx:latest",
+        "ports": {"80/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8080"}]},
+        "env": [], "binds": [],
+        "mem_limit": 268435456,
+        "healthcheck": {"Test": ["CMD", "true"]},
+        "security_opt": ["no-new-privileges"],
+        "log_config": {"Type": "json-file", "Config": {"max-size": "10m"}},
+    })
+    fake_c = FakeContainer("lim", "nginx:latest")
+    mock_client = MagicMock()
+    mock_client.containers.get.return_value = fake_c
+    mock_client.containers.run.return_value = FakeContainer("lim", "nginx:latest")
+    monkeypatch.setattr(docker_actions, "get_docker_client", lambda: mock_client)
+
+    docker_actions.rollback_port_change_docker("docker:lim:80/tcp", store)
+    kw = mock_client.containers.run.call_args[1]
+    assert kw["mem_limit"] == 268435456
+    assert kw["healthcheck"] == {"Test": ["CMD", "true"]}
+    assert kw["security_opt"] == ["no-new-privileges"]
+    assert kw["log_config"].type == "json-file"

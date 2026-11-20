@@ -237,18 +237,25 @@ def test_exec_streams_and_truncates_bounded_output(monkeypatch, tmp_path):
 
     class FakeContainer:
         name = "fake"
+        id = "fake123"
 
-        def exec_run(self, cmd, **kwargs):
-            assert kwargs.get("stream") is True
-            assert "timeout" not in kwargs  # docker-py has no timeout argument
+    def chunks():
+        yield b"A" * 200000
+        yield b"B" * 200000
 
-            def chunks():
-                yield b"A" * 200000
-                yield b"B" * 200000
+    # Real docker-py 7.x contract: low-level exec_create/start/inspect.
+    class FakeAPI:
+        def exec_create(self, cid, cmd, **kwargs):
+            return {"Id": "exec1"}
 
-            return 0, chunks()
+        def exec_start(self, eid, stream=True, demux=False):
+            assert stream is True
+            return chunks()
 
-    client = SimpleNamespace(containers=SimpleNamespace(get=lambda name: FakeContainer()))
+        def exec_inspect(self, eid):
+            return {"ExitCode": 0}
+
+    client = SimpleNamespace(api=FakeAPI(), containers=SimpleNamespace(get=lambda name: FakeContainer()))
     monkeypatch.setattr(docker_actions, "get_docker_client", lambda: client)
     res = docker_actions.exec_in_container("fake", "ps aux", store=test_store, timeout=3)
     assert res["exit_code"] == 0
@@ -262,21 +269,58 @@ def test_exec_stops_reading_at_deadline(monkeypatch, tmp_path):
 
     class FakeContainer:
         name = "fake"
+        id = "fake123"
 
-        def exec_run(self, cmd, **kwargs):
+    class FakeAPI:
+        def exec_create(self, cid, cmd, **kwargs):
+            return {"Id": "exec1"}
+
+        def exec_start(self, eid, stream=True, demux=False):
             def chunks():
                 yield b"first"
                 yield b"second"
+            return chunks()
 
-            return 0, chunks()
+        def exec_inspect(self, eid):
+            return {"ExitCode": None}
 
-    client = SimpleNamespace(containers=SimpleNamespace(get=lambda name: FakeContainer()))
+    client = SimpleNamespace(api=FakeAPI(), containers=SimpleNamespace(get=lambda name: FakeContainer()))
     monkeypatch.setattr(docker_actions, "get_docker_client", lambda: client)
     times = iter([0.0, 0.0, 100.0])
     monkeypatch.setattr(docker_actions.time, "perf_counter", lambda: next(times, 100.0))
     res = docker_actions.exec_in_container("fake", "ps aux", store=test_store, timeout=1)
     assert "Execution timed out after 1s" in res["output"]
     assert "second" not in res["output"]
+
+
+def test_exec_silent_stream_timeout_returns_partial(monkeypatch, tmp_path):
+    """A silent stream hits the client's 3s socket timeout; that must surface as
+    a bounded partial result, not a 500."""
+    test_store = Store(str(tmp_path / "exec_silent.db"))
+    test_store.set_setting("safe_mode", "false")
+
+    class FakeContainer:
+        name = "fake"
+        id = "fake123"
+
+    class FakeAPI:
+        def exec_create(self, cid, cmd, **kwargs):
+            return {"Id": "exec1"}
+
+        def exec_start(self, eid, stream=True, demux=False):
+            def chunks():
+                yield b"partial"
+                raise OSError("Read timed out. (read timeout=3)")
+            return chunks()
+
+        def exec_inspect(self, eid):
+            return {"ExitCode": None}
+
+    client = SimpleNamespace(api=FakeAPI(), containers=SimpleNamespace(get=lambda name: FakeContainer()))
+    monkeypatch.setattr(docker_actions, "get_docker_client", lambda: client)
+    res = docker_actions.exec_in_container("fake", "ps aux", store=test_store, timeout=10)
+    assert "partial" in res["output"]
+    assert "Execution timed out after 10s" in res["output"]
 
 
 # --- Finding 14: port change preserves health fields ---

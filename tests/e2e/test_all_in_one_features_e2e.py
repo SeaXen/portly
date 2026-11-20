@@ -65,9 +65,19 @@ def test_system_drawer_docker_hygiene(desktop_page: Page):
 
 def test_app_detail_tunnels_and_proxy(desktop_page: Page):
     """Verify Cloudflare Tunnel tab and Cloudflare Ingress generator in AppDetailModal."""
-    # Click first row in table
-    row = desktop_page.locator(".portly-table-row").first
-    row.click()
+    # Click a row with a published port: proxy generation needs port > 0, and
+    # the first row may be an unpublished container on Docker-heavy hosts.
+    import re
+    rows = desktop_page.locator(".portly-table-row")
+    expect(rows.first).to_be_visible(timeout=15000)
+    chosen = None
+    for i in range(rows.count()):
+        lines = [l.strip() for l in rows.nth(i).inner_text().splitlines()]
+        if any(re.fullmatch(r"[1-9]\d{0,4}", l) for l in lines):
+            chosen = rows.nth(i)
+            break
+    assert chosen is not None, "No table row with a published port found"
+    chosen.click()
 
     detail_modal = desktop_page.locator(".modal-content")
     expect(detail_modal).to_be_visible()

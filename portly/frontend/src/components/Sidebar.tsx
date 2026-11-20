@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Category } from '../types';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface SidebarProps {
   activeNav: string;
@@ -28,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [showSafeModeModal, setShowSafeModeModal] = useState(false);
   const [autoRelockDuration, setAutoRelockDuration] = useState<number>(300); // 5 minutes default
+  const safeModalRef = useFocusTrap<HTMLDivElement>(showSafeModeModal, () => setShowSafeModeModal(false));
 
   const handleSafeModeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const targetVal = e.target.checked;
@@ -279,7 +281,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {showSafeModeModal && (
         <div className="modal-backdrop" onClick={() => setShowSafeModeModal(false)}>
           <div
+            ref={safeModalRef}
             className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Disable Safe Mode"
             style={{
               width: '440px',
               background: 'var(--surface-1)',
@@ -288,6 +294,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               padding: '24px',
             }}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.stopPropagation();
+                setShowSafeModeModal(false);
+              }
+            }}
           >
             <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>
               Disable Safe Mode?
@@ -297,34 +309,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </p>
 
             <div style={{ background: '#161B22', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>Auto-Relock Protection:</div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text)', cursor: 'pointer', marginBottom: '6px' }}>
-                <input
-                  type="radio"
-                  name="relock"
-                  checked={autoRelockDuration === 300}
-                  onChange={() => setAutoRelockDuration(300)}
-                />
-                Unlock for 5 minutes (Recommended)
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text)', cursor: 'pointer', marginBottom: '6px' }}>
-                <input
-                  type="radio"
-                  name="relock"
-                  checked={autoRelockDuration === 900}
-                  onChange={() => setAutoRelockDuration(900)}
-                />
-                Unlock for 15 minutes
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text)', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  name="relock"
-                  checked={autoRelockDuration === 0}
-                  onChange={() => setAutoRelockDuration(0)}
-                />
-                Stay unlocked indefinitely
-              </label>
+              <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+                <legend style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px', padding: 0 }}>Auto-Relock Protection</legend>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text)', cursor: 'pointer', marginBottom: '6px' }}>
+                  <input
+                    type="radio"
+                    name="relock"
+                    checked={autoRelockDuration === 300}
+                    onChange={() => setAutoRelockDuration(300)}
+                  />
+                  Unlock for 5 minutes (Recommended)
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text)', cursor: 'pointer', marginBottom: '6px' }}>
+                  <input
+                    type="radio"
+                    name="relock"
+                    checked={autoRelockDuration === 900}
+                    onChange={() => setAutoRelockDuration(900)}
+                  />
+                  Unlock for 15 minutes
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text)', cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="relock"
+                    checked={autoRelockDuration === 0}
+                    onChange={() => setAutoRelockDuration(0)}
+                  />
+                  Stay unlocked indefinitely
+                </label>
+              </fieldset>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>

@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import socket
+import time
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional, Tuple, Union
@@ -22,6 +23,9 @@ BLOCKED_IP_RANGES = [
     ipaddress.ip_network("224.0.0.0/4"),     # Multicast
     ipaddress.ip_network("240.0.0.0/4"),     # Reserved
     ipaddress.ip_network("0.0.0.0/8"),       # Current network
+    ipaddress.ip_network("fc00::/7"),        # IPv6 ULA (incl. fd00:ec2::254 metadata)
+    ipaddress.ip_network("fe80::/10"),       # IPv6 link-local
+    ipaddress.ip_network("::/128"),          # Unspecified
 ]
 
 
@@ -46,10 +50,12 @@ def resolve_and_check_host(host: str) -> Tuple[bool, str]:
         addr_info = socket.getaddrinfo(host, None)
         if not addr_info:
             return False, ""
-        target_ip = addr_info[0][4][0]
-        if not is_safe_target_ip(target_ip):
-            return False, ""
-        return True, target_ip
+        # Every record must be safe: urllib may connect to any of them, not
+        # just the first (multi-record SSRF bypass).
+        for info in addr_info:
+            if not is_safe_target_ip(info[4][0]):
+                return False, ""
+        return True, addr_info[0][4][0]
     except Exception:
         return False, ""
 
@@ -105,17 +111,6 @@ def detect_image_type(data: bytes) -> Optional[str]:
     snippet = data[:512].lower()
     if b"<svg" in snippet:
         return "image/svg+xml"
-    return None
-
-
-def extract_favicon_url(html_content: str, base_url: str) -> Optional[str]:
-    """Parses HTML to find <link rel='icon' href='...'>."""
-    match = re.search(r'<link[^>]+rel=["\'](?:shortcut )?icon["\'][^>]+href=["\']([^"\']+)["\']', html_content, re.IGNORECASE)
-    if not match:
-        match = re.search(r'<link[^>]+href=["\']([^"\']+)["\'][^>]+rel=["\'](?:shortcut )?icon["\']', html_content, re.IGNORECASE)
-    if match:
-        href = match.group(1).strip()
-        return urllib.parse.urljoin(base_url, href)
     return None
 
 
@@ -198,6 +193,9 @@ def save_cached_icon(cache_dir: str, app_id: str, data: bytes, mime: str):
     try:
         with open(fp, "wb") as f:
             f.write(data)
+        none_fp = os.path.join(cache_dir, f"{safe_name}.none")
+        if os.path.isfile(none_fp):
+            os.remove(none_fp)
     except Exception as e:
         logger.warning(f"Could not cache icon to {fp}: {e}")
 
@@ -217,6 +215,17 @@ def fetch_or_generate_app_icon(app: Dict[str, Any], cache_dir: str) -> Tuple[byt
     cached = get_cached_icon(cache_dir, app_id)
     if cached:
         return cached
+
+    # Negative cache: icon-less apps must not be re-probed on every page load
+    # (172 apps x 1.5s probes saturate the shared executor).
+    safe_name = hashlib.sha256(app_id.encode()).hexdigest()[:24]
+    none_fp = os.path.join(cache_dir, f"{safe_name}.none")
+    try:
+        if os.path.isfile(none_fp) and (time.time() - os.path.getmtime(none_fp)) < 86400:
+            app_name = app.get("name") or "A"
+            return get_fallback_svg(app_name[0] if app_name else "A")
+    except Exception:
+        pass
 
     # If label_icon is direct URL
     label_icon = app.get("label_icon")
@@ -240,8 +249,14 @@ def fetch_or_generate_app_icon(app: Dict[str, Any], cache_dir: str) -> Tuple[byt
             save_cached_icon(cache_dir, app_id, res[0], res[1])
             return res
 
-    # Fallback to generated letter icon
+    # Fallback to generated letter icon; record the miss for the negative cache.
     app_name = app.get("name") or "A"
     initial = app_name[0] if app_name else "A"
     svg_data, mime = get_fallback_svg(initial)
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(none_fp, "w") as f:
+            f.write("")
+    except Exception:
+        pass
     return svg_data, mime

@@ -136,14 +136,14 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
     try {
       const payload: any = {};
       if (preflightMode === 'command') {
-        payload.raw_command = preflightInput.trim();
+        payload.command = preflightInput.trim();
       } else if (preflightMode === 'compose') {
-        payload.compose_yaml = preflightInput.trim();
+        payload.compose_content = preflightInput.trim();
       } else {
         const ports = preflightInput
           .split(/[\s,]+/)
           .map((p) => parseInt(p.trim()))
-          .filter((p) => !isNaN(p) && p > 0);
+          .filter((p) => !isNaN(p) && p > 0 && p <= 65535);
         if (ports.length === 0) {
           warning('Please enter valid port numbers.');
           setPreflightChecking(false);
@@ -198,12 +198,19 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   };
 
   // Adopt from running host process
-  const handleAdoptProcess = (app: AppItem) => {
+  const handleAdoptProcess = async (app: AppItem) => {
     setName(app.name);
     setPort(app.port);
-    setWorkdir(app.cwd || '');
-    setStartCmd(app.cmdline || '');
     setActiveTab('custom');
+    // cmdline/cwd are redacted from list summaries; fetch the admin detail view.
+    try {
+      const det = await api.getAppDetail(app.id);
+      setWorkdir(det.app.cwd || '');
+      setStartCmd(det.app.cmdline || '');
+    } catch {
+      setWorkdir('');
+      setStartCmd('');
+    }
   };
 
   // Adopt from Docker container
@@ -336,7 +343,9 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
     setActiveTab('custom');
   };
 
-  const dockerApps = availableApps.filter((a) => a.source === 'docker');
+  // Containers with published ports are already managed via their docker entry;
+  // adopting them as custom apps would create a permanent false port conflict.
+  const dockerApps = availableApps.filter((a) => a.source === 'docker' && !a.port);
   const containerRef = useFocusTrap<HTMLDivElement>(true, onClose);
 
   return (
@@ -466,7 +475,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         {activeTab === 'docker' && (
           <div style={{ marginBottom: '20px', maxHeight: '320px', overflowY: 'auto' }}>
             <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '10px' }}>
-              Discovered Docker containers available for adoption or customization:
+              Discovered Docker containers without published ports — adopt them to add management commands:
             </div>
             {dockerApps.length > 0 ? (
               dockerApps.map((d) => (

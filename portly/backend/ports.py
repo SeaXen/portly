@@ -123,18 +123,12 @@ def check_port_availability(port: int, bind_ip: str = "0.0.0.0", proto: str = "t
             pass
 
     # 1. Bind check
-    try:
-        can_bind, bind_err = can_bind_port(port, bind_ip, proto=proto)
-    except TypeError:
-        can_bind, bind_err = can_bind_port(port, bind_ip)
+    can_bind, bind_err = can_bind_port(port, bind_ip, proto=proto)
     if not can_bind:
         return {"free": False, "available": False, "used_by": bind_err}
 
     # 2. Host socket check
-    try:
-        in_table, table_err = is_port_in_socket_table(port, proto=proto)
-    except TypeError:
-        in_table, table_err = is_port_in_socket_table(port)
+    in_table, table_err = is_port_in_socket_table(port, proto=proto)
     if in_table:
         return {"free": False, "available": False, "used_by": table_err}
 
@@ -169,13 +163,20 @@ def check_port_availability(port: int, bind_ip: str = "0.0.0.0", proto: str = "t
     return {"free": True, "available": True, "used_by": ""}
 
 
-def suggest_free_ports(start_port: int = 3000, count: int = 5, bind_ip: str = "0.0.0.0", proto: str = "tcp") -> List[int]:
+def suggest_free_ports(start_port: int = 3000, count: int = 5, bind_ip: str = "0.0.0.0", proto: str = "tcp", store: Optional[Any] = None) -> List[int]:
     """Scans and returns the next N free ports efficiently without repetitive heavy queries."""
     free_ports: List[int] = []
     current = max(1024, start_port)
     host_listeners = discover_host_ports()
     target_proto = proto.lower()
     used_ports = {h["port"] for h in host_listeners if h.get("proto", "tcp").lower() == target_proto}
+
+    # Reserved ports are not free even when nothing is listening yet.
+    if store is not None and hasattr(store, "get_port_reservations"):
+        try:
+            used_ports |= {r["port"] for r in store.get_port_reservations() if r.get("proto", "tcp").lower() == target_proto}
+        except Exception:
+            pass
 
     # Query Docker mapped ports once if available
     docker_avail, _ = is_docker_available()
@@ -240,7 +241,7 @@ def check_preflight_collisions(
             })
 
     # 1. Check docker run pattern: -p 8080:80 or -p 127.0.0.1:8080:80/udp
-    run_matches = re.findall(r'-p\s+(?:["\']?)([0-9a-zA-Z\.\:\/]+)(?:["\']?)', text_to_parse)
+    run_matches = re.findall(r'(?:-p|--publish)\s+(?:["\']?)([0-9a-zA-Z\.\:\/]+)(?:["\']?)', text_to_parse)
     for m in run_matches:
         parts = m.split(":")
         proto = "tcp"
@@ -312,10 +313,7 @@ def check_preflight_collisions(
         port = req["host_port"]
         bind = req["bind"]
         proto = req["proto"]
-        try:
-            avail = check_port_availability(port, bind, proto=proto, store=store)
-        except TypeError:
-            avail = check_port_availability(port, bind, proto=proto)
+        avail = check_port_availability(port, bind, proto=proto, store=store)
         is_free = avail["free"]
         suggestion = None
         if not is_free:
@@ -370,10 +368,7 @@ def plan_port_change(app_id: str, new_port: int, bind: str, store: Store) -> Dic
     Creates a dry-run plan for changing an app's port.
     Returns details of actions that will be performed matching the exact non-destructive recreate procedure.
     """
-    try:
-        avail = check_port_availability(new_port, bind, store=store)
-    except TypeError:
-        avail = check_port_availability(new_port, bind)
+    avail = check_port_availability(new_port, bind, store=store)
     if not avail["free"]:
         return {
             "valid": False,
@@ -389,6 +384,12 @@ def plan_port_change(app_id: str, new_port: int, bind: str, store: Store) -> Dic
         parts = app_id.split(":")
         container_name = parts[1] if len(parts) > 1 else ""
         c_port_proto = parts[2] if len(parts) > 2 else ""
+        if c_port_proto.split("/")[0] in ("0", ""):
+            return {
+                "valid": False,
+                "error": "This container has no published port to remap. Add a port mapping when deploying it first.",
+                "plan": None,
+            }
 
         try:
             container = client.containers.get(container_name)
@@ -442,7 +443,7 @@ def plan_port_change(app_id: str, new_port: int, bind: str, store: Store) -> Dic
                 f"Verify health check at http://{custom_app.get('host', 'localhost')}:{new_port}{custom_app.get('health_path', '')}",
             ],
             "estimated_downtime": "1-2 seconds",
-            "rollback_supported": True,
+            "rollback_supported": False,
         }
         return {"valid": True, "error": "", "plan": plan}
 

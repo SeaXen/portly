@@ -250,12 +250,3 @@ def prune_expired_sessions():
     except Exception:
         pass
 
-
-def require_role(session: Optional[Dict[str, Any]], required_role: str = "admin") -> bool:
-    """Returns True if session meets role requirements."""
-    if not session:
-        return False
-    user_role = session.get("role", "viewer")
-    if required_role == "admin" and user_role != "admin":
-        return False
-    return True

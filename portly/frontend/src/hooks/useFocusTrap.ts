@@ -9,6 +9,10 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(
 ) {
   const containerRef = useRef<T | null>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
+  // Keep onClose in a ref: callers pass inline closures, and re-running the
+  // effect on every parent render would steal focus mid-typing (SSE ticks).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -31,9 +35,9 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && onClose) {
+      if (e.key === "Escape" && onCloseRef.current) {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -76,7 +80,7 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(
         }
       }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   return containerRef;
 }

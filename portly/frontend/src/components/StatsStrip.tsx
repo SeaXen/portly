@@ -31,6 +31,8 @@ export const StatsStrip: React.FC<StatsStripProps> = ({ stats, onOpenSystemDrawe
       {segments.map(({ key, data, isFirst }) => {
         const cls = isFirst ? 'c082' : 'c088';
         const polyPoints = data?.sparkline || '0.0,20.0 60.0,20.0';
+        const pct = key === 'cpu' || key === 'memory' || key === 'disk' ? data?.percent : undefined;
+        const valueColor = pct == null ? undefined : pct >= 90 ? 'var(--danger)' : pct >= 75 ? 'var(--warning)' : undefined;
 
         return (
           <button
@@ -47,12 +49,12 @@ export const StatsStrip: React.FC<StatsStripProps> = ({ stats, onOpenSystemDrawe
           >
             <div className="c083">
               <div className="c084">{data?.label || key.toUpperCase()}</div>
-              <div className="c085">{data?.value || '—'}</div>
+              <div className="c085" style={valueColor ? { color: valueColor } : undefined}>{data?.value || '—'}</div>
               <div className="c086">{data?.context || ''}</div>
             </div>
 
             <svg
-              width="50"
+              width="30"
               height="22"
               viewBox="0 0 60 22"
               preserveAspectRatio="none"

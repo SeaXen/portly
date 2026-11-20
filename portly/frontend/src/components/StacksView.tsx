@@ -29,6 +29,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
   const [executingAction, setExecutingAction] = useState<string | null>(null);
   const [executionOutput, setExecutionOutput] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDownConfirm, setShowDownConfirm] = useState(false);
 
   useEffect(() => {
     loadStacks();
@@ -196,7 +197,16 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
               return (
                 <div
                   key={s.name}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Select stack ${s.name}`}
                   onClick={() => handleSelectStack(s)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSelectStack(s);
+                    }
+                  }}
                   style={{
                     padding: '12px',
                     borderRadius: '8px',
@@ -320,7 +330,11 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                       type="button"
                       className="c078"
                       disabled={executingAction !== null}
-                      onClick={() => handleStackAction('down')}
+                      onClick={() => {
+                        // Safe mode stays gated by handleStackAction's own warning.
+                        if (safeMode) { handleStackAction('down'); return; }
+                        setShowDownConfirm(true);
+                      }}
                       style={{ color: 'var(--danger)', borderColor: 'rgba(255, 138, 138, 0.3)' }}
                     >
                       Down
@@ -431,6 +445,20 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
           </div>
         )}
       </div>
+
+      {/* Down Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDownConfirm}
+        title={`Stop & Remove Stack '${selectedStack?.name}'?`}
+        message={`Are you sure you want to run down on stack '${selectedStack?.name}'? All containers in this stack will be stopped and removed.`}
+        confirmLabel="Run Compose Down"
+        isDanger={true}
+        onConfirm={() => {
+          setShowDownConfirm(false);
+          handleStackAction('down');
+        }}
+        onCancel={() => setShowDownConfirm(false)}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

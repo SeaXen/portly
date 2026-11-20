@@ -10,6 +10,16 @@ import urllib.request
 
 logger = logging.getLogger("portly.health")
 
+_IPV6_ULA = ipaddress.ip_network("fc00::/7")
+
+
+def _blocked_health_ip(ip) -> bool:
+    # Loopback is a legitimate health target (::1 is "reserved" in Python's
+    # IPv6 special-purpose registry, so exempt loopback explicitly).
+    if ip.is_loopback:
+        return False
+    return ip.is_link_local or ip.is_multicast or ip.is_unspecified or ip.is_reserved or ip in _IPV6_ULA
+
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Leaves 3xx responses untouched so expected_status can match them and redirects aren't followed."""
@@ -27,10 +37,20 @@ def _is_safe_health_host(host: str) -> bool:
         return False
     try:
         ip = ipaddress.ip_address(lower_host)
-        if ip.is_link_local or ip.is_multicast:
+        if _blocked_health_ip(ip):
             return False
     except ValueError:
-        pass
+        # DNS name: reject if any record points at link-local/metadata space.
+        try:
+            for info in socket.getaddrinfo(lower_host, None):
+                try:
+                    ip = ipaddress.ip_address(info[4][0])
+                except ValueError:
+                    return False
+                if _blocked_health_ip(ip):
+                    return False
+        except Exception:
+            return False
     return True
 
 

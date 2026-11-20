@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ViewItem } from '../types';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface SavedViewTabsProps {
   views: ViewItem[];
@@ -24,6 +25,7 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
 }) => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [newViewName, setNewViewName] = useState('');
+  const saveModalRef = useFocusTrap<HTMLDivElement>(showSaveModal, () => setShowSaveModal(false));
 
   const getCountForView = (id: string) => {
     if (id === 'all') return appsCount;
@@ -136,7 +138,21 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
 
       {showSaveModal && (
         <div className="modal-backdrop" onClick={() => setShowSaveModal(false)}>
-          <div className="modal-content" style={{ width: '380px', background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '14px', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={saveModalRef}
+            className="modal-content"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Save Current View"
+            style={{ width: '380px', background: 'var(--surface-1)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '14px', padding: '24px' }}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.stopPropagation();
+                setShowSaveModal(false);
+              }
+            }}
+          >
             <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>Save Current View</h3>
             <p style={{ fontSize: '13px', color: 'var(--muted)', margin: '0 0 16px 0', lineHeight: 1.5 }}>
               Save current filters, sort order, and column visibility as a tab.

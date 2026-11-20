@@ -6,6 +6,8 @@ import ipaddress
 import json
 import logging
 import os
+import queue
+import socket
 import threading
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -83,8 +85,11 @@ def format_webhook_payload(
                     chat_id = params["chat_id"][0]
             except Exception:
                 pass
+        # Escape Markdown specials: raw container names like "my_app" otherwise
+        # make Telegram reject the whole alert with a 400.
+        safe_msg = message.replace("\\", "\\\\").replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
         payload = {
-            "text": f"⚓ *Portly: {event_type.replace('_', ' ').title()}*\n\n{message}",
+            "text": f"⚓ *Portly: {event_type.replace('_', ' ').title()}*\n\n{safe_msg}",
             "parse_mode": "Markdown",
         }
         if chat_id:
@@ -122,7 +127,20 @@ def _is_internal_webhook_host(host: str) -> bool:
         ip = ipaddress.ip_address(lower)
         return ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local
     except ValueError:
-        return False
+        pass
+    # DNS names: check every resolved record — an attacker domain with an
+    # internal A record must not bypass the guard. Fail closed on DNS errors.
+    try:
+        for info in socket.getaddrinfo(lower, None):
+            try:
+                ip = ipaddress.ip_address(info[4][0])
+            except ValueError:
+                return True
+            if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+                return True
+    except Exception:
+        return True
+    return False
 
 
 def _internal_webhooks_allowed() -> bool:
@@ -156,7 +174,7 @@ def send_webhook_sync(
     for attempt in range(max_retries + 1):
         try:
             with opener.open(req, timeout=timeout) as resp:
-                status = getattr(resp, "status", getattr(resp, "code", getattr(resp, "getcode", lambda: 200)()))
+                status = resp.status
                 if status < 400:
                     return True, f"Delivered successfully (HTTP {status})"
                 last_err = f"Server responded with status {status}"
@@ -201,16 +219,45 @@ def dispatch_webhook_async(
         if now - last_time < 10.0:
             return
         _cooldown_tracker[cooldown_key] = now
+        if len(_cooldown_tracker) > 500:
+            for k in [k for k, v in _cooldown_tracker.items() if v < now - 60.0]:
+                _cooldown_tracker.pop(k, None)
 
     webhook_type = store.get_setting("webhook_type", "generic").strip()
 
-    def _worker():
-        ok, res = send_webhook_sync(url, webhook_type, event_type, message, details)
-        if not ok:
-            logger.warning(f"Background webhook delivery failed for {event_type}: {res}")
+    _ensure_webhook_worker()
+    try:
+        _webhook_queue.put_nowait((url, webhook_type, event_type, message, details))
+    except queue.Full:
+        logger.warning(f"Webhook queue full; dropping alert for {event_type}")
 
-    t = threading.Thread(target=_worker, daemon=True)
-    t.start()
+
+_webhook_queue: "queue.Queue" = queue.Queue(maxsize=200)
+_webhook_worker_lock = threading.Lock()
+_webhook_worker_started = False
+
+
+def _ensure_webhook_worker():
+    """Single delivery worker: a flap storm must not spawn one thread per event."""
+    global _webhook_worker_started
+    with _webhook_worker_lock:
+        if _webhook_worker_started:
+            return
+
+        def _loop():
+            while True:
+                url, w_type, event_type, message, details = _webhook_queue.get()
+                try:
+                    ok, res = send_webhook_sync(url, w_type, event_type, message, details)
+                    if not ok:
+                        logger.warning(f"Background webhook delivery failed for {event_type}: {res}")
+                except Exception as e:
+                    logger.warning(f"Webhook worker error: {e}")
+                finally:
+                    _webhook_queue.task_done()
+
+        threading.Thread(target=_loop, daemon=True, name="portly-webhook").start()
+        _webhook_worker_started = True
 
 
 def detect_changes(current_apps: List[Dict[str, Any]], current_conflicts: List[Dict[str, Any]], store: Store) -> List[Dict[str, Any]]:

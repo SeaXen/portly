@@ -105,7 +105,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   const [customName, setCustomName] = useState(app.name);
   const [customCategory, setCustomCategory] = useState(app.category_id);
   const [tagsStr, setTagsStr] = useState(app.tags.join(', '));
-  const [urlOverride, setUrlOverride] = useState(app.open_url || '');
+  const [urlOverride, setUrlOverride] = useState(app.url_override || '');
 
   // Modals & Confirmation dialogs (D-1, D-2, D-11)
   const [showRollbackConfirm, setShowRollbackConfirm] = useState(false);
@@ -277,7 +277,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
     }
     setSavingTunnel(true);
     try {
-      await api.patchApp(app.id, { url_override: tunnelUrl.trim() || undefined });
+      await api.patchApp(app.id, { url_override: tunnelUrl.trim() });
       showNotification('Cloudflare / Remote URL updated successfully!', 'success');
       onRefreshApps();
     } catch (e: any) {
@@ -427,9 +427,25 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
     }
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    showNotification(`Copied ${label} to clipboard!`, 'success');
+  const copyToClipboard = async (text: string, label: string) => {
+    // navigator.clipboard is undefined on non-secure (http://LAN) origins.
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      showNotification(`Copied ${label} to clipboard!`, 'success');
+    } catch {
+      showNotification(`Could not copy ${label} — please copy it manually.`, 'error');
+    }
   };
 
   useEffect(() => {
@@ -488,7 +504,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
         name: customName,
         category_id: customCategory,
         tags,
-        url_override: urlOverride || undefined,
+        url_override: urlOverride,
       });
       showNotification('Settings updated successfully!', 'success');
       onRefreshApps();
@@ -591,7 +607,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 </span>
                 {' · '}
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)', fontWeight: 600 }}>
-                  {app.port}
+                  {app.port || '—'}
                 </span>
                 {' · '}
                 <span>{app.bind}</span>
@@ -1830,7 +1846,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
             <div className="c209">
               <div className="c210" style={{ fontWeight: 600, color: 'var(--text)', marginBottom: '8px' }}>Port Configuration</div>
               <div style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: 1.6 }}>
-                <div>Host Port: <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>{app.port}</span></div>
+                <div>Host Port: <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>{app.port || '—'}</span></div>
                 <div>Bind Address: <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text)' }}>{app.bind}</span></div>
                 <div>Protocol: <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--text)', textTransform: 'uppercase' }}>{app.proto}</span></div>
               </div>

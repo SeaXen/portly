@@ -86,7 +86,7 @@ def test_apply_port_change_preserves_resource_limits(tmp_path):
             "Binds": ["/host/data:/data:rw"],
             "RestartPolicy": {"Name": "always"},
             "Privileged": False,
-            "NanoCPUs": 500000000,
+            "NanoCpus": 500000000,
             "Memory": 536870912,
             "MemorySwap": 1073741824,
             "Tmpfs": {"/tmp": "rw,noexec,nosuid,size=64m"},

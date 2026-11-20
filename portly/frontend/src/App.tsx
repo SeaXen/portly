@@ -11,6 +11,8 @@ import { CustomizeDrawer } from './components/CustomizeDrawer';
 import { GridView } from './components/GridView';
 import { HistoryView } from './components/HistoryView';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { ConfirmDialog } from './components/ConfirmDialog';
+import { useFocusTrap } from './hooks/useFocusTrap';
 import { ListView } from './components/ListView';
 import { OverviewView } from './components/OverviewView';
 import { SavedViewTabs } from './components/SavedViewTabs';
@@ -96,6 +98,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showNewCatModal, setShowNewCatModal] = useState(false);
+  const newCatTrapRef = useFocusTrap<HTMLDivElement>(showNewCatModal, () => setShowNewCatModal(false));
   const [newCatName, setNewCatName] = useState('');
   const [newCatColor, setNewCatColor] = useState('var(--accent)');
 
@@ -116,9 +119,19 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   }, [theme]);
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--accent', accent);
-    document.documentElement.style.setProperty('--app-accent', accent);
-  }, [accent]);
+    const resolved = theme === 'system'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : theme;
+    if (resolved === 'light') {
+      // Light theme keeps its fixed high-contrast accent; an inline override
+      // would reintroduce the low-contrast default (#8C9EFF on white ≈ 2.5:1).
+      document.documentElement.style.removeProperty('--accent');
+      document.documentElement.style.removeProperty('--app-accent');
+    } else {
+      document.documentElement.style.setProperty('--accent', accent);
+      document.documentElement.style.setProperty('--app-accent', accent);
+    }
+  }, [accent, theme]);
 
   // Safe Mode Auto-Relock Countdown Timer
   useEffect(() => {
@@ -229,8 +242,8 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     const startPollingFallback = () => {
       if (!fallbackInterval && isComponentMounted) {
         fallbackInterval = setInterval(() => {
-          void fetchAppsAndStats();
-          setStreamDown(false);
+          // Only clear the degradation banner when a fetch actually succeeds.
+          void fetchAppsAndStats().then((ok) => { if (ok) setStreamDown(false); });
         }, 4000);
       }
     };
@@ -359,7 +372,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       setConflicts(appData.conflicts);
       setStats(statData);
       setLastScanTime(appData.last_scan);
-    } catch {}
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   // Safe Mode Toggle with Auto-Relock & Rollback Error Handling (P1-17, D-8, F-10)
@@ -374,7 +390,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     }
 
     try {
-      await api.updateSettings({ safe_mode: String(newVal) });
+      await api.updateSettings({ safe_mode: String(newVal), auto_relock_seconds: String(autoRelockSec ?? 0) });
       if (!newVal) {
         warning(
           autoRelockSec
@@ -421,8 +437,12 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       warning('Viewer access is read-only.');
       return;
     }
-    await api.triggerScan();
-    await fetchAppsAndStats();
+    try {
+      await api.triggerScan();
+      await fetchAppsAndStats();
+    } catch (e: any) {
+      error(`Scan failed: ${e.message}`);
+    }
   };
 
   // Saved View Selection (P1-15: loads saved filters, sort, grouping, view_type)
@@ -486,9 +506,13 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       view_type: viewType,
       columns: [],
     };
-    await api.saveView(newView);
-    setViews((prev) => [...prev, newView]);
-    setActiveViewId(vId);
+    try {
+      await api.saveView(newView);
+      setViews((prev) => [...prev, newView]);
+      setActiveViewId(vId);
+    } catch (e: any) {
+      error(`Failed to save view: ${e.message}`);
+    }
   };
 
   // Selection
@@ -536,8 +560,9 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const handleBulkHide = () => runBulk('hide');
   const handleBulkUnhide = () => runBulk('unhide');
   const handleBulkStart = () => runBulk('start');
-  const handleBulkStop = () => runBulk('stop');
-  const handleBulkRestart = () => runBulk('restart');
+  const [bulkConfirm, setBulkConfirm] = useState<'stop' | 'restart' | null>(null);
+  const handleBulkStop = () => setBulkConfirm('stop');
+  const handleBulkRestart = () => setBulkConfirm('restart');
 
   // Quick Row Actions
   const handleQuickStart = async (app: AppItem, e: React.MouseEvent) => {
@@ -586,8 +611,12 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       warning('Viewer access is read-only.');
       return;
     }
-    await api.patchApp(appId, { category_id: newCatId });
-    await fetchAppsAndStats();
+    try {
+      await api.patchApp(appId, { category_id: newCatId });
+      await fetchAppsAndStats();
+    } catch (e: any) {
+      error(`Failed to move app: ${e.message}`);
+    }
   };
 
   // Create new category
@@ -599,17 +628,21 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     }
     if (!newCatName.trim()) return;
     const catId = newCatName.toLowerCase().replace(/[^a-z0-9]/g, '-');
-    await api.saveCategory({
-      id: catId,
-      name: newCatName.trim(),
-      color: newCatColor,
-      mode: 'manual',
-      sort_order: categories.length + 1,
-    });
-    const updatedCats = await api.getCategories();
-    setCategories(updatedCats);
-    setShowNewCatModal(false);
-    setNewCatName('');
+    try {
+      await api.saveCategory({
+        id: catId,
+        name: newCatName.trim(),
+        color: newCatColor,
+        mode: 'manual',
+        sort_order: categories.length + 1,
+      });
+      const updatedCats = await api.getCategories();
+      setCategories(updatedCats);
+      setShowNewCatModal(false);
+      setNewCatName('');
+    } catch (e: any) {
+      error(`Failed to create category: ${e.message}`);
+    }
   };
 
   // Handle navigation
@@ -1153,10 +1186,21 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
         onClose={() => setShowShortcutsModal(false)}
       />
 
+      {/* Bulk destructive-action confirmation */}
+      <ConfirmDialog
+        isOpen={bulkConfirm !== null}
+        title={bulkConfirm === 'stop' ? 'Stop selected apps?' : 'Restart selected apps?'}
+        message={`This will ${bulkConfirm} ${selectedIds.length} selected app${selectedIds.length === 1 ? '' : 's'}. Running services may be interrupted.`}
+        confirmLabel={bulkConfirm === 'stop' ? 'Stop apps' : 'Restart apps'}
+        isDanger
+        onConfirm={() => { const a = bulkConfirm; setBulkConfirm(null); if (a) void runBulk(a); }}
+        onCancel={() => setBulkConfirm(null)}
+      />
+
       {/* New Category Modal */}
       {showNewCatModal && (
         <div className="modal-backdrop" onClick={() => setShowNewCatModal(false)}>
-          <div className="modal-content" style={{ width: '380px', background: 'var(--surface-2)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '14px', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
+          <div ref={newCatTrapRef} role="dialog" aria-modal="true" aria-label="Create New Category" className="modal-content" style={{ width: '380px', background: 'var(--surface-2)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '14px', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', fontWeight: 600 }}>Create New Category</h3>
             <form onSubmit={handleCreateCategory}>
               <div style={{ marginBottom: '14px' }}>

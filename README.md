@@ -31,10 +31,14 @@ Open **[http://localhost:5533](http://localhost:5533)**.
 services:
   portly:
     image: ghcr.io/seaxen/portly:latest
+    build: .   # published image may lag; build locally if pull fails
     container_name: portly
     network_mode: host
     pid: host
     restart: unless-stopped
+    # Docker socket group for the non-root portly user (match your host's docker GID)
+    group_add:
+      - "${DOCKER_GID:-999}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /:/hostfs:ro
@@ -102,9 +106,19 @@ portly check-port 8080 [--bind 0.0.0.0]
 # Suggest free ports for binding
 portly suggest [--count 5] [--start 3000]
 
-# View process or container logs
+# Start / stop a managed app (custom apps and Docker containers)
+portly start <app_id>
+portly stop <app_id>
+
+# View container or custom-app logs (host processes are not supported)
 portly logs <app_id> [--tail 100]
+
+# Recover a lost server-mode setup token
+portly reset-setup-token
 ```
+
+> The `portly` console command requires `pip install -e .`; with a plain
+> `pip install -r requirements.txt` setup, use `python -m portly …` instead.
 
 ---
 
@@ -167,7 +181,9 @@ portly logs <app_id> [--tail 100]
 # Run unit & integration tests
 python -m pytest tests --ignore=tests/e2e -q
 
-# Run end-to-end Playwright tests (needs the frontend dev server)
+# Run end-to-end Playwright tests (spawns its own server against the built dist)
+pip install pytest-playwright playwright && playwright install chromium
+npm --prefix portly/frontend run build
 python -m pytest -o addopts= tests/e2e -q
 ```
 

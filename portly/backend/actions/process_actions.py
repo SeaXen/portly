@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import psutil
 
-from portly.backend.store import Store
+from portly.backend.store import Store, DEFAULT_DATA_DIR
 
 logger = logging.getLogger("portly.process_actions")
 
@@ -50,7 +50,7 @@ def _get_allowed_log_roots(workdir: Optional[str] = None) -> List[str]:
     # 2. Portly data directory and logs subdir
     data_dir = os.environ.get("PORTLY_DATA_DIR", "")
     if not data_dir:
-        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+        data_dir = DEFAULT_DATA_DIR
     if os.path.isdir(data_dir):
         roots.append(os.path.realpath(data_dir))
         logs_dir = os.path.join(data_dir, "logs")
@@ -101,7 +101,8 @@ def _is_safe_log_path(path: str, workdir: Optional[str] = None) -> bool:
             ".bash_history", ".zsh_history", ".history", "shadow", "passwd",
             "id_rsa", "id_ed25519", "credentials", ".docker/config.json",
             "sam", "system32/config", "auth.log", "secure", "wtmp", "btmp",
-            "lastlog", "audit.log", "tallylog", "faillog", ".bashrc", ".profile", ".zshrc"
+            "lastlog", "audit.log", "tallylog", "faillog", ".bashrc", ".profile", ".zshrc",
+            ".netrc", ".npmrc", ".git-credentials", ".pypirc", "kubeconfig", ".pgpass", ".my.cnf"
         )
         base_name = os.path.basename(lower)
         for b in blocked_names:
@@ -150,6 +151,18 @@ def _check_safe_mode(store: Store):
     safe_mode = store.get_setting("safe_mode", "true").lower() == "true"
     if safe_mode:
         raise PermissionError("Safe mode is active. Mutating actions (start, stop, restart, kill) are locked.")
+
+
+def _pid_alive(pid: int, started: Optional[float]) -> bool:
+    """True if pid is a live process and (when known) the same one we started —
+    guards against PID reuse after a restart."""
+    try:
+        p = psutil.Process(pid)
+        if started and abs(p.create_time() - started) > 1.0:
+            return False
+        return p.is_running() and p.status() != psutil.STATUS_ZOMBIE
+    except Exception:
+        return False
 
 
 def _read_output_stream(app_id: str, proc: subprocess.Popen, log_file: Optional[str] = None):
@@ -246,6 +259,10 @@ def start_custom_app(app_id: str, store: Store, actor: str = "system", internal:
         existing = _running_processes.get(app_id)
         if existing and existing.poll() is None:
             return {"status": "already_running", "pid": existing.pid}
+        # A previous Portly instance (or the CLI) may own a live process.
+        persisted_pid = custom_app.get("managed_pid")
+        if persisted_pid and _pid_alive(persisted_pid, custom_app.get("managed_pid_started")):
+            return {"status": "already_running", "pid": persisted_pid}
 
         # Clear existing in-memory log buffer on fresh start
         if app_id in _log_buffers:
@@ -276,6 +293,13 @@ def start_custom_app(app_id: str, store: Store, actor: str = "system", internal:
         except Exception as e:
             raise RuntimeError(f"Failed to start process: {e}")
 
+    # Persist ownership so stop/restart work after a Portly restart or via CLI.
+    try:
+        started_at = psutil.Process(proc.pid).create_time()
+    except Exception:
+        started_at = None
+    store.set_custom_app_pid(clean_id, proc.pid, started_at)
+
     # Launch log reader thread
     t = threading.Thread(
         target=_read_output_stream,
@@ -301,9 +325,18 @@ def stop_custom_app(app_id: str, store: Store, actor: str = "system") -> Dict[st
     with _lock:
         proc = _running_processes.pop(app_id, None)
 
-    if proc and proc.poll() is None:
+    kill_target = proc if (proc and proc.poll() is None) else None
+    if kill_target is None and custom_app:
+        persisted_pid = custom_app.get("managed_pid")
+        if persisted_pid and _pid_alive(persisted_pid, custom_app.get("managed_pid_started")):
+            try:
+                kill_target = psutil.Process(persisted_pid)
+            except Exception:
+                kill_target = None
+
+    if kill_target is not None:
         try:
-            parent = psutil.Process(proc.pid)
+            parent = psutil.Process(kill_target.pid)
             # Terminate entire process tree
             children = parent.children(recursive=True)
             for child in children:
@@ -320,15 +353,18 @@ def stop_custom_app(app_id: str, store: Store, actor: str = "system") -> Dict[st
                     pass
         except Exception:
             try:
-                proc.kill()
+                kill_target.kill()
             except Exception:
                 pass
         finally:
             try:
-                if proc.stdout:
-                    proc.stdout.close()
+                stdout = getattr(kill_target, "stdout", None)
+                if stdout:
+                    stdout.close()
             except Exception:
                 pass
+    if custom_app:
+        store.set_custom_app_pid(clean_id, None, None)
 
     if stop_cmd and stop_cmd.lower() != "auto":
         try:

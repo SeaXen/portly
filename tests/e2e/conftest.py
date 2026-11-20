@@ -43,6 +43,9 @@ def portly_server_info(tmp_path_factory):
     s = Store(db_path=db_path)
     s.create_user("u_e2e_admin", "admin", auth.hash_password("Password1234!"), role="admin")
     s.save_session(E2E_SESSION_TOKEN, "u_e2e_admin", "admin", "admin", time.time() + 86400 * 7)
+    # Seed one app so table/detail-modal flows have a row even on clean CI hosts
+    # (ambient discovery alone made this coverage environment-dependent).
+    s.upsert_custom_app(app_id="e2e_seed", name="E2E Seed App", host="127.0.0.1", port=59999)
 
     env = os.environ.copy()
     env["PORTLY_DATA_DIR"] = data_dir

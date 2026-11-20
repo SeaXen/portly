@@ -31,6 +31,9 @@ export function resolveAppUrl<T extends { open_url?: string; url_override?: stri
   try {
     const url = new URL(item.open_url);
     if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+      // No-op rewrite: keep the same object identity so SSE ticks don't
+      // invalidate every row's memoization when nothing changed.
+      if (url.hostname === window.location.hostname) return item;
       url.hostname = window.location.hostname;
       return { ...item, open_url: url.toString() };
     }
@@ -67,6 +70,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const code = errDetail.detail?.code || errDetail.code || 'ERROR';
     const err = new Error(message) as any;
     err.code = code;
+    err.status = res.status;
+    const preflight = errDetail.detail?.preflight ?? errDetail.preflight;
+    if (preflight) err.preflight = preflight;
     throw err;
   }
 
@@ -234,7 +240,7 @@ export const api = {
   },
 
   async deleteCategory(catId: string): Promise<any> {
-    return request(`/categories/${catId}`, { method: 'DELETE' });
+    return request(`/categories/${encodeURIComponent(catId)}`, { method: 'DELETE' });
   },
 
   // Rules
@@ -250,7 +256,7 @@ export const api = {
   },
 
   async deleteRule(ruleId: string): Promise<any> {
-    return request(`/rules/${ruleId}`, { method: 'DELETE' });
+    return request(`/rules/${encodeURIComponent(ruleId)}`, { method: 'DELETE' });
   },
 
   // Views
@@ -266,7 +272,7 @@ export const api = {
   },
 
   async deleteView(viewId: string): Promise<any> {
-    return request(`/views/${viewId}`, { method: 'DELETE' });
+    return request(`/views/${encodeURIComponent(viewId)}`, { method: 'DELETE' });
   },
 
   // Settings

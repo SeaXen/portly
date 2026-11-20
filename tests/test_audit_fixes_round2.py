@@ -23,12 +23,14 @@ def test_role_change_revokes_sessions(monkeypatch):
     assert revoked == ["u_bob"]
 
 
-def test_get_client_ip_trusts_xff_only_from_loopback():
-    """A remote client cannot spoof X-Forwarded-For to fake its IP."""
+def test_get_client_ip_ignores_untrusted_xff(monkeypatch):
+    """Without PORTLY_TRUSTED_PROXIES, X-Forwarded-For never changes the client IP
+    (a loopback peer must not be able to rotate rate-limit keys via a fake XFF)."""
+    monkeypatch.delenv("PORTLY_TRUSTED_PROXIES", raising=False)
     loopback = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={"x-forwarded-for": "1.2.3.4"})
     remote = SimpleNamespace(client=SimpleNamespace(host="8.8.8.8"), headers={"x-forwarded-for": "1.2.3.4"})
 
-    assert app_module.get_client_ip(loopback) == "1.2.3.4"
+    assert app_module.get_client_ip(loopback) == "127.0.0.1"
     assert app_module.get_client_ip(remote) == "8.8.8.8"
 
 

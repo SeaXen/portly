@@ -167,3 +167,12 @@ def test_check_tcp_port_ipv6_only():
         assert latency >= 0.0
     finally:
         sock.close()
+
+
+def test_health_guard_blocks_metadata_ula_broadcast():
+    assert health._is_safe_health_host("169.254.169.254") is False
+    assert health._is_safe_health_host("fd00:ec2::254") is False
+    assert health._is_safe_health_host("255.255.255.255") is False
+    assert health._is_safe_health_host("::1") is True
+    assert health._is_safe_health_host("127.0.0.1") is True
+    assert health._is_safe_health_host("192.168.1.10") is True

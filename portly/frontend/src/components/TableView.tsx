@@ -35,6 +35,7 @@ export const TableView: React.FC<TableViewProps> = ({
   onAdoptApp,
   safeMode,
   readOnly = false,
+  visibleFields = {},
   groupBy = 'none',
 }) => {
   const allSelected = apps.length > 0 && apps.every((a) => selectedIds.includes(a.id));
@@ -50,6 +51,27 @@ export const TableView: React.FC<TableViewProps> = ({
   };
 
   const padStyle = density === 'compact' ? { padding: '0 16px', height: '48px' } : { padding: '0 18px', height: '58px' };
+
+  // Honor CustomizeDrawer field toggles: hidden cells use display:none so they
+  // drop out of grid flow, matching the tracks removed from the template.
+  const showPort = visibleFields.port !== false;
+  const showSource = visibleFields.source !== false;
+  const showBind = visibleFields.bind !== false;
+  const showCpuRam = visibleFields.cpuram !== false;
+  const showUptime = visibleFields.uptime !== false;
+  const hide = (show: boolean) => (show ? undefined : ('none' as const));
+  const gridCols = [
+    '32px', '24px', 'minmax(140px, 2.5fr)',
+    showPort ? '85px' : null,
+    showSource ? '75px' : null,
+    '110px',
+    showBind ? '105px' : null,
+    '70px',
+    showCpuRam ? '70px' : null,
+    showCpuRam ? '70px' : null,
+    showUptime ? '90px' : null,
+    '140px',
+  ].filter(Boolean).join(' ');
 
   // Grouping logic
   const groups: Array<{ name: string; items: AppItem[] }> = [];
@@ -78,7 +100,7 @@ export const TableView: React.FC<TableViewProps> = ({
     <div className="portly-table-wrap">
       <div className="portly-table-grid">
         {/* Table Header */}
-        <div className="portly-table-header">
+        <div className="portly-table-header" style={{ gridTemplateColumns: gridCols }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <input
               type="checkbox"
@@ -91,13 +113,14 @@ export const TableView: React.FC<TableViewProps> = ({
           </div>
           <div></div>
           <div style={{ color: 'var(--muted)' }}>Name</div>
-          <div style={{ color: 'var(--accent)' }}>Port</div>
-          <div>Source</div>
+          <div style={{ color: 'var(--accent)', display: hide(showPort) }}>Port</div>
+          <div style={{ display: hide(showSource) }}>Source</div>
           <div>Category</div>
-          <div>Bind</div>
+          <div style={{ display: hide(showBind) }}>Bind</div>
           <div>Status</div>
-          <div>CPU</div>
-          <div>RAM</div>
+          <div style={{ display: hide(showCpuRam) }}>CPU</div>
+          <div style={{ display: hide(showCpuRam) }}>RAM</div>
+          <div style={{ display: hide(showUptime) }}>Uptime</div>
           <div style={{ textAlign: 'right' }}>Actions</div>
         </div>
 
@@ -143,7 +166,7 @@ export const TableView: React.FC<TableViewProps> = ({
                     role="button"
                     tabIndex={0}
                     className={`portly-table-row ${isSelected ? 'selected' : ''}`}
-                    style={padStyle}
+                    style={{ ...padStyle, gridTemplateColumns: gridCols }}
                     onClick={() => onOpenDetail(app)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
@@ -193,12 +216,12 @@ export const TableView: React.FC<TableViewProps> = ({
                     </div>
 
                     {/* Port */}
-                    <div className="table-cell" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, color: 'var(--accent)', fontSize: '13.5px' }}>
-                      {app.port}
+                    <div className="table-cell" style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, color: 'var(--accent)', fontSize: '13.5px', display: hide(showPort) }}>
+                      {app.port || '—'}
                     </div>
 
                     {/* Source Badge */}
-                    <div className="table-cell" style={{ gap: '6px' }}>
+                    <div className="table-cell" style={{ gap: '6px', display: hide(showSource) }}>
                       <span
                         style={{
                           fontSize: '11.5px',
@@ -287,7 +310,7 @@ export const TableView: React.FC<TableViewProps> = ({
                     </div>
 
                     {/* Bind Address (No collision with status) */}
-                    <div className="table-cell">
+                    <div className="table-cell" style={{ display: hide(showBind) }}>
                       <div className="table-bind-text">
                         <span>{app.bind}</span>
                         {app.local_only && (
@@ -329,7 +352,7 @@ export const TableView: React.FC<TableViewProps> = ({
                     </div>
 
                     {/* CPU bar */}
-                    <div className="table-cell" style={{ gap: '8px' }}>
+                    <div className="table-cell" style={{ gap: '8px', display: hide(showCpuRam) }}>
                       <div style={{ width: '42px', height: '4px', borderRadius: '2px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
                         <div style={{ width: `${cpuVal === null ? 0 : Math.max(4, cpuVal)}%`, height: '100%', background: 'var(--accent)', borderRadius: '2px' }} />
                       </div>
@@ -339,8 +362,17 @@ export const TableView: React.FC<TableViewProps> = ({
                     </div>
 
                     {/* RAM */}
-                    <div className="table-cell" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: statsStale ? 'var(--muted)' : 'var(--muted)' }} title={statsStale ? 'Stale or unavailable stats' : undefined}>
+                    <div className="table-cell" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: statsStale ? 'var(--muted)' : 'var(--muted)', display: hide(showCpuRam) }} title={statsStale ? 'Stale or unavailable stats' : undefined}>
                       {app.ram_mb == null ? '—' : app.ram_mb > 0 ? `${app.ram_mb} MB` : '0 MB'}
+                    </div>
+
+                    {/* Uptime */}
+                    <div className="table-cell" style={{ fontSize: '12px', color: 'var(--muted)', display: hide(showUptime) }}>
+                      {app.uptime_sec == null ? '—' : app.uptime_sec >= 86400
+                        ? `${Math.floor(app.uptime_sec / 86400)}d ${Math.floor((app.uptime_sec % 86400) / 3600)}h`
+                        : app.uptime_sec >= 3600
+                        ? `${Math.floor(app.uptime_sec / 3600)}h ${Math.floor((app.uptime_sec % 3600) / 60)}m`
+                        : `${Math.floor(app.uptime_sec / 60)}m`}
                     </div>
 
                     {/* Actions */}

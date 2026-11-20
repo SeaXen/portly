@@ -83,7 +83,7 @@ def test_plan_port_change_port_in_use(tmp_path, monkeypatch):
     store = Store(db_file)
 
     from portly.backend import ports
-    monkeypatch.setattr(ports, "check_port_availability", lambda p, b: {"free": False, "used_by": "Bound by system"})
+    monkeypatch.setattr(ports, "check_port_availability", lambda p, b, proto="tcp", store=None: {"free": False, "used_by": "Bound by system"})
 
     res = plan_port_change("custom:test", 5000, "127.0.0.1", store)
     assert res["valid"] is False
@@ -120,15 +120,15 @@ def test_ports_additional_edge_cases(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ports, "is_docker_available", lambda: (True, ""))
     monkeypatch.setattr(ports, "get_docker_client", lambda: mock_docker)
-    monkeypatch.setattr(ports, "can_bind_port", lambda p, b: (True, ""))
-    monkeypatch.setattr(ports, "is_port_in_socket_table", lambda p: (False, ""))
+    monkeypatch.setattr(ports, "can_bind_port", lambda p, b, proto="tcp": (True, ""))
+    monkeypatch.setattr(ports, "is_port_in_socket_table", lambda p, proto="tcp": (False, ""))
 
     res_dock = ports.check_port_availability(5432)
     assert res_dock["free"] is False
     assert "Claimed by container 'my_postgres'" in res_dock["used_by"]
 
     # 4. plan_port_change with docker unavailable
-    monkeypatch.setattr(ports, "check_port_availability", lambda p, b: {"free": True, "used_by": ""})
+    monkeypatch.setattr(ports, "check_port_availability", lambda p, b, proto="tcp", store=None: {"free": True, "used_by": ""})
     monkeypatch.setattr(ports, "get_docker_client", lambda: None)
     res_no_dock = ports.plan_port_change("docker:redis:6379/tcp", 6380, "0.0.0.0", store)
     assert res_no_dock["valid"] is False

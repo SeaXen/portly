@@ -193,12 +193,8 @@ def discover_host_ports() -> List[Dict[str, Any]]:
                     "port": c.laddr.port,
                     "pid": c.pid or 0,
                 })
-    except (psutil.AccessDenied, PermissionError):
-        if platform.system() == "Windows":
-            raw_conns = _fallback_netstat_windows()
-        else:
-            raw_conns = _fallback_lsof_unix()
-    except Exception:
+    except Exception as e:
+        logger.warning(f"psutil connection enumeration failed ({e}); falling back to netstat/lsof")
         if platform.system() == "Windows":
             raw_conns = _fallback_netstat_windows()
         else:
@@ -226,7 +222,7 @@ def discover_host_ports() -> List[Dict[str, Any]]:
             continue
 
         # Normalize bind
-        if bind in ("0.0.0.0", "::"):
+        if bind in ("0.0.0.0", "::", "*"):
             bind_norm = "0.0.0.0"
         elif bind in ("127.0.0.1", "::1", "localhost"):
             bind_norm = "127.0.0.1"
@@ -280,6 +276,7 @@ def discover_host_ports() -> List[Dict[str, Any]]:
             "cpu_percent": pinfo.get("cpu_percent"),
             "ram_mb": pinfo.get("ram_mb"),
             "uptime_sec": uptime_sec,
+            "stats_age_sec": 0.0,
             "status": "up",
             "created_at": pinfo.get("create_time") or time.time(),
         })

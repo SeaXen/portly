@@ -477,7 +477,9 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
                 className="c215"
                 style={{ width: '100%' }}
               >
-                <option value="generic">Generic JSON / Ntfy / Gotify</option>
+                <option value="generic">Generic JSON</option>
+                <option value="ntfy">Ntfy</option>
+                <option value="gotify">Gotify</option>
                 <option value="discord">Discord Webhook</option>
                 <option value="slack">Slack Incoming Webhook</option>
                 <option value="telegram">Telegram Bot</option>

@@ -1,6 +1,7 @@
 """System stats monitoring with ring buffer history and sparkline generation."""
 
 import collections
+import logging
 import os
 import platform
 import threading
@@ -8,6 +9,8 @@ import time
 from typing import Any, Dict, List, Optional
 
 import psutil
+
+logger = logging.getLogger("portly.stats")
 
 MAX_HISTORY = 60
 
@@ -84,7 +87,8 @@ def collect_snapshot(containers_running: int = 0, listening_count: int = 0, conf
         disk_used_gb = round(disk.used / (1024 ** 3), 1)
         disk_total_gb = round(disk.total / (1024 ** 3), 1)
         disk_pct = disk.percent
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Disk usage probe failed ({e}); reporting placeholder values")
         disk_used_gb = 0.0
         disk_total_gb = 100.0
         disk_pct = 0.0
@@ -155,6 +159,8 @@ def get_current_stats(containers_running: int = 0, listening_count: int = 0, con
             "value": f"{latest['mem_used_gb']} GB",
             "context": f"of {latest['mem_total_gb']} GB",
             "percent": latest["mem_pct"],
+            "used_mb": round(latest["mem_used_gb"] * 1024, 1),
+            "total_mb": round(latest["mem_total_gb"] * 1024, 1),
             "sparkline": _generate_sparkline_points(mem_hist),
             "history": mem_hist,
         },
@@ -171,6 +177,8 @@ def get_current_stats(containers_running: int = 0, listening_count: int = 0, con
             "value": f"↓ {_format_rate(latest['net_down_bps'])}",
             "context": f"↑ {_format_rate(latest['net_up_bps'])}",
             "percent": min(100.0, (latest["net_down_bps"] / (10 * 1024 * 1024)) * 100),
+            "rx_rate": latest["net_down_bps"],
+            "tx_rate": latest["net_up_bps"],
             "sparkline": _generate_sparkline_points(net_hist),
             "history": net_hist,
         },

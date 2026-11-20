@@ -45,7 +45,7 @@ def test_stream_and_settings_require_auth_when_users_exist(monkeypatch):
     )
     assert res_viewer.status_code == 200
     assert "supersecrettoken" not in res_viewer.json()["webhook_url"]
-    assert "..." in res_viewer.json()["webhook_url"]
+    assert "…" in res_viewer.json()["webhook_url"]
 
     # 4. /api/settings authenticated as admin sees full URL
     admin_token = auth.create_session("u_adm", "admin_user", role="admin")
@@ -170,13 +170,18 @@ def test_db_retention_pruning(tmp_path):
         count = conn.execute("SELECT COUNT(*) as cnt FROM health_history WHERE app_id = 'test_app'").fetchone()["cnt"]
         assert count == 200
 
-    # 2. Events pruning: log 1050 events with limit 1000
+    # 2. Discovery noise prunes to max_events; human audit records are kept
+    # separately so port churn cannot evict them.
     for i in range(1050):
-        test_store.log_event("test_evt", f"message {i}", max_events=1000)
+        test_store.log_event("port_opened", f"message {i}", max_events=1000)
+    for i in range(50):
+        test_store.log_event("user.create", f"audit {i}")
 
     with test_store._get_connection() as conn:
-        count = conn.execute("SELECT COUNT(*) as cnt FROM events").fetchone()["cnt"]
-        assert count == 1000
+        noise = conn.execute("SELECT COUNT(*) as cnt FROM events WHERE type = 'port_opened'").fetchone()["cnt"]
+        audit = conn.execute("SELECT COUNT(*) as cnt FROM events WHERE type = 'user.create'").fetchone()["cnt"]
+        assert noise == 1000
+        assert audit == 50
 
 
 def test_multi_homed_no_false_conflict(tmp_path):

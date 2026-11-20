@@ -9,7 +9,7 @@ from typing import Any, Dict, Generator, List, Optional
 
 from portly.backend.discovery.docker_src import get_docker_client, is_docker_available
 from portly.backend.ports import check_port_availability
-from portly.backend.store import Store
+from portly.backend.store import Store, DEFAULT_DATA_DIR
 
 logger = logging.getLogger("portly.docker_actions")
 
@@ -18,6 +18,67 @@ def _check_safe_mode(store: Store):
     safe_mode = store.get_setting("safe_mode", "true").lower() == "true"
     if safe_mode:
         raise PermissionError("Safe mode is active. Mutating actions (start, stop, recreate, update) are locked.")
+
+
+# Shared HostConfig/Config -> run() mapping so every recreate path (image
+# update, port change, multi-port, rollback) preserves the same settings.
+_HOST_CONFIG_RUN_MAP = (
+    ("Privileged", "privileged"), ("CapAdd", "cap_add"), ("CapDrop", "cap_drop"),
+    ("Devices", "devices"), ("Dns", "dns"), ("DnsSearch", "dns_search"),
+    ("ExtraHosts", "extra_hosts"), ("Sysctls", "sysctls"),
+    ("SecurityOpt", "security_opt"), ("ReadonlyRootfs", "read_only"),
+    ("Memory", "mem_limit"), ("MemorySwap", "memswap_limit"), ("NanoCpus", "nano_cpus"),
+    ("CpuShares", "cpu_shares"), ("ShmSize", "shm_size"),
+    ("PidMode", "pid_mode"), ("IpcMode", "ipc_mode"), ("UTSMode", "uts_mode"),
+    ("GroupAdd", "group_add"), ("Init", "init"), ("AutoRemove", "auto_remove"),
+    ("Tmpfs", "tmpfs"),
+)
+
+
+def _host_config_extras(host_config: Dict[str, Any]) -> Dict[str, Any]:
+    from docker.types import LogConfig
+    extras: Dict[str, Any] = {}
+    for hk, rk in _HOST_CONFIG_RUN_MAP:
+        val = host_config.get(hk)
+        if val not in (None, "", [], {}):
+            extras[rk] = val
+    lc = host_config.get("LogConfig")
+    if lc and lc.get("Type"):
+        extras["log_config"] = LogConfig(type=lc["Type"], config=lc.get("Config") or {})
+    return extras
+
+
+def _config_extras(config: Dict[str, Any]) -> Dict[str, Any]:
+    extras: Dict[str, Any] = {}
+    if config.get("Healthcheck"):
+        extras["healthcheck"] = config["Healthcheck"]
+    if config.get("StopSignal"):
+        extras["stop_signal"] = config["StopSignal"]
+    if config.get("Hostname"):
+        extras["hostname"] = config["Hostname"]
+    if config.get("Domainname"):
+        extras["domainname"] = config["Domainname"]
+    return extras
+
+
+def _binds_with_mounts(host_config: Dict[str, Any], attrs: Dict[str, Any]) -> List[str]:
+    """HostConfig.Binds plus Mounts entries missing from it: --mount volumes do
+    not appear in Binds, and dropping them on recreate loses data."""
+    binds = list(host_config.get("Binds") or [])
+    existing_destinations = set()
+    for b in binds:
+        parts = b.split(":")
+        if len(parts) >= 2:
+            existing_destinations.add(parts[1])
+    for m in attrs.get("Mounts") or []:
+        dest = m.get("Destination")
+        if dest and dest not in existing_destinations:
+            src = m.get("Source") if m.get("Type") == "bind" else (m.get("Name") or m.get("Source"))
+            mode = m.get("Mode") or ("rw" if m.get("RW", True) else "ro")
+            if src:
+                binds.append(f"{src}:{dest}:{mode}")
+                existing_destinations.add(dest)
+    return binds
 
 
 def start_container(container_name_or_id: str, store: Store, actor: str = "system") -> Dict[str, Any]:
@@ -118,7 +179,7 @@ def check_image_update(image_tag: str) -> Dict[str, Any]:
     """Checks if an updated image is available in the registry compared to local RepoDigests."""
     client = get_docker_client()
     if not client:
-        return {"has_update": False, "current_digest": "", "latest_digest": "", "message": "Docker not available"}
+        return {"has_update": False, "known": False, "current_digest": "", "latest_digest": "", "message": "Docker not available"}
 
     try:
         local_img = client.images.get(image_tag)
@@ -171,7 +232,7 @@ def apply_image_update(container_name: str, store: Store, actor: str = "system")
     config = attrs.get("Config", {})
     host_config = attrs.get("HostConfig", {})
     ports = host_config.get("PortBindings") or {}
-    binds = list(host_config.get("Binds") or [])
+    binds = _binds_with_mounts(host_config, attrs)
     networks = attrs.get("NetworkSettings", {}).get("Networks") or {}
 
     backup_name = f"{container_name}_portly_update_bak_{int(time.time())}"
@@ -199,32 +260,11 @@ def apply_image_update(container_name: str, store: Store, actor: str = "system")
 
     # Carry over the remaining runtime settings so an image update does not
     # silently recreate the container without them.
-    for hk, rk in (
-        ("Privileged", "privileged"), ("CapAdd", "cap_add"), ("CapDrop", "cap_drop"),
-        ("Devices", "devices"), ("Dns", "dns"), ("DnsSearch", "dns_search"),
-        ("ExtraHosts", "extra_hosts"), ("Sysctls", "sysctls"),
-        ("SecurityOpt", "security_opt"), ("ReadonlyRootfs", "read_only"),
-        ("Memory", "mem_limit"), ("NanoCpus", "nano_cpus"),
-        ("CpuShares", "cpu_shares"), ("ShmSize", "shm_size"),
-        ("PidMode", "pid_mode"), ("IpcMode", "ipc_mode"), ("UTSMode", "uts_mode"),
-        ("GroupAdd", "group_add"), ("Init", "init"), ("AutoRemove", "auto_remove"),
-    ):
-        val = host_config.get(hk)
-        if val not in (None, "", [], {}):
-            run_kwargs[rk] = val
-    if config.get("Healthcheck"):
-        run_kwargs["healthcheck"] = config["Healthcheck"]
-    if config.get("StopSignal"):
-        run_kwargs["stop_signal"] = config["StopSignal"]
-    if config.get("Hostname"):
-        run_kwargs["hostname"] = config["Hostname"]
-    if config.get("Domainname"):
-        run_kwargs["domainname"] = config["Domainname"]
+    run_kwargs.update(_host_config_extras(host_config))
+    run_kwargs.update(_config_extras(config))
     net_mode = host_config.get("NetworkMode")
     if net_mode and net_mode not in ("default", "bridge"):
         run_kwargs["network_mode"] = net_mode
-    # shortcut: log driver config is not copied (SDK needs a typed LogConfig);
-    # upgrade when a Docker fixture is available to validate it.
 
     try:
         new_container = client.containers.run(**run_kwargs)
@@ -254,12 +294,15 @@ def apply_image_update(container_name: str, store: Store, actor: str = "system")
             failed_c.remove(force=True)
         except Exception:
             pass
+        restored = True
         try:
             container.rename(container_name)
             container.start()
         except Exception as rb_err:
+            restored = False
             logger.error(f"Failed to restore original container after update failure: {rb_err}")
-        raise RuntimeError(f"Update failed: {e}. Original container restored.")
+        suffix = "Original container restored." if restored else "Automatic restore FAILED - inspect container state manually."
+        raise RuntimeError(f"Update failed: {e}. {suffix}")
 
 
 def apply_port_change_docker(container_name: str, new_port: int, target_c_port: str, bind: str, store: Store, actor: str = "system") -> Dict[str, Any]:
@@ -278,21 +321,7 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
         raise ValueError(f"Container '{container_name}' uses host networking mode. Port mappings cannot be changed via Docker.")
 
     ports = host_config.get("PortBindings") or {}
-    binds = list(host_config.get("Binds") or [])
-    mounts = attrs.get("Mounts") or []
-    existing_destinations = set()
-    for b in binds:
-        parts = b.split(":")
-        if len(parts) >= 2:
-            existing_destinations.add(parts[1])
-    for m in mounts:
-        dest = m.get("Destination")
-        if dest and dest not in existing_destinations:
-            src = m.get("Source") if m.get("Type") == "bind" else (m.get("Name") or m.get("Source"))
-            mode = m.get("Mode") or ("rw" if m.get("RW", True) else "ro")
-            if src:
-                binds.append(f"{src}:{dest}:{mode}")
-                existing_destinations.add(dest)
+    binds = _binds_with_mounts(host_config, attrs)
 
     networks = attrs.get("NetworkSettings", {}).get("Networks") or {}
     image = config.get("Image")
@@ -341,6 +370,9 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
         "pid_mode": host_config.get("PidMode"),
         "security_opt": host_config.get("SecurityOpt"),
         "log_config": host_config.get("LogConfig"),
+        "host_config_raw": host_config,
+        "config_raw": config,
+        "networks_raw": networks,
     }
     store.save_port_snapshot(app_id, old_port or 0, new_port, snapshot_config)
 
@@ -369,36 +401,8 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
         run_kwargs["user"] = user
     if working_dir:
         run_kwargs["working_dir"] = working_dir
-    if host_config.get("CapAdd"):
-        run_kwargs["cap_add"] = host_config.get("CapAdd")
-    if host_config.get("CapDrop"):
-        run_kwargs["cap_drop"] = host_config.get("CapDrop")
-    if host_config.get("Devices"):
-        run_kwargs["devices"] = host_config.get("Devices")
-    if host_config.get("Dns"):
-        run_kwargs["dns"] = host_config.get("Dns")
-    if host_config.get("ExtraHosts"):
-        run_kwargs["extra_hosts"] = host_config.get("ExtraHosts")
-    if host_config.get("NanoCPUs"):
-        run_kwargs["nano_cpus"] = host_config.get("NanoCPUs")
-    if host_config.get("Memory"):
-        run_kwargs["mem_limit"] = host_config.get("Memory")
-    if host_config.get("MemorySwap"):
-        run_kwargs["memswap_limit"] = host_config.get("MemorySwap")
-    if config.get("Healthcheck"):
-        run_kwargs["healthcheck"] = config.get("Healthcheck")
-    if host_config.get("Tmpfs"):
-        run_kwargs["tmpfs"] = host_config.get("Tmpfs")
-    if host_config.get("Sysctls"):
-        run_kwargs["sysctls"] = host_config.get("Sysctls")
-    if host_config.get("IpcMode"):
-        run_kwargs["ipc_mode"] = host_config.get("IpcMode")
-    if host_config.get("PidMode"):
-        run_kwargs["pid_mode"] = host_config.get("PidMode")
-    if host_config.get("SecurityOpt"):
-        run_kwargs["security_opt"] = host_config.get("SecurityOpt")
-    if host_config.get("LogConfig"):
-        run_kwargs["log_config"] = host_config.get("LogConfig")
+    run_kwargs.update(_host_config_extras(host_config))
+    run_kwargs.update(_config_extras(config))
 
     # Non-destructive recreation: rename original container first
     backup_name = f"{container_name}_portly_bak_{int(time.time())}"
@@ -407,14 +411,14 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
 
     try:
         new_container = client.containers.run(**run_kwargs)
-        for net_name in networks:
+        for net_name, net_cfg in networks.items():
             try:
-                client.networks.get(net_name).connect(new_container)
+                client.networks.get(net_name).connect(new_container, aliases=(net_cfg or {}).get("Aliases") or [])
             except Exception:
                 pass
 
         # Post-start verification: check container is running and not immediately exiting
-        time.sleep(0.1)
+        time.sleep(1.0)
         if hasattr(new_container, "reload"):
             new_container.reload()
         state = getattr(new_container, "attrs", {}).get("State", {})
@@ -437,12 +441,15 @@ def apply_port_change_docker(container_name: str, new_port: int, target_c_port: 
             pass
 
         # 2. Revert rename and restart original container
+        restored = True
         try:
             container.rename(container_name)
             container.start()
         except Exception as rb_err:
+            restored = False
             logger.error(f"Critical: failed to restore original container {container_name}: {rb_err}")
-        raise RuntimeError(f"Failed to apply port change: {run_err}. Original container was preserved and restored.")
+        suffix = "Original container was preserved and restored." if restored else "Automatic restore FAILED - inspect container state manually."
+        raise RuntimeError(f"Failed to apply port change: {run_err}. {suffix}")
 
     store.log_event("port_change", f"Changed container {container_name} port to {new_port}", app_id=app_id, actor=actor)
     return {
@@ -469,7 +476,7 @@ def apply_multi_port_change_docker(container_name: str, mappings: List[Dict[str,
         raise ValueError(f"Container '{container_name}' uses host networking mode. Port mappings cannot be changed via Docker.")
 
     old_ports = host_config.get("PortBindings") or {}
-    binds = list(host_config.get("Binds") or [])
+    binds = _binds_with_mounts(host_config, attrs)
     networks = attrs.get("NetworkSettings", {}).get("Networks") or {}
 
     new_port_bindings = dict(old_ports)
@@ -499,6 +506,9 @@ def apply_multi_port_change_docker(container_name: str, mappings: List[Dict[str,
         "devices": host_config.get("Devices"),
         "dns": host_config.get("Dns"),
         "extra_hosts": host_config.get("ExtraHosts"),
+        "host_config_raw": host_config,
+        "config_raw": config,
+        "networks_raw": networks,
     })
 
     run_kwargs: Dict[str, Any] = {
@@ -532,6 +542,8 @@ def apply_multi_port_change_docker(container_name: str, mappings: List[Dict[str,
         run_kwargs["dns"] = host_config.get("Dns")
     if host_config.get("ExtraHosts"):
         run_kwargs["extra_hosts"] = host_config.get("ExtraHosts")
+    run_kwargs.update(_host_config_extras(host_config))
+    run_kwargs.update(_config_extras(config))
 
     backup_name = f"{container_name}_portly_bak_{int(time.time())}"
     container.stop(timeout=10)
@@ -539,13 +551,13 @@ def apply_multi_port_change_docker(container_name: str, mappings: List[Dict[str,
 
     try:
         new_container = client.containers.run(**run_kwargs)
-        for net_name in networks:
+        for net_name, net_cfg in networks.items():
             try:
-                client.networks.get(net_name).connect(new_container)
+                client.networks.get(net_name).connect(new_container, aliases=(net_cfg or {}).get("Aliases") or [])
             except Exception:
                 pass
 
-        time.sleep(0.1)
+        time.sleep(1.0)
         if hasattr(new_container, "reload"):
             new_container.reload()
         state = getattr(new_container, "attrs", {}).get("State", {})
@@ -562,12 +574,15 @@ def apply_multi_port_change_docker(container_name: str, mappings: List[Dict[str,
             created_c.remove(force=True)
         except Exception:
             pass
+        restored = True
         try:
             container.rename(container_name)
             container.start()
         except Exception as rb_err:
+            restored = False
             logger.error(f"Failed to restore original container: {rb_err}")
-        raise RuntimeError(f"Multi-port change failed: {run_err}. Original container restored.")
+        suffix = "Original container restored." if restored else "Automatic restore FAILED - inspect container state manually."
+        raise RuntimeError(f"Multi-port change failed: {run_err}. {suffix}")
 
     store.log_event("port_change_multi", f"Updated multiple ports on container {container_name}", app_id=app_id, actor=actor)
     return {"status": "recreated", "container": container_name, "mappings": mappings, "rollback_available": True}
@@ -577,6 +592,13 @@ def rollback_port_change_docker(app_id: str, store: Store, actor: str = "system"
     """Restores previous port mapping from snapshot non-destructively."""
     _check_safe_mode(store)
     snap = store.get_port_snapshot(app_id)
+    snap_key = app_id
+    if not snap:
+        # Multi-port changes snapshot under docker:<name>:multi.
+        parts_id = app_id.split(":")
+        if len(parts_id) >= 2 and parts_id[0] == "docker":
+            snap_key = f"docker:{parts_id[1]}:multi"
+            snap = store.get_port_snapshot(snap_key)
     if not snap:
         raise ValueError("No rollback snapshot found for this app.")
 
@@ -624,12 +646,25 @@ def rollback_port_change_docker(app_id: str, store: Store, actor: str = "system"
         run_kwargs["dns"] = cfg.get("dns")
     if cfg.get("extra_hosts"):
         run_kwargs["extra_hosts"] = cfg.get("extra_hosts")
+    # Legacy snapshots stored individual keys; newer ones store the raw config.
+    for legacy_k in ("mem_limit", "memswap_limit", "nano_cpus", "healthcheck", "tmpfs", "sysctls", "ipc_mode", "pid_mode", "security_opt"):
+        if cfg.get(legacy_k) and legacy_k not in run_kwargs:
+            run_kwargs[legacy_k] = cfg[legacy_k]
+    if cfg.get("log_config") and "log_config" not in run_kwargs:
+        from docker.types import LogConfig
+        lc = cfg["log_config"]
+        run_kwargs["log_config"] = LogConfig(type=lc.get("Type", "json-file"), config=lc.get("Config") or {})
+    if cfg.get("host_config_raw"):
+        run_kwargs.update(_host_config_extras(cfg["host_config_raw"]))
+    if cfg.get("config_raw"):
+        run_kwargs.update(_config_extras(cfg["config_raw"]))
 
     try:
         new_c = client.containers.run(**run_kwargs)
-        for net_name in cfg.get("networks", []):
+        nets_raw = cfg.get("networks_raw") or {n: {} for n in cfg.get("networks", [])}
+        for net_name, net_cfg in nets_raw.items():
             try:
-                client.networks.get(net_name).connect(new_c)
+                client.networks.get(net_name).connect(new_c, aliases=(net_cfg or {}).get("Aliases") or [])
             except Exception:
                 pass
         try:
@@ -642,14 +677,17 @@ def rollback_port_change_docker(app_id: str, store: Store, actor: str = "system"
             created_c.remove(force=True)
         except Exception:
             pass
+        restored = True
         try:
             container.rename(container_name)
             container.start()
-        except Exception:
-            pass
-        raise RuntimeError(f"Rollback failed: {run_err}. Container restored to pre-rollback state.")
+        except Exception as rb_err:
+            restored = False
+            logger.error(f"Failed to restore original container after rollback failure: {rb_err}")
+        suffix = "Container restored to pre-rollback state." if restored else "Automatic restore FAILED - inspect container state manually."
+        raise RuntimeError(f"Rollback failed: {run_err}. {suffix}")
 
-    store.clear_port_snapshot(app_id)
+    store.clear_port_snapshot(snap_key)
     store.log_event("port_rollback", f"Rolled back container {container_name} ports", app_id=app_id, actor=actor)
     return {"status": "rolled_back", "port": snap["original_port"]}
 
@@ -689,6 +727,12 @@ def parse_and_validate_safe_command(command: str) -> List[str]:
         )
 
     # Allowed argv rules
+    if binary in ("hostname", "date"):
+        # hostname -F / date -f read arbitrary files into the container —
+        # not inspection-only, so reject them in safe mode.
+        for arg in argv[1:]:
+            if arg in ("-F", "-f", "--file") or arg.startswith("--file="):
+                raise PermissionError(f"Safe mode is active. File-reading flag '{arg}' is not allowed for '{binary}'.")
     if binary in ("ps", "uptime", "free", "df", "uname", "whoami", "id", "hostname", "date", "pwd"):
         for arg in argv[1:]:
             if any(c in arg for c in (";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\\")):
@@ -716,12 +760,6 @@ def parse_and_validate_safe_command(command: str) -> List[str]:
         else:
             raise PermissionError(f"Safe mode is active. 'ip {sub}' is not allowed in safe mode.")
 
-    elif binary == "ls":
-        for arg in argv[1:]:
-            if any(c in arg for c in (";", "&", "|", "`", "$", "(", ")", "<", ">", "\n", "\\")):
-                raise PermissionError(f"Safe mode is active. Argument '{arg}' contains restricted shell operator.")
-        return argv
-
     raise PermissionError(
         f"Command '{binary}' is not in the safe inspection whitelist. "
         f"Unlock safe mode in the top bar to execute custom commands."
@@ -740,7 +778,7 @@ def exec_in_container(
 ) -> Dict[str, Any]:
     """Runs a command inside a Docker container enforcing argv allowlist, bounded timeout, and output cap."""
     timeout = max(1, min(60, int(timeout or 10)))
-    if store and store.get_setting("safe_mode", "true").lower() == "true":
+    if store is None or store.get_setting("safe_mode", "true").lower() == "true":
         cmd_exec = parse_and_validate_safe_command(command)
     else:
         cmd_exec = shlex.split(command)
@@ -752,42 +790,45 @@ def exec_in_container(
     container = client.containers.get(container_name_or_id)
     t0 = time.perf_counter()
     deadline = t0 + timeout
-    # docker-py's exec_run has no timeout argument; stream and enforce the
-    # deadline here so the API thread cannot hang on a stuck command.
-    result = container.exec_run(
-        cmd_exec, stdout=True, stderr=True, demux=False, stream=True
-    )
+    # Low-level exec API: exec_run(stream=True) in docker-py 7.x returns
+    # ExecResult(None, generator) — the real exit code only exists in
+    # exec_inspect after the stream ends.
+    api = client.api
+    exec_id = api.exec_create(container.id, cmd_exec, stdout=True, stderr=True)["Id"]
+    chunks = api.exec_start(exec_id, stream=True, demux=False)
     output_cap = 262144
     timed_out = False
-    if isinstance(result, tuple):
-        exit_code, chunks = result
-        collected = bytearray()
-        try:
-            for chunk in chunks:
-                if time.perf_counter() >= deadline:
-                    timed_out = True
-                    break
-                piece = chunk if isinstance(chunk, (bytes, bytearray)) else str(chunk).encode("utf-8", errors="replace")
-                remaining = output_cap - len(collected)
-                if remaining > 0:
-                    collected.extend(piece[:remaining])
-        finally:
-            close = getattr(chunks, "close", None)
-            if callable(close):
-                close()
-        output_str = collected.decode("utf-8", errors="replace")
-        if len(collected) >= output_cap:
-            output_str += "\n... [Output truncated at 256 KB]"
-    else:
-        # Legacy SDK / mocked ExecResult returning the whole output at once.
-        exit_code = result.exit_code
-        raw_output = result.output
-        output_str = raw_output.decode("utf-8", errors="replace") if isinstance(raw_output, (bytes, bytearray)) else str(raw_output or "")
-        if len(output_str) > output_cap:
-            output_str = output_str[:output_cap] + "\n... [Output truncated at 256 KB]"
+    collected = bytearray()
+    try:
+        for chunk in chunks:
+            if time.perf_counter() >= deadline:
+                timed_out = True
+                break
+            piece = chunk if isinstance(chunk, (bytes, bytearray)) else str(chunk).encode("utf-8", errors="replace")
+            remaining = output_cap - len(collected)
+            if remaining > 0:
+                collected.extend(piece[:remaining])
+    except Exception as e:
+        # The client's socket timeout (3s) fires on silent streams; treat it as
+        # a deadline hit and return the partial output instead of a 500.
+        if "timed out" in str(e).lower():
+            timed_out = True
+        else:
+            raise
+    finally:
+        close = getattr(chunks, "close", None)
+        if callable(close):
+            close()
+    try:
+        exit_code = api.exec_inspect(exec_id).get("ExitCode")
+    except Exception:
+        exit_code = None
+    output_str = collected.decode("utf-8", errors="replace")
+    if len(collected) >= output_cap:
+        output_str += "\n... [Output truncated at 256 KB]"
     # shortcut: docker-py cannot kill a single exec; the container-side process
-    # may outlive the HTTP request. Upgrade to low-level exec inspect/kill when
-    # a Docker fixture is available to validate it.
+    # may outlive the HTTP request. Upgrade to low-level exec kill when a
+    # Docker fixture is available to validate it.
     if timed_out:
         output_str += f"\n... [Execution timed out after {timeout}s]"
     duration_ms = round((time.perf_counter() - t0) * 1000.0, 1)
@@ -863,6 +904,19 @@ def get_container_compose_config(container_name_or_id: str) -> Dict[str, Any]:
 
     # Restrict compose read to yaml files <= 1MB
     norm_path = os.path.realpath(candidate_path)
+    # Compose labels are attacker-controlled (anyone who can create a container
+    # can set them): only read inside the project's own working directory.
+    wd = os.path.realpath(working_dir) if working_dir else ""
+    if not wd or not (norm_path == wd or norm_path.startswith(wd + os.sep)):
+        return {
+            "has_compose": True,
+            "project": project,
+            "service": service,
+            "config_file": resolved_config_path,
+            "compose_file": candidate_path,
+            "content": "# Error: Compose file is outside the project working directory; read refused.",
+            "can_manage": False,
+        }
     if not (norm_path.endswith(".yml") or norm_path.endswith(".yaml")):
         return {
             "has_compose": True,
@@ -903,7 +957,15 @@ def get_container_compose_config(container_name_or_id: str) -> Dict[str, Any]:
     }
 
 
+_df_cache: Optional[Dict[str, Any]] = None
+_df_cache_ts: float = 0.0
+
+
 def get_docker_system_df(store: Store) -> Dict[str, Any]:
+    global _df_cache, _df_cache_ts
+    # docker df is seconds-slow on large hosts; the drawer polls every 4s.
+    if _df_cache is not None and (time.time() - _df_cache_ts) < 10.0:
+        return _df_cache
     client = get_docker_client()
     if not client:
         raise RuntimeError("Docker is not available.")
@@ -922,7 +984,8 @@ def get_docker_system_df(store: Store) -> Dict[str, Any]:
         total_disk = img_total + cont_total + vol_total
         total_reclaimable = img_reclaim + vol_reclaim
 
-        return {
+        result = {
+            "available": True,
             "images_count": len(images),
             "containers_count": len(containers),
             "volumes_count": len(volumes),
@@ -933,9 +996,13 @@ def get_docker_system_df(store: Store) -> Dict[str, Any]:
             "containers": {"count": len(containers), "size_mb": round(cont_total / (1024 * 1024), 2)},
             "volumes": {"count": len(volumes), "size_mb": round(vol_total / (1024 * 1024), 2), "reclaimable_mb": round(vol_reclaim / (1024 * 1024), 2)},
         }
+        _df_cache = result
+        _df_cache_ts = time.time()
+        return result
     except Exception as e:
         logger.error(f"Error querying docker df: {e}")
-        return {"total_size_mb": 0.0, "reclaimable_mb": 0.0, "error": str(e)}
+        return {"available": False, "images_count": 0, "containers_count": 0, "volumes_count": 0,
+                "total_size_mb": 0.0, "total_reclaimable_mb": 0.0, "reclaimable_mb": 0.0, "error": str(e)}
 
 
 def list_docker_images(store: Store) -> List[Dict[str, Any]]:
@@ -1163,11 +1230,13 @@ def deploy_container(
         raise RuntimeError(f"Failed to deploy container {clean_name}: {e}")
 
 
-def execute_stack_file_action(project_name: str, compose_yaml: str, action: str, data_dir: str = "data") -> Dict[str, Any]:
+def execute_stack_file_action(project_name: str, compose_yaml: str, action: str, data_dir: Optional[str] = None) -> Dict[str, Any]:
     """Writes stack YAML to disk and invokes docker compose CLI with output capture."""
     import subprocess
     import shutil
-    import re
+
+    if not data_dir:
+        data_dir = DEFAULT_DATA_DIR
 
     if not project_name or not re.fullmatch(r"[A-Za-z0-9_-]+", project_name):
         raise ValueError("Stack name may only contain letters, digits, '-' and '_'.")

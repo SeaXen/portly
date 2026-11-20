@@ -20,13 +20,22 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose }) => {
   const [loading, setLoading] = useState(true);
   const [showPruneConfirm, setShowPruneConfirm] = useState(false);
 
+  const fetchingRef = React.useRef(false);
+
+  const loadAll = async () => {
+    // Skip ticks while a fetch is in flight: docker df can be seconds-slow.
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      await Promise.all([loadStats(), loadDockerStats()]);
+    } finally {
+      fetchingRef.current = false;
+    }
+  };
+
   useEffect(() => {
-    loadStats();
-    loadDockerStats();
-    const interval = setInterval(() => {
-      loadStats();
-      loadDockerStats();
-    }, 4000);
+    loadAll();
+    const interval = setInterval(loadAll, 4000);
     return () => clearInterval(interval);
   }, []);
 

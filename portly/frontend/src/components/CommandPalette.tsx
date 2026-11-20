@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AppItem } from '../types';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -38,6 +39,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [confirmDisableSafeMode, setConfirmDisableSafeMode] = useState(false);
+  const paletteRef = useFocusTrap<HTMLDivElement>(isOpen, onClose);
 
   useEffect(() => {
     if (!isOpen) {
@@ -132,6 +134,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   return (
     <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 1300, alignItems: 'flex-start', paddingTop: '12vh' }}>
       <div
+        ref={paletteRef}
         className="command-palette"
         role="dialog"
         aria-modal="true"
@@ -139,7 +142,25 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {confirmDisableSafeMode ? (
-          <div style={{ padding: '28px 24px', textAlign: 'center' }}>
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Unlock Safe Mode?"
+            style={{ padding: '28px 24px', textAlign: 'center' }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                // Stop App's global Escape and the palette's own handler: cancel this step only.
+                e.stopPropagation();
+                setConfirmDisableSafeMode(false);
+              } else if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'BUTTON') {
+                // Buttons keep their native Enter activation (Cancel cancels, Confirm confirms).
+                e.preventDefault();
+                onToggleSafeMode();
+                setConfirmDisableSafeMode(false);
+                onClose();
+              }
+            }}
+          >
             <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'center' }}>
               <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
@@ -157,6 +178,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               <button
                 type="button"
                 className="c078"
+                autoFocus
                 onClick={() => setConfirmDisableSafeMode(false)}
               >
                 Cancel (Keep Safe Mode ON)
@@ -165,7 +187,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                 type="button"
                 style={{
                   background: '#FF5C5C',
-                  color: '#FFFFFF',
+                  color: '#0B1220',
                   border: 'none',
                   borderRadius: '8px',
                   padding: '8px 18px',
@@ -238,7 +260,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <span style={{ fontWeight: 600 }}>{a.name}</span>
-                          <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>{a.port}</span>
+                          <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)' }}>{a.port || '—'}</span>
                           <span style={{ fontSize: '12px', color: 'var(--muted)' }}>{a.source}</span>
                         </div>
                         <span className="command-badge" style={{ color: a.status === 'unknown' ? 'var(--muted)' : (a.status === 'up' ? 'var(--success)' : 'var(--danger)') }}>

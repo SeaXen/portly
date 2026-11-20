@@ -14,6 +14,9 @@ def _safe_regex_match(pattern: str, target: str) -> bool:
     # Block obvious nested quantifiers that cause ReDoS (e.g. (a+)+ or (x*)*)
     if re.search(r'\([^)]*[\+\*]\)[\+\*]', pattern):
         return False
+    # Overlapping alternation under a quantifier ((a|aa)+) is exponential too.
+    if re.search(r'\([^)]*\|[^)]*\)[\+\*]', pattern):
+        return False
 
     if pattern not in _regex_cache:
         try:
@@ -26,7 +29,9 @@ def _safe_regex_match(pattern: str, target: str) -> bool:
         return False
 
     try:
-        return bool(compiled.search(target))
+        # Bound the target: cmdlines are attacker-controlled and long inputs
+        # amplify any residual backtracking in user-supplied patterns.
+        return bool(compiled.search(target[:4096]))
     except Exception:
         return False
 

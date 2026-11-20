@@ -31,6 +31,8 @@ _stats_thread: Optional[threading.Thread] = None
 _client_lock = threading.Lock()
 _debounce_timer: Optional[threading.Timer] = None
 _debounce_lock = threading.Lock()
+_last_good_containers: List[Dict[str, Any]] = []
+_last_good_ts: float = 0.0
 
 
 def get_docker_client(force_retry: bool = False) -> Optional[Any]:
@@ -69,7 +71,10 @@ def get_docker_client(force_retry: bool = False) -> Optional[Any]:
 
 
 def is_docker_available() -> Tuple[bool, str]:
-    get_docker_client()
+    # Non-blocking after first init: report cached state so async routes never
+    # stall on a slow/dead daemon. Retries happen in discovery (executor).
+    if not _client_init_attempted:
+        get_docker_client()
     return _docker_available, _docker_error_msg
 
 
@@ -268,7 +273,7 @@ def clear_container_stats_cache(container_id: Optional[str] = None):
 
 
 def discover_docker_containers() -> List[Dict[str, Any]]:
-    global _client, _docker_available
+    global _client, _docker_available, _last_good_containers, _last_good_ts
     client = get_docker_client()
     if not client or not _docker_available:
         return []
@@ -416,7 +421,14 @@ def discover_docker_containers() -> List[Dict[str, Any]]:
                 logger.warning(f"Error inspecting container {c}: {e}")
     except Exception as e:
         logger.error(f"Error querying docker containers: {e}")
+        # Transient daemon hiccup: serve the last good inventory briefly instead
+        # of firing port_closed for every container (empty UI + alert spam).
+        if _last_good_containers and (time.time() - _last_good_ts) < 120.0:
+            return _last_good_containers
         _docker_available = False
         _client = None
 
+    if results:
+        _last_good_containers = results
+        _last_good_ts = time.time()
     return results

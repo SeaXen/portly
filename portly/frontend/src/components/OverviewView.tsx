@@ -187,7 +187,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 <div>
                   <div style={{ fontWeight: 600, color: 'var(--text)' }}>{app.name}</div>
                   <div style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)', fontSize: '13px', marginTop: '2px' }}>
-                    {app.port}
+                    {app.port || '—'}
                   </div>
                 </div>
                 <span

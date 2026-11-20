@@ -415,20 +415,20 @@ def test_bulk_actions_and_safe_mode(monkeypatch):
     # Bulk start
     res_start = client.post("/api/apps/bulk", json={"ids": ["docker:web:80/tcp", "custom:worker"], "action": "start"})
     assert res_start.status_code == 200
-    mock_start_dock.assert_called_once_with("web", store)
-    mock_start_cust.assert_called_once_with("custom:worker", store)
+    mock_start_dock.assert_called_once_with("web", store, actor="admin")
+    mock_start_cust.assert_called_once_with("custom:worker", store, actor="admin")
 
     # Bulk stop
     res_stop = client.post("/api/apps/bulk", json={"ids": ["docker:web:80/tcp", "custom:worker"], "action": "stop"})
     assert res_stop.status_code == 200
-    mock_stop_dock.assert_called_once_with("web", store)
-    mock_stop_cust.assert_called_once_with("custom:worker", store)
+    mock_stop_dock.assert_called_once_with("web", store, actor="admin")
+    mock_stop_cust.assert_called_once_with("custom:worker", store, actor="admin")
 
     # Bulk restart
     res_restart = client.post("/api/apps/bulk", json={"ids": ["docker:web:80/tcp", "custom:worker"], "action": "restart"})
     assert res_restart.status_code == 200
-    mock_restart_dock.assert_called_once_with("web", store)
-    mock_restart_cust.assert_called_once_with("custom:worker", store)
+    mock_restart_dock.assert_called_once_with("web", store, actor="admin")
+    mock_restart_cust.assert_called_once_with("custom:worker", store, actor="admin")
 
     # Re-enable safe mode
     store.set_setting("safe_mode", "true")
@@ -437,13 +437,13 @@ def test_bulk_actions_and_safe_mode(monkeypatch):
 def test_start_stop_restart_endpoints(monkeypatch):
     store.set_setting("safe_mode", "false")
 
-    monkeypatch.setattr(app_module.docker_actions, "start_container", lambda c, s: {"status": "started", "container": c})
-    monkeypatch.setattr(app_module.docker_actions, "stop_container", lambda c, s: {"status": "stopped", "container": c})
-    monkeypatch.setattr(app_module.docker_actions, "restart_container", lambda c, s: {"status": "restarted", "container": c})
-    monkeypatch.setattr(app_module.process_actions, "start_custom_app", lambda a, s: {"status": "started", "app_id": a})
-    monkeypatch.setattr(app_module.process_actions, "stop_custom_app", lambda a, s: {"status": "stopped", "app_id": a})
-    monkeypatch.setattr(app_module.process_actions, "restart_custom_app", lambda a, s: {"status": "restarted", "app_id": a})
-    monkeypatch.setattr(app_module.process_actions, "kill_host_process", lambda pid, s: {"status": "killed", "pid": pid})
+    monkeypatch.setattr(app_module.docker_actions, "start_container", lambda c, s, actor="system": {"status": "started", "container": c})
+    monkeypatch.setattr(app_module.docker_actions, "stop_container", lambda c, s, actor="system": {"status": "stopped", "container": c})
+    monkeypatch.setattr(app_module.docker_actions, "restart_container", lambda c, s, actor="system": {"status": "restarted", "container": c})
+    monkeypatch.setattr(app_module.process_actions, "start_custom_app", lambda a, s, actor="system": {"status": "started", "app_id": a})
+    monkeypatch.setattr(app_module.process_actions, "stop_custom_app", lambda a, s, actor="system": {"status": "stopped", "app_id": a})
+    monkeypatch.setattr(app_module.process_actions, "restart_custom_app", lambda a, s, actor="system": {"status": "restarted", "app_id": a})
+    monkeypatch.setattr(app_module.process_actions, "kill_host_process", lambda pid, s, actor="system": {"status": "killed", "pid": pid})
 
     # Start docker
     res_dock_start = client.post("/api/apps/docker:web:80/tcp/start")
@@ -567,7 +567,7 @@ def test_port_change_api_execution(monkeypatch):
     # 2. Plan only (apply=false)
     monkeypatch.setattr(
         "portly.backend.app.plan_port_change",
-        lambda a, p, b, s: {
+        lambda a, p, b, s, actor="system": {
             "valid": True,
             "error": "",
             "plan": {"type": "docker", "container_name": "web", "target_container_port": "80/tcp", "steps": []}
@@ -595,7 +595,7 @@ def test_port_change_api_execution(monkeypatch):
     monkeypatch.setattr(
         docker_actions,
         "apply_port_change_docker",
-        lambda c, hp, cp, b, s: {"status": "success", "new_port": hp}
+        lambda c, hp, cp, b, s, actor="system": {"status": "success", "new_port": hp}
     )
     res_apply_dock = client.post("/api/apps/docker:web:80/tcp/port?apply=true", json={
         "host_port": 8081,
@@ -607,13 +607,13 @@ def test_port_change_api_execution(monkeypatch):
     # 5. Apply=true custom app
     monkeypatch.setattr(
         "portly.backend.app.plan_port_change",
-        lambda a, p, b, s: {
+        lambda a, p, b, s, actor="system": {
             "valid": True,
             "error": "",
             "plan": {"type": "custom", "name": "Worker"}
         }
     )
-    monkeypatch.setattr(process_actions, "restart_custom_app", lambda a, s: {"status": "restarted"})
+    monkeypatch.setattr(process_actions, "restart_custom_app", lambda a, s, actor="system": {"status": "restarted"})
     res_apply_cust = client.post("/api/apps/custom:worker/port?apply=true", json={
         "host_port": 9005,
         "bind": "127.0.0.1"
@@ -630,7 +630,7 @@ def test_port_change_api_execution(monkeypatch):
     monkeypatch.setattr(
         docker_actions,
         "rollback_port_change_docker",
-        lambda app_id, s: {"status": "rolled_back", "port": 8080}
+        lambda app_id, s, actor="system": {"status": "rolled_back", "port": 8080}
     )
     res_roll_ok = client.post("/api/apps/docker:web:80/tcp/port?rollback=true", json={"host_port": 8080})
     assert res_roll_ok.status_code == 200
@@ -641,12 +641,15 @@ def test_port_change_api_execution(monkeypatch):
 
 def test_image_update_endpoints(monkeypatch):
     from portly.backend.actions import docker_actions
-    monkeypatch.setattr(docker_actions, "check_image_update", lambda img: {"update_available": True, "image": img})
+    monkeypatch.setattr(docker_actions, "check_image_update", lambda img: {"has_update": True, "current_digest": "", "latest_digest": "sha256:abc", "message": "Update available"})
+    # Hermetic: never touch a real Docker daemon, present or not.
+    monkeypatch.setattr("portly.backend.app.get_docker_client", lambda: object())
+    monkeypatch.setattr(docker_actions, "apply_image_update", lambda c, s, actor="system": {"status": "updated", "container": c})
 
     # Check update for docker app
     res_check = client.post("/api/apps/docker:web:80/tcp/update/check")
     assert res_check.status_code == 200
-    assert res_check.json()["update_available"] is True
+    assert res_check.json()["has_update"] is True
 
     # Check update for app without image tag
     res_check_none = client.post("/api/apps/custom:worker/update/check")
@@ -661,6 +664,7 @@ def test_image_update_endpoints(monkeypatch):
     store.set_setting("safe_mode", "false")
     res_apply_ok = client.post("/api/apps/docker:web:80/tcp/update/apply")
     assert res_apply_ok.status_code == 200
+    assert res_apply_ok.json()["status"] == "updated"
     store.set_setting("safe_mode", "true")
 
 
@@ -680,3 +684,28 @@ def test_admin_setup_and_login_lifecycle(monkeypatch):
     assert res_setup_dup.status_code == 400
     assert res_setup_dup.json()["detail"]["code"] == "SETUP_DONE"
 
+
+
+def test_preflight_detects_collisions_in_all_modes():
+    """Regression: payload keys must reach the parser (raw_command/compose_yaml
+    were silently dropped by PreflightModel, reporting 'all free' for anything)."""
+    import socket
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.listen(1)
+    try:
+        r = client.post("/api/ports/preflight", json={"command": f"docker run -d -p {port}:80 nginx"})
+        assert r.status_code == 200
+        assert r.json()["has_collision"] is True
+        assert any(c["port"] == port for c in r.json()["collisions"])
+
+        r2 = client.post("/api/ports/preflight", json={"ports": [port]})
+        assert r2.status_code == 200
+        assert r2.json()["has_collision"] is True
+
+        r3 = client.post("/api/ports/preflight", json={"compose_content": f"services:\n  web:\n    ports:\n      - \"{port}:80\"\n"})
+        assert r3.status_code == 200
+        assert r3.json()["has_collision"] is True
+    finally:
+        s.close()

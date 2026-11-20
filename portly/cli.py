@@ -107,7 +107,8 @@ def main():
         os.environ["PORTLY_MODE"] = str(mode)
 
         print(f"Starting Portly dashboard on http://{_display_host(host)}:{port} (Mode: {mode})")
-        import uvicorn
+        import logging
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
         uvicorn.run("portly.backend.app:app", host=host, port=port, log_level="info")
 
     elif args.command == "reset-setup-token":
@@ -183,7 +184,7 @@ def main():
             print(f"Error: App '{app_target}' not found.", file=sys.stderr)
             sys.exit(1)
 
-        url = target.get("url")
+        url = target.get("open_url") or target.get("url")
         if not url:
             port = target.get("port")
             if port and port > 0:
@@ -199,14 +200,14 @@ def main():
         webbrowser.open(url)
 
     elif args.command == "check-port":
-        res = check_port_availability(args.port, args.bind)
+        res = check_port_availability(args.port, args.bind, store=Store())
         is_free = res.get("free", res.get("available", False))
         print(f"Port {args.port} ({args.bind}): {'AVAILABLE' if is_free else 'OCCUPIED'}")
         if not is_free and res.get("used_by"):
             print(f"  Reason: {res.get('used_by')}")
 
     elif args.command == "suggest":
-        ports = suggest_free_ports(start_port=args.start, count=args.count, bind_ip=args.bind)
+        ports = suggest_free_ports(start_port=args.start, count=args.count, bind_ip=args.bind, store=Store())
         print(f"Suggested free ports starting from {args.start} ({args.bind}):")
         for p in ports:
             print(f"  - {p}")
@@ -225,7 +226,7 @@ def main():
         if not target:
             # Maybe direct container name or custom id
             if app_target.startswith("docker:"):
-                target = {"source": "docker", "container_name": app_target.split(":", 1)[1]}
+                target = {"source": "docker", "container_name": app_target.split(":")[1]}
             elif app_target.startswith("custom:"):
                 target = {"source": "custom", "id": app_target}
             else:

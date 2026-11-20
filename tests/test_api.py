@@ -51,9 +51,12 @@ def test_custom_app_crud():
     items = [x for x in list_res.json() if x["id"] == "test_app_1"]
     assert len(items) == 1
 
-    # Delete
+    # Delete — mutations require Safe Mode unlocked (delete no longer swallows the gate)
+    from portly.backend.app import store
+    store.set_setting("safe_mode", "false")
     del_res = client.delete("/api/custom-apps/test_app_1")
     assert del_res.status_code == 200
+    store.set_setting("safe_mode", "true")
 
 
 def test_export_endpoints():

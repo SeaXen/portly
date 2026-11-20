@@ -128,24 +128,60 @@ def test_tls_inspector_unreachable():
     assert res["error"] is not None
 
 
-@patch("ssl.get_server_certificate")
-@patch("ssl._ssl._test_decode_cert")
-def test_tls_inspector_success(mock_decode, mock_get_cert):
-    mock_get_cert.return_value = "-----BEGIN CERTIFICATE-----\nMIIB..."
-    mock_decode.return_value = {
-        "subject": ((("commonName", "homelab.local"),),),
-        "issuer": ((("organizationName", "Let's Encrypt"),),),
-        "notBefore": "Nov 14 00:00:00 2026 GMT",
-        "notAfter": "Feb 14 00:00:00 2027 GMT",
-        "subjectAltName": (("DNS", "homelab.local"), ("DNS", "*.homelab.local")),
-    }
+def test_tls_inspector_success(monkeypatch):
+    # Exercises the real production path (socket -> DER -> cryptography parse)
+    # with a generated self-signed cert; no private ssl test APIs involved.
+    import datetime as dt
+    from cryptography import x509 as cx
+    from cryptography.x509.oid import NameOID as NO
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = cx.Name([cx.NameAttribute(NO.COMMON_NAME, "homelab.local")])
+    now = dt.datetime.now(dt.timezone.utc)
+    cert = (
+        cx.CertificateBuilder()
+        .subject_name(name).issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(cx.random_serial_number())
+        .not_valid_before(now - dt.timedelta(days=1))
+        .not_valid_after(now + dt.timedelta(days=90))
+        .add_extension(cx.SubjectAlternativeName([cx.DNSName("homelab.local"), cx.DNSName("*.homelab.local")]), critical=False)
+        .sign(key, hashes.SHA256())
+    )
+    der = cert.public_bytes(serialization.Encoding.DER)
+
+    class FakeSSock:
+        def getpeercert(self, binary_form=False):
+            return der
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    class FakeCtx:
+        check_hostname = True
+        verify_mode = None
+        def wrap_socket(self, sock, server_hostname=None):
+            return FakeSSock()
+
+    class FakeSock:
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr("portly.backend.tls_inspector.ssl.create_default_context", lambda: FakeCtx())
+    monkeypatch.setattr("portly.backend.tls_inspector.socket.create_connection", lambda *a, **k: FakeSock())
 
     res = inspect_tls_certificate("127.0.0.1", 443)
     assert res["is_tls"] is True
     assert res["subject"] == "homelab.local"
-    assert res["issuer"] == "Let's Encrypt"
+    assert res["self_signed"] is True
     assert any("homelab.local" in s for s in res["san"])
-    assert res["days_remaining"] is not None
+    assert 88 <= res["days_remaining"] <= 90
+    assert res["expired"] is False
 
 
 # ==========================================
@@ -182,7 +218,10 @@ def test_safe_mode_exec_whitelisting():
 def test_exec_in_container_success(mock_get_client):
     mock_client = MagicMock()
     mock_container = MagicMock()
-    mock_container.exec_run.return_value = MagicMock(exit_code=0, output=b"USER PID %CPU %MEM COMMAND\nroot 1 0.0 0.1 node app.js")
+    # Real docker-py 7.x contract: low-level exec_create/start/inspect.
+    mock_client.api.exec_create.return_value = {"Id": "exec1"}
+    mock_client.api.exec_start.return_value = iter([b"USER PID %CPU %MEM COMMAND\nroot 1 0.0 0.1 node app.js"])
+    mock_client.api.exec_inspect.return_value = {"ExitCode": 0}
     mock_client.containers.get.return_value = mock_container
     mock_get_client.return_value = mock_client
 

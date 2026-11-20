@@ -123,7 +123,7 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
         # Merge stored overrides
         override = app_overrides.get(app_id, {})
 
-        name = override.get("name") or item.get("label_name") or item.get("name") or "App"
+        name = override.get("name") or item.get("name") or "App"
         icon = override.get("icon") or item.get("label_icon") or ""
         tags = override.get("tags") or []
         notes = override.get("notes") or ""
@@ -188,6 +188,7 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
             "sort_order": sort_order,
             "status": status,
             "open_url": open_url,
+            "url_override": url_override,
             "has_custom_url": has_custom_url,
             "local_only": local_only,
             "has_tls": has_tls,

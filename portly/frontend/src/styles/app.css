@@ -15,6 +15,10 @@
   --border: rgba(0, 0, 0, 0.09);
   --text: #0F172A;
   --muted: #475569;
+  --accent: #4F63D2;
+  --success: #0D9488;
+  --warning: #B45309;
+  --danger: #DC2626;
 }
 
 [data-theme="light"] body {
@@ -116,6 +120,39 @@
 
 [data-theme="oled"] .c075,
 [data-theme="oled"] .c198 {
+  color: #F5F6F8;
+}
+
+/* Grid card (style.css .c026) had no theme override */
+[data-theme="light"] .c026 {
+  background: #FFFFFF;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #0F172A;
+}
+/* Card text classes carry their own light-on-dark colours; inheritance alone won't fix them */
+[data-theme="light"] .c026 .c030,
+[data-theme="light"] .c026 .c034 {
+  color: #0F172A;
+}
+[data-theme="light"] .c026 .c013,
+[data-theme="light"] .c026 .c031,
+[data-theme="light"] .c026 .c038 {
+  color: #475569;
+}
+[data-theme="oled"] .c026 {
+  background: #050505;
+  border-color: rgba(255, 255, 255, 0.10);
+  color: #F5F6F8;
+}
+
+[data-theme="light"] .floating-bulk-bar {
+  background: #FFFFFF;
+  border-color: rgba(0, 0, 0, 0.09);
+  color: #0F172A;
+}
+[data-theme="oled"] .floating-bulk-bar {
+  background: #050505;
+  border-color: rgba(255, 255, 255, 0.10);
   color: #F5F6F8;
 }
 
@@ -472,9 +509,9 @@ kbd,
    ========================================================================== */
 
 .portly-sidebar {
-  width: 220px;
-  min-width: 220px;
-  max-width: 220px;
+  width: 232px;
+  min-width: 232px;
+  max-width: 232px;
   min-height: 100vh;
   background: #0A0D14;
   border-right: 1px solid rgba(255, 255, 255, 0.07);
@@ -624,7 +661,7 @@ kbd,
 .sidebar-cat-btn {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   height: 32px;
   padding: 0 10px;
   border-radius: 8px;
@@ -670,7 +707,7 @@ kbd,
   font-size: 11px;
   color: #8D95A5;
   background: rgba(255, 255, 255, 0.05);
-  padding: 1px 6px;
+  padding: 1px 5px;
   border-radius: 6px;
   min-width: 16px;
   text-align: center;
@@ -687,7 +724,7 @@ kbd,
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-weight: 500;
-  width: 38px;
+  width: 32px;
   text-align: right;
 }
 
@@ -819,7 +856,7 @@ kbd,
 }
 
 .portly-table-grid {
-  min-width: 960px;
+  min-width: 1010px;
   width: 100%;
 }
 
@@ -828,7 +865,7 @@ kbd,
   top: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: 32px 24px minmax(140px, 2.5fr) 85px 75px 110px 105px 70px 70px 70px 90px;
+  grid-template-columns: 32px 24px minmax(140px, 2.5fr) 85px 75px 110px 105px 70px 70px 70px 140px;
   align-items: center;
   gap: 8px;
   padding: 0 16px;
@@ -845,7 +882,7 @@ kbd,
 
 .portly-table-row {
   display: grid;
-  grid-template-columns: 32px 24px minmax(140px, 2.5fr) 85px 75px 110px 105px 70px 70px 70px 90px;
+  grid-template-columns: 32px 24px minmax(140px, 2.5fr) 85px 75px 110px 105px 70px 70px 70px 140px;
   align-items: center;
   gap: 8px;
   padding: 0 16px;
@@ -973,6 +1010,9 @@ kbd,
   background: rgba(255, 255, 255, 0.09);
   border-color: rgba(255, 255, 255, 0.16);
 }
+
+/* Network value (4th cell) is the widest — give it extra room. */
+.c081 > button:nth-child(4) { flex-grow: 1.45; }
 
 /* Accessible Stats Button Resets */
 button.c082,
@@ -1199,6 +1239,24 @@ button.c088 {
 [data-theme="light"] [style*="rgb(21, 24, 33)"],
 [data-theme="light"] [style*="#151821"] {
   background: #F8FAFC !important;
+}
+/* Remaining hard-coded dark surfaces: UserManagementDrawer cards, Sidebar auto-relock
+   box, AppDetailModal pre/rows, StacksView terminal output. */
+[data-theme="light"] [style*="rgb(22, 27, 34)"],
+[data-theme="light"] [style*="#161B22"],
+[data-theme="light"] [style*="rgb(9, 11, 16)"],
+[data-theme="light"] [style*="#090B10"],
+[data-theme="light"] [style*="rgb(36, 44, 55)"],
+[data-theme="light"] [style*="#242C37"],
+[data-theme="light"] [style*="rgb(29, 42, 68)"],
+[data-theme="light"] [style*="#1D2A44"],
+[data-theme="light"] [style*="rgb(26, 30, 44)"],
+[data-theme="light"] [style*="#1A1E2C"],
+[data-theme="light"] [style*="rgb(6, 8, 11)"],
+[data-theme="light"] [style*="#06080B"] {
+  background: #F8FAFC !important;
+  border-color: rgba(0, 0, 0, 0.09) !important;
+  color: #0F172A !important;
 }
 
 /* D-6: fit all six stat tiles on narrow screens (hide secondary context) */
