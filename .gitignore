@@ -44,5 +44,8 @@ data/
 .DS_Store
 Thumbs.db
 
+# Local virtualenv
+.venv/
+
 # Legacy unit-test data dir (tests now use per-run temp dirs)
 tests/test_data_dir/

@@ -71,7 +71,7 @@ jobs:
       - name: Run Pytest test suite
         run: |
           export PORTLY_TESTING=1
-          python -m pytest tests/ --ignore=tests/e2e -v
+          python -m pytest tests/ --ignore=tests/e2e -v --cov=portly --cov-fail-under=70
 
   frontend-build:
     name: Frontend Build & Typecheck
@@ -90,6 +90,9 @@ jobs:
         run: |
           npm ci --no-audit
           npm run build
+
+      - name: Verify committed dist matches source
+        run: git diff --exit-code -- portly/frontend/dist
 
   e2e-test:
     name: Playwright E2E Tests
