@@ -15,7 +15,8 @@ Self-hosted port/process/container dashboard. One Python package (`portly`) with
 - E2E tests (separate, not in the default run): need `pip install pytest-playwright playwright` + `playwright install chromium` and a built frontend. Run `python -m pytest -o addopts= tests/e2e -q` (`-o addopts=` clears the default e2e ignore). Skipped entirely if playwright is not installed.
   - `tests/e2e/conftest.py` **removes** `PORTLY_TESTING`, starts a real server on a random port with a temp SQLite DB pre-seeded with an admin session cookie; no Docker needed.
 - CI parity extras **not in requirements.txt**: `pytest-asyncio`, `pytest-cov` (backend); `pytest-playwright`, `playwright` (e2e). `python -m compileall -q portly` is a CI syntax gate.
-- CI exists in three places: `.github/workflows/ci.yml` (backend + frontend + e2e), `.forgejo/workflows/ci.yml` and `.gitlab-ci.yml` (backend + frontend only). Keep them aligned when changing test/build steps.
+- CI exists in three places: `.github/workflows/ci.yml`, `.forgejo/workflows/ci.yml`, and `.gitlab-ci.yml` — all run lint + backend + frontend + e2e. Keep them aligned when changing test/build steps.
+- Forgejo Actions runs on an `act` runner where `actions/setup-python@v5` cannot resolve Python 3.12 for the OS ("version not found"). Keep `.forgejo/workflows/ci.yml` on its python3-venv/apt bootstrap; only GitHub/GitLab use pinned setup actions.
 
 ## Structure / entrypoints
 - CLI: `portly/cli.py:main` — console script `portly` and `python -m portly`; subcommands `run`, `list`, `start`, `stop`, `open`, `check-port`, `suggest`, `logs`.
