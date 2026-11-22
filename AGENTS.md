@@ -32,6 +32,8 @@ Self-hosted port/process/container dashboard. One Python package (`portly`) with
 
 ## Conventions / gotchas
 - Safe Mode is on by default and gates mutations; new mutating endpoints/actions must respect it (see `tests/test_actions_safe_mode.py`, `tests/test_audit_backend_fixes.py`).
+- CSRF middleware rejects mutating requests carrying neither `Origin` nor `Referer` outside `PORTLY_TESTING` (non-browser clients must send `Origin`). Vite's `:5173` origins are trusted only when `PORTLY_TESTING`/`PORTLY_DEV` is set.
+- Overlays (modals/drawers) render inside `#portly-app-root`; `useFocusTrap` must inert only background siblings, never the root — root-wide inert disables the dialogs themselves and broke 7 e2e tests.
 - UI must not use `alert()`/`confirm()` — use `Toast` / `ConfirmDialog` with ARIA roles and `useFocusTrap`.
 - Local-first/offline: no external CDN fonts, styles, or scripts; fonts are vendored in `portly/frontend/public/fonts`.
 - Discovery is cross-platform: `discovery/host.py` falls back to `netstat -ano` / `lsof`; keep stable ID prefixes `docker:`, `host:`, `custom:`.
