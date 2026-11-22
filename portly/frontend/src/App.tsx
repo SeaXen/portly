@@ -25,6 +25,7 @@ import { Toolbar } from './components/Toolbar';
 import { TopBar } from './components/TopBar';
 import { UserManagementDrawer } from './components/UserManagementDrawer';
 import { useToast } from './components/Toast';
+import { resolveViewChord } from './utils/shortcuts';
 import { AppItem, Category, ConflictItem, Rule, StatsData, ViewItem } from './types';
 
 interface AppProps {
@@ -94,6 +95,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const [adoptingApp, setAdoptingApp] = useState<AppItem | null>(null);
   const [showCustomize, setShowCustomize] = useState(false);
   const [showSystemDrawer, setShowSystemDrawer] = useState(false);
+  const [systemDrawerSection, setSystemDrawerSection] = useState<string | null>(null);
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
@@ -213,18 +215,9 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
         return;
       }
 
-      const now = Date.now();
-      if (e.key.toLowerCase() === 'g') {
-        gPressedAt = now;
-        return;
-      }
-
-      if (now - gPressedAt < 1000) {
-        if (e.key.toLowerCase() === 't') { setViewType('table'); gPressedAt = 0; }
-        else if (e.key.toLowerCase() === 'g') { setViewType('grid'); gPressedAt = 0; }
-        else if (e.key.toLowerCase() === 'b') { setViewType('board'); gPressedAt = 0; }
-        else if (e.key.toLowerCase() === 'l') { setViewType('list'); gPressedAt = 0; }
-      }
+      const chord = resolveViewChord(e.key, gPressedAt, Date.now());
+      gPressedAt = chord.gPressedAt;
+      if (chord.view) setViewType(chord.view);
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -648,6 +641,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   // Handle navigation
   const handleSelectNav = (nav: string) => {
     if (nav === 'system') {
+      setSystemDrawerSection(null);
       setShowSystemDrawer(true);
       return;
     }
@@ -760,7 +754,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   }, [displayedIds]);
 
   return (
-    <div className="c042" style={{ display: 'flex', width: '100%', minHeight: '100vh', background: 'var(--bg)' }}>
+    <div id="portly-app-root" className="c042" style={{ display: 'flex', width: '100%', minHeight: '100vh', background: 'var(--bg)' }}>
       {/* Sidebar - hidden in kiosk mode */}
       {!kioskMode && (
         <Sidebar
@@ -950,7 +944,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
             onSelectNav={handleSelectNav}
           />
         ) : activeNav === 'stacks' ? (
-          <StacksView safeMode={safeMode} />
+          <StacksView safeMode={safeMode} readOnly={readOnly} />
         ) : activeNav === 'history' ? (
           <HistoryView />
         ) : activeNav === 'conflicts' ? (
@@ -965,7 +959,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
             {/* Single-Line Stats Strip */}
             <StatsStrip
               stats={stats}
-              onOpenSystemDrawer={() => setShowSystemDrawer(true)}
+              onOpenSystemDrawer={(section) => {
+                setSystemDrawerSection(section || null);
+                setShowSystemDrawer(true);
+              }}
             />
 
             {/* Saved View Tabs */}
@@ -1009,7 +1006,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
             {/* Views Container */}
             <div style={{ flex: 1, minHeight: 0 }}>
-              {apps.length === 0 && !initialLoadError && !initialLoading ? (
+              {displayedApps.length === 0 && !initialLoadError && !initialLoading ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '220px', gap: '10px', color: 'var(--muted)', textAlign: 'center' }}>
                   <Icon name="info" size={28} />
                   <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text)' }}>No services found yet — discovery is running…</div>
@@ -1157,7 +1154,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
       {/* System Stats Drawer */}
       {showSystemDrawer && (
-        <SystemDrawer onClose={() => setShowSystemDrawer(false)} />
+        <SystemDrawer
+          defaultSection={systemDrawerSection ?? undefined}
+          onClose={() => setShowSystemDrawer(false)}
+        />
       )}
 
       {/* User Management & Audit Logs Drawer */}

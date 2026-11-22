@@ -82,6 +82,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <span style={{ display: 'inline-flex' }}><Icon name={iconName} size={16} color={borderColor} /></span>
               <span style={{ flex: 1, wordBreak: 'break-word', lineHeight: 1.4 }}>{t.message}</span>
               <button
+                type="button"
                 onClick={() => removeToast(t.id)}
                 style={{
                   background: 'transparent',

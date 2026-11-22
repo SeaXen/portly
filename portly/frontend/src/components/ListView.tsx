@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppItem, Category } from '../types';
+import { EmptyState } from './EmptyState';
 
 interface ListViewProps {
   apps: AppItem[];
@@ -8,12 +9,15 @@ interface ListViewProps {
 }
 
 export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail }) => {
+  if (apps.length === 0) return <EmptyState />;
+
   return (
     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '4px' }}>
       {apps.map((app) => (
         <div
           key={app.id}
           className="c053"
+          tabIndex={0}
           style={{
             height: '40px',
             background: 'var(--surface-2)',
@@ -26,6 +30,13 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail }) => {
             cursor: 'pointer',
           }}
           onClick={() => onOpenDetail(app)}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onOpenDetail(app);
+            }
+          }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span
@@ -49,7 +60,7 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail }) => {
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--muted)' }}>
               {app.bind}
             </span>
-            <span style={{ fontSize: '12px', color: app.stats_age_sec == null || app.stats_age_sec > 15 ? 'var(--muted)' : 'var(--muted)' }} title={app.stats_age_sec == null || app.stats_age_sec > 15 ? 'Stale or unavailable stats' : undefined}>
+            <span style={{ fontSize: '12px', color: app.stats_age_sec == null || app.stats_age_sec > 15 ? 'var(--muted)' : 'var(--text)' }} title={app.stats_age_sec == null || app.stats_age_sec > 15 ? 'Stale or unavailable stats' : undefined}>
               CPU {app.cpu_percent == null ? '—' : `${app.cpu_percent}%`} · {app.ram_mb == null ? '—' : `${app.ram_mb} MB`}{app.stats_age_sec == null || app.stats_age_sec > 15 ? ' (stale)' : ''}
             </span>
             <span className="c109" style={{ textTransform: 'capitalize' }}>

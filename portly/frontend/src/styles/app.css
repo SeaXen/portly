@@ -23,6 +23,7 @@
   --success: #0F766E;
   --warning: #B45309;
   --danger: #B91C1C;
+  --accent-deep: #4338CA;
 }
 
 [data-theme="light"] body {
@@ -78,6 +79,7 @@
   --border: rgba(255, 255, 255, 0.10);
   --text: #F5F6F8;
   --muted: #949AA8;
+  --accent-deep: #6875DF;
 }
 
 [data-theme="oled"] body {
@@ -306,6 +308,9 @@ button, a, input, select, textarea {
   }
   .c026:hover {
     transform: none !important;
+  }
+  .live-dot {
+    animation: none !important;
   }
 }
 
@@ -819,7 +824,7 @@ kbd,
   cursor: pointer;
   inset: 0;
   background-color: #242C37;
-  transition: 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
   border-radius: 20px;
 }
 
@@ -831,7 +836,7 @@ kbd,
   left: 3px;
   bottom: 3px;
   background-color: #ECEEF3;
-  transition: 0.2s;
+  transition: transform 0.2s ease, background-color 0.2s ease;
   border-radius: 50%;
 }
 
@@ -1180,12 +1185,41 @@ button.c088 {
   .portly-sidebar .sidebar-btn-label {
     display: none;
   }
+  /* Keep category nav and Safe Mode card reachable on small screens. */
   .portly-sidebar .sidebar-cat-section,
   .portly-sidebar .sidebar-safe-card {
-    display: none !important;
+    display: flex;
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: min(300px, 78vw);
+    margin-top: 0;
+  }
+  .portly-sidebar .sidebar-cat-list {
+    flex-direction: row;
+    max-height: none;
+    overflow-x: auto;
+  }
+  .portly-sidebar .sidebar-cat-btn {
+    width: auto;
+    flex: 0 0 auto;
   }
   .c067 {
     flex: 1 1 auto;
+  }
+
+  /* Top bar stacks: title row on top, actions full-width below. Keeps the
+     action buttons from squeezing into a tall multi-row column beside the
+     fixed-width title on narrow screens. */
+  .c068 {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .c069 {
+    justify-content: space-between;
+  }
+  .c073 {
+    justify-content: flex-start;
   }
 }
 
@@ -1250,21 +1284,12 @@ button.c088 {
   color: #475569 !important;
 }
 
-/* Light theme: neutralise hard-coded dark inline colours on every view. */
-[data-theme="light"] [style*="rgb(16, 18, 24)"],
-[data-theme="light"] [style*="#101218"],
-[data-theme="light"] [style*="rgb(21, 24, 33)"],
-[data-theme="light"] [style*="#151821"],
+/* shortcut: these neutralise hard-coded colours in TSX inline styles, which the
+   cascade cannot reach; only selectors for colours still set inline are kept. */
 [data-theme="light"] [style*="rgb(14, 17, 22)"],
 [data-theme="light"] [style*="#0E1116"],
 [data-theme="light"] [style*="rgb(8, 10, 14)"],
-[data-theme="light"] [style*="#080A0E"],
-[data-theme="light"] [style*="rgb(7, 8, 12)"],
-[data-theme="light"] [style*="#07080C"],
-[data-theme="light"] [style*="rgb(17, 20, 29)"],
-[data-theme="light"] [style*="#11141D"],
-[data-theme="light"] [style*="rgb(28, 32, 48)"],
-[data-theme="light"] [style*="#1C2030"] {
+[data-theme="light"] [style*="#080A0E"] {
   background: #FFFFFF !important;
   border-color: rgba(0, 0, 0, 0.09) !important;
 }
@@ -1274,55 +1299,21 @@ button.c088 {
 [data-theme="light"] [style*="rgba(255,255,255,0.08)"] {
   border-color: rgba(0, 0, 0, 0.09) !important;
 }
-[data-theme="light"] [style*="rgb(236, 238, 243)"],
-[data-theme="light"] [style*="#ECEEF3"] {
-  color: #0F172A !important;
-}
-[data-theme="light"] [style*="rgb(141, 149, 165)"],
-[data-theme="light"] [style*="#8D95A5"],
-[data-theme="light"] [style*="rgb(148, 163, 184)"],
-[data-theme="light"] [style*="#94A3B8"] {
-  color: #475569 !important;
-}
 [data-theme="light"] [style*="rgb(140, 158, 255)"],
-[data-theme="light"] [style*="#8C9EFF"] {
-  color: var(--accent) !important;
-}
+[data-theme="light"] [style*="#8C9EFF"] { color: var(--accent) !important; }
 [data-theme="light"] [style*="#C4B5FD"],
 [data-theme="light"] [style*="rgb(196, 181, 253)"] { color: #6D28D9 !important; }
-[data-theme="light"] [style*="#9AA4B2"],
-[data-theme="light"] [style*="rgb(154, 164, 178)"],
 [data-theme="light"] [style*="#64748B"],
 [data-theme="light"] [style*="rgb(100, 116, 139)"] { color: #475569 !important; }
-[data-theme="light"] [style*="#7AA8FF"],
-[data-theme="light"] [style*="rgb(122, 168, 255)"] { color: var(--accent) !important; }
-[data-theme="light"] [style*="#E6EAF0"],
-[data-theme="light"] [style*="rgb(230, 234, 240)"] { color: #0F172A !important; }
-[data-theme="light"] [style*="#5EEAD4"],
-[data-theme="light"] [style*="rgb(94, 234, 212)"] { color: var(--success) !important; }
-[data-theme="light"] [style*="#FBBF77"],
-[data-theme="light"] [style*="rgb(251, 191, 119)"] { color: var(--warning) !important; }
-[data-theme="light"] [style*="#FF8A8A"],
-[data-theme="light"] [style*="rgb(255, 138, 138)"] { color: var(--danger) !important; }
 [data-theme="light"] [style*="#F5A3D0"],
 [data-theme="light"] [style*="rgb(245, 163, 208)"] { color: #BE185D !important; }
 [data-theme="light"] [style*="#B6E36B"],
 [data-theme="light"] [style*="rgb(182, 227, 107)"] { color: #4D7C0F !important; }
-[data-theme="light"] [style*="#C9CFDB"],
-[data-theme="light"] [style*="rgb(201, 207, 219)"] { color: #334155 !important; }
-[data-theme="light"] [style*="#F5C2C2"],
-[data-theme="light"] [style*="rgb(245, 194, 194)"] { color: #991B1B !important; }
-/* Dark text reserved for accent-filled buttons; white keeps ≥4.5:1 in light */
+/* Dark text reserved for accent-filled buttons; white keeps >=4.5:1 in light */
 [data-theme="light"] [style*="#0B1220"],
 [data-theme="light"] [style*="rgb(11, 18, 32)"],
 [data-theme="light"] [style*="#0A0D14"],
 [data-theme="light"] [style*="rgb(10, 13, 20)"] { color: #FFFFFF !important; }
-[data-theme="light"] [style*="rgb(21, 24, 33)"],
-[data-theme="light"] [style*="#151821"] {
-  background: #F8FAFC !important;
-}
-/* Remaining hard-coded dark surfaces: UserManagementDrawer cards, Sidebar auto-relock
-   box, AppDetailModal pre/rows, StacksView terminal output. */
 [data-theme="light"] [style*="rgb(22, 27, 34)"],
 [data-theme="light"] [style*="#161B22"],
 [data-theme="light"] [style*="rgb(9, 11, 16)"],
@@ -1339,7 +1330,6 @@ button.c088 {
   border-color: rgba(0, 0, 0, 0.09) !important;
   color: #0F172A !important;
 }
-
 /* D-6: fit all six stat tiles on narrow screens (hide secondary context) */
 @media (max-width: 900px) {
   .c082, .c088 { padding: 10px 8px; gap: 4px; }
@@ -1359,4 +1349,28 @@ button.c088 {
   .c081 { flex-wrap: wrap !important; overflow-x: visible !important; }
   .c082, .c088 { flex: 1 1 33.333%; min-width: 33.333%; }
   .c088:nth-child(4) { border-left: none; }
+}
+
+/* Shared filtered-empty state used by GridView / ListView / BoardView. */
+.portly-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 220px;
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--muted);
+  background: var(--surface-1);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-card);
+}
+.portly-empty-state-title {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.portly-empty-state-hint {
+  font-size: 13px;
 }

@@ -7,7 +7,7 @@ COPY portly/frontend/ ./
 RUN npm run build
 
 # Stage 2: Runtime Image
-FROM python:3.11-slim
+FROM python:3.12-slim
 WORKDIR /app
 
 # Install system dependencies (net-tools, procps, curl)

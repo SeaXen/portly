@@ -222,7 +222,12 @@ def test_public_host_setting_takes_effect_on_next_request(client, monkeypatch):
     monkeypatch.setattr(store, "get_user_count", lambda: 1)
     token = auth.create_session("u_admin", "admin", role="admin")
 
-    res = client.patch("/api/settings", json={"public_host": "portly.lan"}, cookies={"portly_session": token})
+    res = client.patch(
+        "/api/settings",
+        json={"public_host": "portly.lan"},
+        cookies={"portly_session": token},
+        headers={"Origin": "http://testserver"},  # CSRF proof now required outside PORTLY_TESTING
+    )
     assert res.status_code == 200
     assert client.get("/api/auth/me", headers={"host": "portly.lan"}).status_code == 200
 

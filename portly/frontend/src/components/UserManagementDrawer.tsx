@@ -177,6 +177,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
             <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--muted)' }}>Manage users, roles, and audit trail</p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             style={{
               background: 'transparent',
@@ -195,6 +196,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
         {/* Tab switcher */}
         <div style={{ display: 'flex', borderBottom: '1px solid #242C37', padding: '0 24px', gap: 16 }}>
           <button
+            type="button"
             onClick={() => setActiveTab('users')}
             style={{
               padding: '12px 4px',
@@ -210,6 +212,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
             Users ({users.length})
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('audit')}
             style={{
               padding: '12px 4px',
@@ -269,6 +272,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <select
+                              aria-label={`Role for ${u.username}`}
                               value={u.role}
                               onChange={(e) => handleRoleChange(u.id, e.target.value)}
                               disabled={isSelf}
@@ -286,6 +290,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                             </select>
 
                             <button
+                              type="button"
                               onClick={() => {
                                 setPasswordTarget(u);
                                 setNewPwVal('');
@@ -306,6 +311,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
 
                             {!isSelf && (
                               <button
+                                type="button"
                                 onClick={() => setDeleteTarget(u)}
                                 title="Delete user"
                                 style={{
@@ -336,6 +342,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <label style={{ fontSize: 12, color: 'var(--muted)' }}>Username</label>
                     <input
+                      aria-label="Username"
                       type="text"
                       name="new_username"
                       autoComplete="username"
@@ -358,6 +365,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <label style={{ fontSize: 12, color: 'var(--muted)' }}>Password (min 10 characters)</label>
                     <input
+                      aria-label="Password (min 10 characters)"
                       type="password"
                       name="new_password"
                       autoComplete="new-password"
@@ -380,6 +388,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <label style={{ fontSize: 12, color: 'var(--muted)' }}>Role</label>
                     <select
+                      aria-label="Role"
                       value={newRole}
                       onChange={(e) => setNewRole(e.target.value as 'admin' | 'viewer')}
                       style={{
@@ -509,6 +518,7 @@ export function UserManagementDrawer({ isOpen, onClose, currentUser }: UserManag
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: 12, color: 'var(--muted)' }}>New Password (min 10 chars)</label>
                 <input
+                  aria-label="New Password (min 10 chars)"
                   type="password"
                   name="reset_password"
                   autoComplete="new-password"

@@ -69,6 +69,7 @@ export function ConfirmDialog({
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
           <button
+            type="button"
             onClick={onCancel}
             style={{
               padding: '8px 16px',
@@ -84,6 +85,7 @@ export function ConfirmDialog({
             {cancelLabel}
           </button>
           <button
+            type="button"
             onClick={onConfirm}
             style={{
               padding: '8px 18px',

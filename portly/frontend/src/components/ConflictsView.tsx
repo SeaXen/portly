@@ -204,8 +204,9 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
             <div style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '14px' }}>Create Port Reservation</div>
             <div style={{ display: 'grid', gridTemplateColumns: '120px 100px 1fr', gap: '12px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Port</label>
+                <label htmlFor="res-port" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Port</label>
                 <input
+                  id="res-port"
                   type="number"
                   required
                   min={1}
@@ -217,8 +218,9 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Protocol</label>
+                <label htmlFor="res-proto" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Protocol</label>
                 <select
+                  id="res-proto"
                   value={resProto}
                   onChange={(e) => setResProto(e.target.value)}
                   className="c215"
@@ -229,8 +231,9 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Reservation Name</label>
+                <label htmlFor="res-name" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Reservation Name</label>
                 <input
+                  id="res-name"
                   type="text"
                   name="reservation_name"
                   autoComplete="off"
@@ -246,8 +249,9 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Target Service (optional)</label>
+                <label htmlFor="res-service" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Target Service (optional)</label>
                 <input
+                  id="res-service"
                   type="text"
                   name="target_service"
                   autoComplete="off"
@@ -259,8 +263,9 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Notes / Description</label>
+                <label htmlFor="res-desc" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Notes / Description</label>
                 <input
+                  id="res-desc"
                   type="text"
                   name="reservation_description"
                   autoComplete="off"

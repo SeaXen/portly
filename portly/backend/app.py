@@ -308,11 +308,13 @@ def _dashboard_origins() -> set:
         parsed = urlparse(f"//{pub}").hostname
         if parsed:
             hosts.add(parsed.lower())
+    # Vite dev ports are only trusted in dev/test — never in the production allowlist.
+    dev_mode = os.getenv("PORTLY_TESTING") == "1" or os.getenv("PORTLY_DEV") == "1"
     origins = set()
     for h in hosts:
         for scheme in ("http", "https"):
             origins.add(f"{scheme}://{h}:{port}")
-            if h in ("localhost", "127.0.0.1"):
+            if dev_mode and h in ("localhost", "127.0.0.1"):
                 origins.add(f"{scheme}://{h}:5173")  # Vite dev server (proxied to the API)
     if pub:
         origins.add(f"https://{pub}")
@@ -401,7 +403,15 @@ def _allowed_host_set() -> tuple:
 
 
 def _host_is_allowed(host_header: str, allowed_hosts: set, wildcards: set) -> bool:
-    if not host_header or host_header in allowed_hosts or _is_ip_literal(host_header):
+    if not host_header:
+        return True
+    if _is_ip_literal(host_header):
+        # Loopback stays allowed for local healthchecks; with an explicit
+        # allowlist configured, other IP literals must be listed too.
+        if os.getenv("PORTLY_ALLOWED_HOSTS", "").strip():
+            return host_header in ("127.0.0.1", "::1") or host_header in allowed_hosts
+        return True
+    if host_header in allowed_hosts:
         return True
     # Only an explicit `*.example.com` entry matches subdomains.
     return any(host_header.endswith(f".{w}") for w in wildcards)
@@ -513,6 +523,13 @@ async def security_and_csrf_middleware(request: Request, call_next):
                     status_code=403,
                     content={"code": "CSRF_DETECTED", "message": f"Referer '{referer}' is not authorized."}
                 ))
+        elif os.getenv("PORTLY_TESTING") != "1":
+            # No Origin/Referer and no separate CSRF-token channel: refuse the
+            # cookie-authenticated mutation rather than implicitly trusting it.
+            return _apply_security_headers(JSONResponse(
+                status_code=403,
+                content={"code": "CSRF_DETECTED", "message": "Mutating requests must include an Origin or Referer header."}
+            ))
 
     response = await call_next(request)
     _apply_security_headers(response)
@@ -1318,7 +1335,7 @@ async def restart_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(requi
 
 # 4. Port checking and Change Port flow
 @app.get("/api/ports/check")
-async def check_port_endpoint(port: int = Query(...), bind: str = "0.0.0.0", user: Dict[str, Any] = Depends(require_auth)):
+async def check_port_endpoint(port: int = Query(..., ge=1, le=65535), bind: str = "0.0.0.0", user: Dict[str, Any] = Depends(require_auth)):
     res = check_port_availability(port, bind, store=store)
     return res
 
@@ -1935,7 +1952,7 @@ async def get_system_endpoint(user: Dict[str, Any] = Depends(require_auth)):
 
 
 @app.get("/api/events")
-async def get_events_endpoint(limit: int = 100, user: Dict[str, Any] = Depends(require_auth)):
+async def get_events_endpoint(limit: int = Query(100, ge=1, le=1000), user: Dict[str, Any] = Depends(require_auth)):
     events = store.get_events(limit=limit)
     if user.get("role") != "admin":
         for e in events:
@@ -2533,7 +2550,7 @@ async def update_user_password_endpoint(
 # Audit Logs Endpoint (S-6)
 @app.get("/api/audit-logs")
 async def get_audit_logs_endpoint(
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=1000),
     event_type: Optional[str] = None,
     user: Dict[str, Any] = Depends(require_admin)
 ):

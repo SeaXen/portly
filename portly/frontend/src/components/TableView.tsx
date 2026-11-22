@@ -2,6 +2,7 @@ import React from 'react';
 import { AppItem, Category } from '../types';
 import { AppIcon } from './AppIcon';
 import { Icon } from './Icon';
+import { EmptyState } from './EmptyState';
 
 interface TableViewProps {
   apps: AppItem[];
@@ -126,9 +127,7 @@ export const TableView: React.FC<TableViewProps> = ({
 
         {/* Rows */}
         {apps.length === 0 ? (
-          <div style={{ padding: '56px 24px', textAlign: 'center', color: 'var(--muted)', fontSize: '14px' }}>
-            No listening ports or applications found matching current filters.
-          </div>
+          <EmptyState />
         ) : (
           groups.map((grp, grpIdx) => (
             <React.Fragment key={grpIdx}>
@@ -164,8 +163,16 @@ export const TableView: React.FC<TableViewProps> = ({
                   <div
                     key={app.id}
                     className={`portly-table-row ${isSelected ? 'selected' : ''}`}
+                    tabIndex={0}
                     style={{ ...padStyle, gridTemplateColumns: gridCols }}
                     onClick={() => onOpenDetail(app)}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onOpenDetail(app);
+                      }
+                    }}
                   >
                     {/* Checkbox */}
                     <div className="table-cell" onClick={(e) => e.stopPropagation()}>

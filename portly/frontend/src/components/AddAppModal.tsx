@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { AppItem, Category, PreflightResponse } from '../types';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -90,6 +90,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   // Live port check
   const [portStatus, setPortStatus] = useState<{ free: boolean; used_by: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const portReqRef = useRef(0);
+  const deployPortReqRef = useRef(0);
 
   useEffect(() => {
     if (activeTab === 'custom') {
@@ -100,20 +102,22 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
   }, [port, deployHostPort, activeTab]);
 
   const checkPort = async (p: number) => {
+    const req = ++portReqRef.current;
     try {
       const res = await api.checkPort(p);
-      setPortStatus(res);
+      if (req === portReqRef.current) setPortStatus(res);
     } catch {
-      setPortStatus(null);
+      if (req === portReqRef.current) setPortStatus(null);
     }
   };
 
   const checkDeployPort = async (p: number) => {
+    const req = ++deployPortReqRef.current;
     try {
       const res = await api.checkPort(p);
-      setDeployPortStatus(res);
+      if (req === deployPortReqRef.current) setDeployPortStatus(res);
     } catch {
-      setDeployPortStatus(null);
+      if (req === deployPortReqRef.current) setDeployPortStatus(null);
     }
   };
 

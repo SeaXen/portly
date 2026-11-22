@@ -2,6 +2,7 @@ import React from 'react';
 import { AppItem, Category } from '../types';
 import { AppIcon } from './AppIcon';
 import { Icon } from './Icon';
+import { EmptyState } from './EmptyState';
 
 interface GridViewProps {
   apps: AppItem[];
@@ -12,6 +13,8 @@ interface GridViewProps {
 }
 
 export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, visibleFields = {}, onAdoptApp }) => {
+  if (apps.length === 0) return <EmptyState />;
+
   return (
     <div className="c025" style={{ width: '100%', boxSizing: 'border-box' }}>
       {apps.map((app) => {
@@ -21,11 +24,19 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, visibleF
           <div
             key={app.id}
             className="c026"
+            tabIndex={0}
             style={{
               cursor: 'pointer',
               transition: 'border-color 0.15s, transform 0.1s',
             }}
             onClick={() => onOpenDetail(app)}
+            onKeyDown={(e) => {
+              if (e.target !== e.currentTarget) return;
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpenDetail(app);
+              }
+            }}
           >
             {/* Top row */}
             <div className="c027">

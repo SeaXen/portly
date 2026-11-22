@@ -80,7 +80,7 @@ def can_bind_port(port: int, bind_ip: str = "0.0.0.0", proto: str = "tcp") -> Tu
         if proto.lower() == "tcp":
             s.listen(1)
         return True, ""
-    except socket.error as e:
+    except (socket.error, OverflowError, ValueError) as e:
         err_code = getattr(e, "errno", None)
         if err_code in (errno.EACCES, getattr(errno, "WSAEACCES", 10013)):
             if port < 1024:

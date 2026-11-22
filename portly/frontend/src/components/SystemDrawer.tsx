@@ -11,7 +11,16 @@ interface SystemDrawerProps {
   defaultSection?: string;
 }
 
-export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose }) => {
+const SECTION_IDS: Record<string, string> = {
+  cpu: 'sys-cpu',
+  memory: 'sys-memory',
+  disk: 'sys-disk',
+  network: 'sys-network',
+  containers: 'sys-containers',
+  listening: 'sys-overview',
+};
+
+export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose, defaultSection }) => {
   const { success, error } = useToast();
   const containerRef = useFocusTrap<HTMLDivElement>(true, onClose);
   const [stats, setStats] = useState<SystemStats | null>(null);
@@ -21,6 +30,17 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose }) => {
   const [showPruneConfirm, setShowPruneConfirm] = useState(false);
 
   const fetchingRef = React.useRef(false);
+  const didScrollRef = React.useRef(false);
+
+  // StatsStrip tiles pass a section key; jump to the matching panel once stats
+  // have rendered so the drilldown lands on something real.
+  useEffect(() => {
+    if (!defaultSection || didScrollRef.current || !stats) return;
+    const id = SECTION_IDS[defaultSection];
+    if (!id) return;
+    didScrollRef.current = true;
+    document.getElementById(id)?.scrollIntoView({ block: 'start' });
+  }, [defaultSection, stats]);
 
   const loadAll = async () => {
     // Skip ticks while a fetch is in flight: docker df can be seconds-slow.
@@ -127,7 +147,7 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose }) => {
             )}
 
             {/* Overview Box */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div id="sys-overview" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div style={{ padding: '14px', background: 'var(--surface-2)', borderRadius: '10px' }}>
                 <div style={{ fontSize: '12px', color: 'var(--muted)' }}>Host Uptime</div>
                 <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text)', marginTop: '4px' }}>{stats.uptime}</div>
@@ -141,7 +161,7 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose }) => {
             </div>
 
             {/* Per Core CPU Bars */}
-            <div style={{ background: 'var(--surface-2)', borderRadius: '12px', padding: '16px' }}>
+            <div id="sys-cpu" style={{ background: 'var(--surface-2)', borderRadius: '12px', padding: '16px' }}>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '12px' }}>CPU Load Per Core</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '8px' }}>
                 {stats.cpu_per_core?.map((pct, idx) => (
@@ -159,7 +179,7 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose }) => {
             </div>
 
             {/* Memory & Swap */}
-            <div style={{ background: 'var(--surface-2)', borderRadius: '12px', padding: '16px' }}>
+            <div id="sys-memory" style={{ background: 'var(--surface-2)', borderRadius: '12px', padding: '16px' }}>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '12px' }}>Memory & Swap Allocation</div>
               <div style={{ marginBottom: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
@@ -183,7 +203,7 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose }) => {
             </div>
 
             {/* Disks */}
-            <div style={{ background: 'var(--surface-2)', borderRadius: '12px', padding: '16px' }}>
+            <div id="sys-disk" style={{ background: 'var(--surface-2)', borderRadius: '12px', padding: '16px' }}>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '12px' }}>Disk Storage & Mounts</div>
               {stats.host_visible === false && (
                 <div role="note" style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
@@ -207,7 +227,7 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose }) => {
 
             {/* Docker Storage & System Hygiene */}
             {dockerDf?.available && (
-              <div style={{ background: 'var(--surface-2)', borderRadius: '12px', padding: '16px' }}>
+              <div id="sys-containers" style={{ background: 'var(--surface-2)', borderRadius: '12px', padding: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span>Docker Storage & Hygiene</span>
@@ -249,7 +269,7 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose }) => {
             )}
 
             {/* Network Interfaces */}
-            <div style={{ background: 'var(--surface-2)', borderRadius: '12px', padding: '16px' }}>
+            <div id="sys-network" style={{ background: 'var(--surface-2)', borderRadius: '12px', padding: '16px' }}>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '12px' }}>Network Interfaces</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {stats.interfaces?.filter(iface => iface.ip).map((iface, i) => (

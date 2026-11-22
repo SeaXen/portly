@@ -45,6 +45,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     if (!isOpen) {
       setConfirmDisableSafeMode(false);
       setQuery('');
+      setSelectedIndex(0);
     }
   }, [isOpen]);
 

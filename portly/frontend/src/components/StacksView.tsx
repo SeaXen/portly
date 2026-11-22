@@ -7,9 +7,10 @@ import { Icon } from './Icon';
 
 interface StacksViewProps {
   safeMode: boolean;
+  readOnly?: boolean;
 }
 
-export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
+export const StacksView: React.FC<StacksViewProps> = ({ safeMode, readOnly = false }) => {
   const { success, error, warning } = useToast();
   const [stacks, setStacks] = useState<ComposeStack[]>([]);
   const [selectedStack, setSelectedStack] = useState<ComposeStack | null>(null);
@@ -61,6 +62,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
   };
 
   const handleNewStack = () => {
+    if (readOnly) return;
     setSelectedStack(null);
     setStackName('my-new-stack');
     setStackYaml(`version: '3.8'\nservices:\n  web:\n    image: nginx:alpine\n    ports:\n      - "8080:80"\n    restart: unless-stopped\n`);
@@ -91,6 +93,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
   };
 
   const handleSaveStack = async (force: boolean = false) => {
+    if (readOnly) return;
     if (!stackName.trim() || !stackYaml.trim()) {
       warning('Stack name and YAML content are required.');
       return;
@@ -118,6 +121,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
   };
 
   const handleStackAction = async (action: 'up' | 'down' | 'restart' | 'stop') => {
+    if (readOnly) return;
     if (!selectedStack) return;
     if (safeMode) {
       warning('Safe mode is ON. Unlock safe mode in the sidebar to control stacks.');
@@ -143,6 +147,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
   };
 
   const confirmDeleteStack = async () => {
+    if (readOnly) return;
     if (!selectedStack) return;
     setShowDeleteConfirm(false);
     try {
@@ -174,14 +179,16 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
             <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text)' }}>Compose Stacks</h2>
             <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{stacks.length} managed stack(s)</div>
           </div>
-          <button
-            type="button"
-            className="c080"
-            style={{ fontSize: '12px', padding: '4px 10px' }}
-            onClick={handleNewStack}
-          >
-            + New
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              className="c080"
+              style={{ fontSize: '12px', padding: '4px 10px' }}
+              onClick={handleNewStack}
+            >
+              + New
+            </button>
+          )}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1 }}>
@@ -280,7 +287,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                 )}
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {!readOnly && <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {isEditing ? (
                   <>
                     <button
@@ -349,7 +356,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                     </button>
                   </>
                 )}
-              </div>
+              </div>}
             </div>
 
             {/* Preflight Result Banner */}
@@ -378,7 +385,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
                     </div>
                   )}
                 </div>
-                {preflightResult.has_collision && isEditing && (
+                {preflightResult.has_collision && isEditing && !readOnly && (
                   <button
                     type="button"
                     className="c078"
@@ -397,6 +404,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode }) => {
               <textarea
                 value={stackYaml}
                 onChange={(e) => setStackYaml(e.target.value)}
+                aria-label="docker-compose.yml definition"
                 readOnly={!isEditing}
                 rows={14}
                 className="c220"

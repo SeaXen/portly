@@ -54,6 +54,17 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   const [scrollPaused, setScrollPaused] = useState(false);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
+  // Notifications and post-action closes use timers; drop them on unmount so
+  // they cannot fire into a detached modal.
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+  }, []);
+  const scheduleTimer = (fn: () => void, ms: number) => {
+    timersRef.current.push(setTimeout(fn, ms));
+  };
+
   // Port change state
   const [targetPort, setTargetPort] = useState<number>(app.port || 3000);
   const [targetBind, setTargetBind] = useState<string>(app.bind || '0.0.0.0');
@@ -120,7 +131,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
 
   const showNotification = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     setToast({ message, type });
-    setTimeout(() => {
+    scheduleTimer(() => {
       setToast((prev) => (prev?.message === message ? null : prev));
     }, 4500);
   };
@@ -238,7 +249,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
       await api.applyPortChange(app.id, targetPort, targetBind);
       showNotification(`Port change successfully applied! App running on :${targetPort}`, 'success');
       onRefreshApps();
-      setTimeout(() => onClose(), 1200);
+      scheduleTimer(() => onClose(), 1200);
     } catch (e: any) {
       showNotification(`Port change failed: ${e.message}`, 'error');
     } finally {
@@ -264,7 +275,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
       await api.rollbackPortChange(app.id);
       showNotification('Port mapping rolled back successfully!', 'success');
       onRefreshApps();
-      setTimeout(() => onClose(), 1200);
+      scheduleTimer(() => onClose(), 1200);
     } catch (err: any) {
       showNotification(`Rollback failed: ${err.message}`, 'error');
     }
@@ -305,7 +316,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
       })));
       showNotification('All port mappings applied successfully!', 'success');
       onRefreshApps();
-      setTimeout(() => onClose(), 1200);
+      scheduleTimer(() => onClose(), 1200);
     } catch (e: any) {
       showNotification(`Multi-port change failed: ${e.message}`, 'error');
     } finally {

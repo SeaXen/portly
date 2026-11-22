@@ -1,7 +1,7 @@
 stages:
   - lint
-  - test
   - build
+  - test
 
 variables:
   PIP_DISABLE_PIP_VERSION_CHECK: "1"
@@ -10,7 +10,9 @@ lint:
   stage: lint
   image: python:3.12-slim
   before_script:
-    - apt-get update -qq && apt-get install -y -qq nodejs npm >/dev/null
+    - apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null
+    - curl -fsSL https://deb.nodesource.com/setup_20.x | bash - || exit 1
+    - apt-get install -y -qq nodejs >/dev/null
     - pip install ruff
   script:
     - ruff check portly tests
@@ -40,7 +42,9 @@ e2e-tests:
   stage: test
   image: python:3.12-slim
   before_script:
-    - apt-get update -qq && apt-get install -y -qq nodejs npm >/dev/null
+    - apt-get update -qq && apt-get install -y -qq curl ca-certificates >/dev/null
+    - curl -fsSL https://deb.nodesource.com/setup_20.x | bash - || exit 1
+    - apt-get install -y -qq nodejs >/dev/null
     - pip install -r requirements.txt
     - pip install pytest pytest-playwright playwright
     - playwright install chromium --with-deps

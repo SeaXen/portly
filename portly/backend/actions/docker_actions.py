@@ -826,10 +826,14 @@ def exec_in_container(
     output_str = collected.decode("utf-8", errors="replace")
     if len(collected) >= output_cap:
         output_str += "\n... [Output truncated at 256 KB]"
-    # shortcut: docker-py cannot kill a single exec; the container-side process
-    # may outlive the HTTP request. Upgrade to low-level exec kill when a
-    # Docker fixture is available to validate it.
     if timed_out:
+        try:
+            # docker-py has no exec_kill helper; POST to the low-level exec kill
+            # endpoint so a cancelled HTTP request does not leave the process running.
+            api._post(api._url("/exec/{0}/kill", exec_id), params={"signal": "SIGKILL"}, timeout=3)
+        except Exception as e:
+            # Best-effort only: never mask the original timeout or partial output.
+            logger.debug("Could not kill timed-out exec %s: %s", exec_id, e)
         output_str += f"\n... [Execution timed out after {timeout}s]"
     duration_ms = round((time.perf_counter() - t0) * 1000.0, 1)
 

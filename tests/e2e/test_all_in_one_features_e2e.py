@@ -7,7 +7,8 @@ from playwright.sync_api import Page, expect
 @pytest.fixture
 def desktop_page(authenticated_context, portly_server):
     page = authenticated_context.new_page()
-    page.goto(portly_server, wait_until="domcontentloaded")
+    with page.expect_response(lambda r: "/api/settings" in r.url, timeout=12000):
+        page.goto(portly_server, wait_until="domcontentloaded")
     page.wait_for_selector(".portly-sidebar, .c068", timeout=12000)
     yield page
 

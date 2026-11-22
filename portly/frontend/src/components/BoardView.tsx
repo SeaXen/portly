@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppItem, Category } from '../types';
+import { EmptyState } from './EmptyState';
 
 interface BoardViewProps {
   apps: AppItem[];
@@ -45,6 +46,8 @@ export const BoardView: React.FC<BoardViewProps> = ({
     setDraggedAppId(null);
     setActiveDropCategory(null);
   };
+
+  if (apps.length === 0) return <EmptyState />;
 
   return (
     <div className="c147" style={{ width: '100%', overflowX: 'auto', paddingBottom: '16px' }}>

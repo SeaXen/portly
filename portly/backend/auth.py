@@ -81,7 +81,12 @@ def verify_setup_token(provided_token: str) -> bool:
     provided = provided_token.strip()
     env_token = os.environ.get("PORTLY_SETUP_TOKEN", "").strip()
     if env_token:
-        return hmac.compare_digest(provided, env_token)
+        matched = hmac.compare_digest(provided, env_token)
+        if matched:
+            # Trade-off: an env token cannot be consumed without breaking operator
+            # automation that reuses it — accepted as intentionally non-single-use.
+            logger.warning("PORTLY_SETUP_TOKEN accepted: env setup tokens are reusable; rotate the secret after provisioning.")
+        return matched
     record = _get_store().get_setup_token_record()
     if not record or not record.get("token_hash"):
         return False
@@ -91,7 +96,7 @@ def verify_setup_token(provided_token: str) -> bool:
 def consume_setup_token():
     """Invalidates the setup token after the first admin is created."""
     if os.environ.get("PORTLY_SETUP_TOKEN", "").strip():
-        return  # env override cannot be consumed
+        return  # env override is intentionally non-consumable: rotating it would break operator automation
     with _auth_lock:
         _get_store().delete_setup_token()
 
@@ -142,9 +147,12 @@ def clear_failed_attempts(key: str):
 
 
 def validate_password(password: str) -> Tuple[bool, str]:
-    """Validates password strength (minimum 10 characters)."""
+    """Validates password strength (minimum 10 characters, max 72 bytes for bcrypt)."""
     if not password or len(password) < 10:
         return False, "Password must be at least 10 characters long."
+    if len(password.encode("utf-8")) > 72:
+        # bcrypt silently truncates beyond 72 bytes, making distinct passwords equal.
+        return False, "Password must be at most 72 bytes long."
     return True, ""
 
 

@@ -26,7 +26,8 @@ def page(authenticated_context, portly_server):
     page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
     page.on("pageerror", lambda err: page_errors.append(str(err)))
 
-    page.goto(portly_server, wait_until="domcontentloaded")
+    with page.expect_response(lambda r: "/api/settings" in r.url, timeout=12000):
+        page.goto(portly_server, wait_until="domcontentloaded")
     # Wait for React app root and initial discovery layout
     page.wait_for_selector(".portly-sidebar, .c068", timeout=12000)
 

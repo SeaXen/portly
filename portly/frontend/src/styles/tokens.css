@@ -12,10 +12,10 @@
   font-display:swap;
 }
 :root{
-  /* Portly design tokens (reference). Component CSS in style.css uses the literal values. */
+  /* Portly design tokens — consumed by style.css and app.css component rules. */
   --bg:#0A0B0F; --surface-1:#101218; --surface-2:#151821; --surface-3:#1C2030;
   --border:rgba(255,255,255,.07); --text:#ECEEF3; --muted:#8D95A5;
-  --accent:#8C9EFF; --success:#5EEAD4; --danger:#FF8A8A; --warning:#FBBF77;
+  --accent:#8C9EFF; --accent-deep:#6875DF; --success:#5EEAD4; --danger:#FF8A8A; --warning:#FBBF77;
   --cat-development:#8C9EFF; --cat-databases:#5EEAD4; --cat-monitoring:#FBBF77;
   --cat-automation:#F5A3D0; --cat-infrastructure:#B6E36B; --cat-uncategorized:#8D95A5;
   --font-ui:Inter,system-ui,sans-serif; --font-mono:'JetBrains Mono',monospace;
