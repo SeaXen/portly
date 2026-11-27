@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './components/Icon';
 import { api, resolveAppUrl } from './api';
 import { AddAppModal } from './components/AddAppModal';
@@ -42,7 +42,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const [viewType, setViewType] = useState<'table' | 'grid' | 'list' | 'board'>('table');
   const [density, setDensity] = useState<'compact' | 'comfy'>('compact');
   const [theme, setTheme] = useState<'dark' | 'light' | 'oled' | 'system'>('dark');
-  const [accent, setAccent] = useState('var(--accent)');
+  const [accent, setAccent] = useState('#8C9EFF');
   const [safeMode, setSafeMode] = useState(true);
   const [unlockCountdown, setUnlockCountdown] = useState<number | null>(null);
   const [kioskMode, setKioskMode] = useState(false);
@@ -102,7 +102,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   const [showNewCatModal, setShowNewCatModal] = useState(false);
   const newCatTrapRef = useFocusTrap<HTMLDivElement>(showNewCatModal, () => setShowNewCatModal(false));
   const [newCatName, setNewCatName] = useState('');
-  const [newCatColor, setNewCatColor] = useState('var(--accent)');
+  const [newCatColor, setNewCatColor] = useState('#8C9EFF');
 
   // Initial Load
   useEffect(() => {
@@ -135,12 +135,17 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     }
   }, [accent, theme]);
 
+  const safeModeRef = useRef(safeMode);
+  safeModeRef.current = safeMode;
+  const unlockCountdownRef = useRef(unlockCountdown);
+  unlockCountdownRef.current = unlockCountdown;
+
   // Safe Mode Auto-Relock Countdown Timer
   useEffect(() => {
     if (safeMode || unlockCountdown === null) return;
     if (unlockCountdown <= 0) {
-      handleToggleSafeMode(true);
-      info('Safe mode automatically re-locked.');
+      void handleToggleSafeModeRef.current(true);
+      infoRef.current('Safe mode automatically re-locked.');
       return;
     }
     const timer = setInterval(() => {
@@ -371,10 +376,13 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     }
   };
 
+  const infoRef = useRef(info);
+  infoRef.current = info;
+
   // Safe Mode Toggle with Auto-Relock & Rollback Error Handling (P1-17, D-8, F-10)
-  const handleToggleSafeMode = async (newVal: boolean, autoRelockSec?: number) => {
-    const prev = safeMode;
-    const prevCountdown = unlockCountdown;
+  const handleToggleSafeMode = useCallback(async (newVal: boolean, autoRelockSec?: number) => {
+    const prev = safeModeRef.current;
+    const prevCountdown = unlockCountdownRef.current;
     setSafeMode(newVal);
     if (!newVal && autoRelockSec) {
       setUnlockCountdown(autoRelockSec);
@@ -398,7 +406,10 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       setUnlockCountdown(prevCountdown);
       error(`Failed to update safe mode: ${err.message || 'Network error'}`);
     }
-  };
+  }, [error, success, warning]);
+
+  const handleToggleSafeModeRef = useRef(handleToggleSafeMode);
+  handleToggleSafeModeRef.current = handleToggleSafeMode;
 
   // Theme Toggle — serialize writes so rapid clicks land in order
   const settingsQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -1093,6 +1104,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
       {/* Detail Modal */}
       {detailApp && (
         <AppDetailModal
+          key={detailApp.id}
           app={detailApp}
           onClose={() => setDetailAppId(null)}
           categories={categories}
@@ -1223,7 +1235,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Color</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {['var(--accent)', 'var(--success)', 'var(--warning)', '#F5A3D0', '#B6E36B', '#C4B5FD', 'var(--danger)'].map((col) => (
+                  {['#8C9EFF', '#5EEAD4', '#FBBF77', '#F5A3D0', '#B6E36B', '#C4B5FD', '#FF8A8A'].map((col) => (
                     <button
                       key={col}
                       type="button"

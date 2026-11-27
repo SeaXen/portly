@@ -92,7 +92,7 @@ export function ConfirmDialog({
               borderRadius: 8,
               border: 0,
               background: isDanger ? 'var(--danger)' : 'var(--accent)',
-              color: '#0B1220',
+              color: 'var(--on-accent)',
               fontSize: 14,
               cursor: 'pointer',
               fontWeight: 600,

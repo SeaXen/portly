@@ -187,8 +187,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
               <button
                 type="button"
                 style={{
-                  background: '#FF5C5C',
-                  color: '#0B1220',
+                  background: 'var(--danger)',
+                  color: 'var(--on-accent)',
                   border: 'none',
                   borderRadius: '8px',
                   padding: '8px 18px',

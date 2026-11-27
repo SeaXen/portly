@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { ComposeStack, PreflightResponse } from '../types';
 import { useToast } from './Toast';
@@ -32,25 +32,41 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode, readOnly = fal
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showDownConfirm, setShowDownConfirm] = useState(false);
 
-  useEffect(() => {
-    loadStacks();
-  }, []);
+  const selectedNameRef = useRef<string | null>(null);
+  selectedNameRef.current = selectedStack?.name ?? null;
 
-  const loadStacks = async () => {
+  const loadStacks = useCallback(async (selectName?: string) => {
     try {
       const data = await api.getComposeStacks();
-      setStacks(data.stacks || []);
-      if (!selectedStack && data.stacks && data.stacks.length > 0) {
-        setSelectedStack(data.stacks[0]);
-        setStackName(data.stacks[0].name);
-        setStackYaml(data.stacks[0].compose_yaml);
+      const nextStacks = data.stacks || [];
+      setStacks(nextStacks);
+      const targetName = selectName ?? selectedNameRef.current;
+      if (targetName) {
+        const match = nextStacks.find((s) => s.name === targetName);
+        if (match) {
+          setSelectedStack(match);
+          setStackName(match.name);
+          setStackYaml(match.compose_yaml);
+          return;
+        }
+      }
+      if (nextStacks.length > 0 && !targetName) {
+        setSelectedStack(nextStacks[0]);
+        setStackName(nextStacks[0].name);
+        setStackYaml(nextStacks[0].compose_yaml);
+      } else if (nextStacks.length === 0) {
+        setSelectedStack(null);
       }
     } catch {
       // Ignored
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void loadStacks();
+  }, [loadStacks]);
 
   const handleSelectStack = (stack: ComposeStack) => {
     setSelectedStack(stack);
@@ -107,7 +123,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode, readOnly = fal
       });
       success(`Stack '${stackName}' saved!`);
       setIsEditing(false);
-      loadStacks();
+      await loadStacks(stackName.trim());
     } catch (err: any) {
       if (err.code === 'PORT_COLLISION' && !force) {
         warning(`Cannot save stack: port collision detected. Review preflight check.`);
@@ -137,7 +153,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode, readOnly = fal
         error(res.message);
       }
       setExecutionOutput(res.output || res.message || 'Operation finished.');
-      loadStacks();
+      await loadStacks(selectedStack.name);
     } catch (err: any) {
       error(`Stack action failed: ${err.message}`);
       setExecutionOutput(`Error: ${err.message}`);
@@ -232,7 +248,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode, readOnly = fal
                         width: '8px',
                         height: '8px',
                         borderRadius: '50%',
-                        background: s.status === 'running' ? 'var(--success)' : '#64748B',
+                        background: s.status === 'running' ? 'var(--success)' : 'var(--muted)',
                       }}
                       title={s.status}
                     />
@@ -350,9 +366,10 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode, readOnly = fal
                       type="button"
                       className="c077"
                       title="Delete Stack"
+                      aria-label="Delete Stack"
                       onClick={() => setShowDeleteConfirm(true)}
                     >
-                      🗑
+                      <Icon name="trash" size={14} />
                     </button>
                   </>
                 )}
@@ -415,8 +432,8 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode, readOnly = fal
                   fontFamily: 'JetBrains Mono, monospace',
                   fontSize: '12.5px',
                   lineHeight: 1.6,
-                  background: isEditing ? 'var(--surface-2)' : '#0B0D13',
-                  color: isEditing ? 'var(--text)' : '#A0AEC0',
+                  background: isEditing ? 'var(--surface-2)' : 'var(--surface-input)',
+                  color: isEditing ? 'var(--text)' : 'var(--muted)',
                 }}
               />
             </div>
@@ -430,7 +447,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode, readOnly = fal
                 </div>
                 <div
                   style={{
-                    background: '#06080B',
+                    background: 'var(--surface-terminal)',
                     border: '1px solid rgba(255,255,255,0.08)',
                     borderRadius: '8px',
                     padding: '12px',

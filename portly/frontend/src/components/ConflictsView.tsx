@@ -345,7 +345,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
                   <div style={{ fontSize: '12px', color: 'var(--muted)' }}>{r.description}</div>
                 )}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748B', marginTop: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
                   <span>Reserved by {r.created_by}</span>
                   <span>{r.service ? `Target: ${r.service}` : 'General Intent'}</span>
                 </div>

@@ -921,6 +921,18 @@ async def get_apps(
     }
 
 
+def _docker_container_name(app_id: str) -> str:
+    """Extract and validate the non-empty container name from a 'docker:<name>' ID."""
+    parts = app_id.split(":")
+    container_name = parts[1].strip() if len(parts) > 1 else ""
+    if not container_name:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_ID", "message": "Invalid container app id"},
+        )
+    return container_name
+
+
 @app.get("/api/apps/{app_id:path}/logs")
 async def get_logs_endpoint(
     app_id: str,
@@ -929,7 +941,7 @@ async def get_logs_endpoint(
     user: Dict[str, Any] = Depends(require_admin)
 ):
     if app_id.startswith("docker:"):
-        c_name = app_id.split(":")[1]
+        c_name = _docker_container_name(app_id)
         lines = await asyncio.to_thread(docker_actions.get_container_logs, c_name, tail=tail, follow=False)
     elif app_id.startswith("custom:"):
         lines = await asyncio.to_thread(process_actions.get_custom_app_logs, app_id, store, tail=tail)
@@ -1056,7 +1068,7 @@ async def exec_command_endpoint(
             status_code=400,
             detail={"code": "NOT_DOCKER", "message": "Command execution is only supported for Docker containers."}
         )
-    container_name = app_id.split(":")[1]
+    container_name = _docker_container_name(app_id)
     exec_timeout = max(1, min(60, int(data.timeout or 10)))
     try:
         res = await asyncio.wait_for(
@@ -1099,7 +1111,7 @@ async def get_app_compose_endpoint(app_id: str, user: Dict[str, Any] = Depends(r
             status_code=400,
             detail={"code": "NOT_DOCKER", "message": "Docker Compose inspection is only supported for Docker containers."}
         )
-    container_name = app_id.split(":")[1]
+    container_name = _docker_container_name(app_id)
     try:
         res = await asyncio.to_thread(docker_actions.get_container_compose_config, container_name)
         return res
@@ -1121,7 +1133,7 @@ async def reveal_env_endpoint(app_id: str, user: Dict[str, Any] = Depends(requir
             raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Custom app not found"})
         return {"env": ca.get("env", {})}
     elif app_id.startswith("docker:"):
-        c_name = app_id.split(":")[1]
+        c_name = _docker_container_name(app_id)
         insp = await asyncio.to_thread(docker_actions.inspect_container, c_name, False)
         # Docker env is a list of "K=V" strings; the UI expects a dict like custom apps.
         env_dict: Dict[str, str] = {}
@@ -1239,7 +1251,7 @@ async def bulk_action(data: BulkActionModel, user: Dict[str, Any] = Depends(requ
         for app_id in ids:
             try:
                 if app_id.startswith("docker:"):
-                    c_name = app_id.split(":")[1]
+                    c_name = _docker_container_name(app_id)
                     if action == "start":
                         await asyncio.to_thread(docker_actions.start_container, c_name, store, actor=user.get("username", "admin"))
                     elif action == "stop":
@@ -1257,6 +1269,9 @@ async def bulk_action(data: BulkActionModel, user: Dict[str, Any] = Depends(requ
                     failed.append({"id": app_id, "error": "Start/stop/restart is not supported for host processes."})
                     continue
                 succeeded.append(app_id)
+            except HTTPException as he:
+                msg = he.detail.get("message") if isinstance(he.detail, dict) else str(he.detail)
+                failed.append({"id": app_id, "error": str(msg)})
             except Exception as e:
                 logger.warning(f"Error in bulk action for {app_id}: {e}")
                 failed.append({"id": app_id, "error": str(e)})
@@ -1270,7 +1285,7 @@ async def bulk_action(data: BulkActionModel, user: Dict[str, Any] = Depends(requ
 async def start_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_admin)):
     try:
         if app_id.startswith("docker:"):
-            c_name = app_id.split(":")[1]
+            c_name = _docker_container_name(app_id)
             res = await asyncio.to_thread(docker_actions.start_container, c_name, store, actor=user.get("username", "admin"))
         elif app_id.startswith("custom:"):
             res = await asyncio.to_thread(process_actions.start_custom_app, app_id, store, actor=user.get("username", "admin"))
@@ -1290,7 +1305,7 @@ async def start_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(require
 async def stop_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_admin)):
     try:
         if app_id.startswith("docker:"):
-            c_name = app_id.split(":")[1]
+            c_name = _docker_container_name(app_id)
             res = await asyncio.to_thread(docker_actions.stop_container, c_name, store, actor=user.get("username", "admin"))
         elif app_id.startswith("custom:"):
             res = await asyncio.to_thread(process_actions.stop_custom_app, app_id, store, actor=user.get("username", "admin"))
@@ -1317,7 +1332,7 @@ async def stop_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_
 async def restart_app_endpoint(app_id: str, user: Dict[str, Any] = Depends(require_admin)):
     try:
         if app_id.startswith("docker:"):
-            c_name = app_id.split(":")[1]
+            c_name = _docker_container_name(app_id)
             res = await asyncio.to_thread(docker_actions.restart_container, c_name, store, actor=user.get("username", "admin"))
         elif app_id.startswith("custom:"):
             res = await asyncio.to_thread(process_actions.restart_custom_app, app_id, store, actor=user.get("username", "admin"))
@@ -1488,10 +1503,7 @@ async def change_multi_ports_endpoint(
     if not app_id.startswith("docker:"):
         raise HTTPException(status_code=400, detail={"code": "NOT_SUPPORTED", "message": "Multi-port remapping is only supported for Docker containers"})
 
-    parts = app_id.split(":")
-    container_name = parts[1] if len(parts) > 1 else ""
-    if not container_name:
-        raise HTTPException(status_code=400, detail={"code": "INVALID_ID", "message": "Invalid container app id"})
+    container_name = _docker_container_name(app_id)
 
     if store.get_setting("safe_mode", "true").lower() == "true":
         raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": "Safe mode is ON. Unlock safe mode to change ports."})
@@ -1517,10 +1529,11 @@ async def change_multi_ports_endpoint(
             continue
         if port in owned_ports:
             continue
+        bind_addr = m.bind or "0.0.0.0"
         try:
-            avail = check_port_availability(port, "0.0.0.0", store=store)
+            avail = check_port_availability(port, bind_addr, store=store)
         except TypeError:
-            avail = check_port_availability(port, "0.0.0.0")
+            avail = check_port_availability(port, bind_addr)
         if not avail.get("free", False):
             conflicts.append({"port": port, "reason": avail.get("used_by", "")})
     if conflicts:
@@ -1561,7 +1574,7 @@ async def apply_update_endpoint(app_id: str, user: Dict[str, Any] = Depends(requ
         raise HTTPException(status_code=403, detail={"code": "SAFE_MODE", "message": "Safe mode is active. Mutating actions are locked."})
     if not app_id.startswith("docker:"):
         raise HTTPException(status_code=400, detail={"code": "NOT_DOCKER", "message": "Image updates are only supported for Docker containers."})
-    c_name = app_id.split(":")[1]
+    c_name = _docker_container_name(app_id)
     client = get_docker_client()
     if not client:
         return {"status": "ok", "message": "Docker is not available on this host. Image update skipped."}
@@ -1658,8 +1671,12 @@ async def list_compose_stacks_endpoint(user: Dict[str, Any] = Depends(require_au
                 if maps:
                     for m in maps:
                         hp = m.get("HostPort")
-                        if hp and int(hp) not in ports_list:
-                            ports_list.append(int(hp))
+                        try:
+                            hp_int = int(hp)
+                        except (ValueError, TypeError):
+                            continue
+                        if hp_int not in ports_list:
+                            ports_list.append(hp_int)
         s["containers_running"] = running_count
         s["ports"] = sorted(ports_list)
         s["status"] = "running" if running_count > 0 else "stopped"

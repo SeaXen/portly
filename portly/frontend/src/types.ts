@@ -42,6 +42,7 @@ export interface AppItem {
   tls_expired?: boolean;
   expected_status?: string;
   custom_headers?: Record<string, string>;
+  env?: Record<string, string>;
 }
 
 export interface PortReservation {

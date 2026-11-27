@@ -187,7 +187,7 @@ export const TableView: React.FC<TableViewProps> = ({
                     </div>
 
                     {/* Grab handle */}
-                    <div className="table-cell" style={{ color: '#64748B', cursor: 'grab' }}>
+                    <div className="table-cell" style={{ color: 'var(--muted)', cursor: 'grab' }}>
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <circle cx="9" cy="6" r="1"></circle>
                         <circle cx="15" cy="6" r="1"></circle>
@@ -245,10 +245,14 @@ export const TableView: React.FC<TableViewProps> = ({
                             background: 'rgba(251, 191, 119, 0.15)',
                             color: 'var(--warning)',
                             border: '1px solid rgba(251, 191, 119, 0.25)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
                           }}
                           title={`Tunnel URL: ${app.url_override}`}
                         >
-                          ☁ Tunnel
+                          <Icon name="cloud" size={11} />
+                          <span>Tunnel</span>
                         </span>
                       )}
                       {app.has_tls && (
@@ -302,7 +306,7 @@ export const TableView: React.FC<TableViewProps> = ({
                         {catName}
                       </span>
                       {app.category_mode === 'manual' && (
-                        <span style={{ fontSize: '10px', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        <span style={{ fontSize: '10px', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                           M
                         </span>
                       )}

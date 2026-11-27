@@ -1,7 +1,20 @@
 import React from 'react';
 
 // Authored SVG icons — used instead of raw emoji/Unicode glyphs per DESIGN.md.
-export type IconName = 'check' | 'x' | 'warning' | 'info' | 'bolt' | 'lock' | 'clock' | 'refresh';
+export type IconName =
+  | 'check'
+  | 'x'
+  | 'warning'
+  | 'info'
+  | 'bolt'
+  | 'lock'
+  | 'clock'
+  | 'refresh'
+  | 'anchor'
+  | 'trash'
+  | 'eye'
+  | 'pause'
+  | 'cloud';
 
 interface IconProps {
   name: IconName;
@@ -20,6 +33,11 @@ export const Icon: React.FC<IconProps> = ({ name, size = 16, color, className })
     lock: <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>,
     clock: <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>,
     refresh: <><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></>,
+    anchor: <><circle cx="12" cy="5" r="3" /><line x1="12" y1="22" x2="12" y2="8" /><path d="M5 12H2a10 10 0 0 0 20 0h-3" /></>,
+    trash: <><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></>,
+    eye: <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z" /><circle cx="12" cy="12" r="3" /></>,
+    pause: <><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></>,
+    cloud: <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />,
   };
 
   return (

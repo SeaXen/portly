@@ -109,7 +109,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
     }
   };
 
-  const accents = ['var(--accent)', 'var(--success)', 'var(--warning)', '#F5A3D0', '#B6E36B', '#C4B5FD'];
+  const accents = ['#8C9EFF', '#5EEAD4', '#FBBF77', '#F5A3D0', '#B6E36B', '#C4B5FD'];
 
   const handleCreateRule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -317,7 +317,7 @@ export const CustomizeDrawer: React.FC<CustomizeDrawerProps> = ({
               type="color"
               aria-label="Custom accent color"
               title="Custom accent color"
-              value={/^#[0-9a-f]{6}$/i.test(accent) ? accent : 'var(--accent)'}
+              value={/^#[0-9a-f]{6}$/i.test(accent) ? accent : '#8C9EFF'}
               onChange={(e) => onChangeAccent(e.target.value)}
               style={{ width: '28px', height: '28px', padding: 0, border: 'none', borderRadius: '50%', background: 'transparent', cursor: 'pointer' }}
             />

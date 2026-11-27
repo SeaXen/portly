@@ -849,7 +849,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                   id="custom-workdir"
                   name="customWorkdir"
                   type="text"
-                  placeholder="C:\projects\my-app"
+                  placeholder="/opt/my-app"
                   value={workdir}
                   onChange={(e) => setWorkdir(e.target.value)}
                   autoComplete="off"
@@ -863,7 +863,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                   id="custom-log-file"
                   name="customLogFile"
                   type="text"
-                  placeholder="C:\projects\my-app\app.log"
+                  placeholder="/var/log/my-app.log"
                   value={logFile}
                   onChange={(e) => setLogFile(e.target.value)}
                   autoComplete="off"
@@ -1075,7 +1075,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                     fontWeight: 600,
                     cursor: 'pointer',
                     background: preflightMode === m ? 'var(--accent)' : 'rgba(255,255,255,0.06)',
-                    color: preflightMode === m ? '#0B1220' : 'var(--text)',
+                    color: preflightMode === m ? 'var(--on-accent)' : 'var(--text)',
                     border: 0,
                   }}
                 >
@@ -1113,7 +1113,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 <label htmlFor="preflight-input" style={{ fontSize: '12px', color: 'var(--muted)' }}>
                   {preflightMode === 'command' ? 'Command Line Invocation' : preflightMode === 'compose' ? 'Compose YAML Definition (or drop .yml file here)' : 'Comma or Space-separated Ports'}
                 </label>
-                <span style={{ fontSize: '11px', color: '#64748B' }}>Drag & drop .yml file supported</span>
+                <span style={{ fontSize: '11px', color: 'var(--muted)' }}>Drag & drop .yml file supported</span>
               </div>
               <textarea
                 id="preflight-input"
@@ -1132,7 +1132,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 className="c080"
                 disabled={preflightChecking}
                 onClick={handleRunPreflight}
-                style={{ background: 'var(--accent)', color: '#0B1220' }}
+                style={{ background: 'var(--accent)', color: 'var(--on-accent)' }}
               >
                 {preflightChecking ? 'Checking Collisions…' : 'Run Preflight Check'}
               </button>
@@ -1171,7 +1171,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             padding: '8px 12px',
-                            background: '#161B22',
+                            background: 'var(--surface-input)',
                             borderRadius: '6px',
                             fontSize: '12px',
                             gap: '8px',
@@ -1198,7 +1198,8 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                               onClick={() => {
                                 const oldP = String(col.port);
                                 const newP = String(suggested);
-                                setPreflightInput(preflightInput.split(oldP).join(newP));
+                                const portRegex = new RegExp(`(^|[^0-9])${oldP}(?![0-9])`, 'g');
+                                setPreflightInput((prev) => prev.replace(portRegex, `$1${newP}`));
                                 success(`Remapped port ${oldP} -> ${newP}! Click Preflight to re-verify.`);
                               }}
                             >

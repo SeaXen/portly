@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { api } from '../api';
+import { Icon } from './Icon';
 import { LoginScreen } from './LoginScreen';
 import { SetupScreen } from './SetupScreen';
 
@@ -78,7 +79,9 @@ export function AuthGate({ children }: { children: (auth: AuthContextType) => Re
           fontFamily: 'Inter, system-ui, sans-serif',
         }}
       >
-        <div style={{ fontSize: 32, animation: 'spin 1.5s linear infinite' }}>⚓</div>
+        <div style={{ color: 'var(--accent)', animation: 'spin 1.5s linear infinite', display: 'inline-flex' }}>
+          <Icon name="anchor" size={32} />
+        </div>
         <div style={{ fontSize: 14 }}>Connecting to Portly…</div>
       </div>
     );

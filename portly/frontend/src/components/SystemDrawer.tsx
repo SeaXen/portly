@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Icon } from './Icon';
 import { api } from '../api';
 import { DockerSystemDf, SystemStats } from '../types';
@@ -42,7 +42,23 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose, defaultSect
     document.getElementById(id)?.scrollIntoView({ block: 'start' });
   }, [defaultSection, stats]);
 
-  const loadAll = async () => {
+  const loadStats = useCallback(async () => {
+    try {
+      const data = await api.getSystemStats();
+      setStats(data);
+    } catch {} finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadDockerStats = useCallback(async () => {
+    try {
+      const df = await api.getDockerSystemDf();
+      setDockerDf(df);
+    } catch {}
+  }, []);
+
+  const loadAll = useCallback(async () => {
     // Skip ticks while a fetch is in flight: docker df can be seconds-slow.
     if (fetchingRef.current) return;
     fetchingRef.current = true;
@@ -51,29 +67,13 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose, defaultSect
     } finally {
       fetchingRef.current = false;
     }
-  };
+  }, [loadStats, loadDockerStats]);
 
   useEffect(() => {
-    loadAll();
-    const interval = setInterval(loadAll, 4000);
+    void loadAll();
+    const interval = setInterval(() => { void loadAll(); }, 4000);
     return () => clearInterval(interval);
-  }, []);
-
-  const loadStats = async () => {
-    try {
-      const data = await api.getSystemStats();
-      setStats(data);
-    } catch {} finally {
-      setLoading(false);
-    }
-  };
-
-  const loadDockerStats = async () => {
-    try {
-      const df = await api.getDockerSystemDf();
-      setDockerDf(df);
-    } catch {}
-  };
+  }, [loadAll]);
 
   const handlePrune = () => {
     setShowPruneConfirm(true);
@@ -238,11 +238,12 @@ export const SystemDrawer: React.FC<SystemDrawerProps> = ({ onClose, defaultSect
                   <button
                     type="button"
                     className="c078"
-                    style={{ height: '26px', fontSize: '11px', color: 'var(--danger)', borderColor: 'rgba(255,138,138,0.3)' }}
+                    style={{ height: '26px', fontSize: '11px', color: 'var(--danger)', borderColor: 'rgba(255,138,138,0.3)', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
                     disabled={pruning}
                     onClick={handlePrune}
                   >
-                    {pruning ? 'Pruning…' : '🧹 Prune Unused Space'}
+                    <Icon name="trash" size={12} />
+                    <span>{pruning ? 'Pruning…' : 'Prune Unused Space'}</span>
                   </button>
                 </div>
 

@@ -282,6 +282,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           type="button"
           className="c078"
           onClick={toggleSortDir}
+          aria-label={`Sort direction: ${sortDir === 'asc' ? 'ascending' : 'descending'}`}
           title={`Order: ${sortDir === 'asc' ? 'Ascending' : 'Descending'}`}
           style={{ height: '34px', padding: '0 8px', fontSize: '12px', borderLeft: 0, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
         >

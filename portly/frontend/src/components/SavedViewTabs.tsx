@@ -173,7 +173,7 @@ export const SavedViewTabs: React.FC<SavedViewTabsProps> = ({
               />
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button type="button" className="c078" onClick={() => setShowSaveModal(false)}>Cancel</button>
-                <button type="submit" className="c080" style={{ background: 'var(--accent)', color: '#0A0D14', fontWeight: 600 }}>Save View</button>
+                <button type="submit" className="c080" style={{ background: 'var(--accent)', color: 'var(--on-accent)', fontWeight: 600 }}>Save View</button>
               </div>
             </form>
           </div>

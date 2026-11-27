@@ -307,7 +307,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Turning off Safe mode allows executing real operations: starting/stopping services, killing processes, and recreating containers on your host machine.
             </p>
 
-            <div style={{ background: '#161B22', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ background: 'var(--surface-input)', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', border: '1px solid var(--border-subtle)' }}>
               <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
                 <legend style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)', marginBottom: '8px', padding: 0 }}>Auto-Relock Protection</legend>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text)', cursor: 'pointer', marginBottom: '6px' }}>

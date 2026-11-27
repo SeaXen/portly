@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { parseAnsiToReact } from '../utils/ansi';
 import { useFocusTrap } from '../hooks/useFocusTrap';
@@ -61,9 +61,9 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
   }, []);
-  const scheduleTimer = (fn: () => void, ms: number) => {
+  const scheduleTimer = useCallback((fn: () => void, ms: number) => {
     timersRef.current.push(setTimeout(fn, ms));
-  };
+  }, []);
 
   // Port change state
   const [targetPort, setTargetPort] = useState<number>(app.port || 3000);
@@ -123,26 +123,51 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
   const [showComposeDownConfirm, setShowComposeDownConfirm] = useState(false);
   const [showRevealEnvConfirm, setShowRevealEnvConfirm] = useState(false);
   const [revealedEnv, setRevealedEnv] = useState<string[] | null>(null);
-  const envEntries: string[] = revealedEnv || inspectData?.env || [];
+  const [detailEnv, setDetailEnv] = useState<string[] | null>(null);
+  const envEntries: string[] = revealedEnv || detailEnv || inspectData?.env || [];
   const [revealingEnv, setRevealingEnv] = useState(false);
 
   // In-modal Toast Notifications
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
 
-  const showNotification = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+  const showNotification = useCallback((message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     setToast({ message, type });
     scheduleTimer(() => {
       setToast((prev) => (prev?.message === message ? null : prev));
     }, 4500);
-  };
+  }, [scheduleTimer]);
+
+  const loadLogs = useCallback(async () => {
+    try {
+      const res = await api.getAppLogs(app.id, 500);
+      setLogs(res.lines || []);
+    } catch {
+      setLogs(['Failed to fetch logs.']);
+    }
+  }, [app.id]);
+
+  const checkPortStatus = useCallback(async (p: number, b: string) => {
+    setPortChecking(true);
+    try {
+      const res = await api.checkPort(p, b);
+      setPortAvail(res);
+    } catch {
+      setPortAvail({ free: false, used_by: 'Error checking port' });
+    } finally {
+      setPortChecking(false);
+    }
+  }, []);
 
   // Load initial details
   useEffect(() => {
-    loadLogs();
-    checkPortStatus(targetPort, targetBind);
+    void loadLogs();
+    void checkPortStatus(app.port, app.bind || '0.0.0.0');
     api.getAppDetail(app.id).then((d) => {
       setHealthHistory(d.health_history || []);
       setInspectData(d.docker_inspect || null);
+      if (d.app?.env && typeof d.app.env === 'object' && Object.keys(d.app.env).length > 0) {
+        setDetailEnv(Object.entries(d.app.env).map(([k, v]) => `${k}=${String(v ?? '')}`));
+      }
       if (d.docker_inspect?.ports) {
         const pList: Array<{ container_port: string; host_port: number; bind: string }> = [];
         Object.entries(d.docker_inspect.ports).forEach(([cp, maps]: [string, any]) => {
@@ -161,16 +186,16 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
         setMultiPorts([{ container_port: `${app.port}/${app.proto || 'tcp'}`, host_port: app.port, bind: app.bind || '0.0.0.0' }]);
       }
     });
-  }, [app.id]);
+  }, [app.id, app.port, app.proto, app.bind, loadLogs, checkPortStatus]);
 
   // Live Auto-follow interval for logs
   useEffect(() => {
     if (!autoFollow || activeTab !== 'logs') return;
     const interval = setInterval(() => {
-      loadLogs();
+      void loadLogs();
     }, 2500);
     return () => clearInterval(interval);
-  }, [autoFollow, activeTab, app.id]);
+  }, [autoFollow, activeTab, loadLogs]);
 
   // Auto-scroll logs when new logs come in if autoFollow is checked
   useEffect(() => {
@@ -203,27 +228,6 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
       setRegexError(null);
     }
   }, [isRegexFilter, logFilter]);
-
-  const loadLogs = async () => {
-    try {
-      const res = await api.getAppLogs(app.id, 500);
-      setLogs(res.lines || []);
-    } catch {
-      setLogs(['Failed to fetch logs.']);
-    }
-  };
-
-  const checkPortStatus = async (p: number, b: string) => {
-    setPortChecking(true);
-    try {
-      const res = await api.checkPort(p, b);
-      setPortAvail(res);
-    } catch {
-      setPortAvail({ free: false, used_by: 'Error checking port' });
-    } finally {
-      setPortChecking(false);
-    }
-  };
 
   const handleSuggestPort = async () => {
     try {
@@ -376,7 +380,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
     }
   };
 
-  const loadProxyConfig = async (domain?: string) => {
+  const loadProxyConfig = useCallback(async (domain?: string) => {
     if (!app.port) return;
     setLoadingProxy(true);
     try {
@@ -387,9 +391,9 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
     } finally {
       setLoadingProxy(false);
     }
-  };
+  }, [app.id, app.port, proxyDomain, showNotification]);
 
-  const loadTlsInfo = async () => {
+  const loadTlsInfo = useCallback(async () => {
     if (!app.port) return;
     setLoadingTls(true);
     try {
@@ -400,9 +404,9 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
     } finally {
       setLoadingTls(false);
     }
-  };
+  }, [app.id, app.port, showNotification]);
 
-  const loadComposeInfo = async () => {
+  const loadComposeInfo = useCallback(async () => {
     if (app.source !== 'docker') return;
     setLoadingCompose(true);
     try {
@@ -413,7 +417,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
     } finally {
       setLoadingCompose(false);
     }
-  };
+  }, [app.id, app.source, showNotification]);
 
   const handleRunExec = async (cmdToRun?: string) => {
     if (readOnly) {
@@ -461,13 +465,13 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
 
   useEffect(() => {
     if (activeTab === 'proxy' && !proxyData) {
-      loadProxyConfig();
+      void loadProxyConfig();
     } else if (activeTab === 'tls' && !tlsData) {
-      loadTlsInfo();
+      void loadTlsInfo();
     } else if (activeTab === 'compose' && !composeData) {
-      loadComposeInfo();
+      void loadComposeInfo();
     }
-  }, [activeTab]);
+  }, [activeTab, proxyData, tlsData, composeData, loadProxyConfig, loadTlsInfo, loadComposeInfo]);
 
   const handleCheckUpdate = async () => {
     setCheckingUpdate(true);
@@ -563,7 +567,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
           width: '1180px',
           maxWidth: '96vw',
           maxHeight: '92vh',
-          background: '#0E1116',
+          background: 'var(--surface-1)',
           border: '1px solid rgba(255,255,255,0.1)',
           borderRadius: '16px',
           padding: '24px',
@@ -769,6 +773,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
             </div>
             <button
               type="button"
+              aria-label="Dismiss notification"
               onClick={() => setToast(null)}
               style={{
                 background: 'none',
@@ -1010,7 +1015,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     onScroll={handleLogScroll}
                     className="c200"
                     style={{
-                      background: '#080A0E',
+                      background: 'var(--surface-terminal)',
                       border: '1px solid rgba(255,255,255,0.07)',
                       borderRadius: '12px',
                       padding: '16px',
@@ -1059,7 +1064,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                         bottom: '16px',
                         left: '50%',
                         transform: 'translateX(-50%)',
-                        background: '#1A1E2C',
+                        background: 'var(--surface-3)',
                         color: 'var(--accent)',
                         border: '1px solid rgba(140, 158, 255, 0.4)',
                         borderRadius: '20px',
@@ -1074,7 +1079,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                         zIndex: 10,
                       }}
                     >
-                      <span>Auto-scroll paused ⏸</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}><Icon name="pause" size={12} /> Auto-scroll paused</span>
                       <span style={{ textDecoration: 'underline', color: 'var(--text)' }}>Resume</span>
                     </button>
                   )}
@@ -1148,6 +1153,23 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                   </div>
                 )}
 
+                {app.source === 'host' && (
+                  <div
+                    role="note"
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: 'rgba(251, 191, 119, 0.1)',
+                      border: '1px solid rgba(251, 191, 119, 0.25)',
+                      color: 'var(--warning)',
+                      fontSize: '12.5px',
+                      marginBottom: '16px',
+                    }}
+                  >
+                    Unmanaged host processes cannot be port-remapped directly. Adopt this service as a Custom App to manage its port configuration.
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <button type="button" className="c078" onClick={handleSuggestPort}>
                     Suggest free port
@@ -1155,10 +1177,10 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                   <button
                     type="button"
                     className="c080"
-                    disabled={readOnly || portChanging || !portAvail?.free}
+                    disabled={readOnly || portChanging || !portAvail?.free || app.source === 'host'}
                     onClick={handleApplyPortChange}
                   >
-                    {portChanging ? 'Recreating…' : 'Apply and recreate'}
+                    {portChanging ? 'Recreating…' : app.source === 'custom' ? 'Save and restart' : 'Apply and recreate'}
                   </button>
                   {app.source === 'docker' && (
                     <button
@@ -1184,7 +1206,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
                       {multiPorts.map((mp, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 140px', gap: '12px', alignItems: 'center', background: '#090B10', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 140px', gap: '12px', alignItems: 'center', background: 'var(--surface-code)', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
                           <div>
                             <span style={{ fontSize: '11px', color: 'var(--muted)', display: 'block' }}>Container Port</span>
                             <code style={{ color: 'var(--success)', fontFamily: 'JetBrains Mono, monospace', fontSize: '13px' }}>{mp.container_port}</code>
@@ -1288,7 +1310,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                   </div>
                 </div>
 
-                <div style={{ background: '#090B10', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '16px', fontSize: '12.5px', color: 'var(--muted)', lineHeight: 1.6 }}>
+                <div style={{ background: 'var(--surface-code)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '16px', fontSize: '12.5px', color: 'var(--muted)', lineHeight: 1.6 }}>
                   <strong style={{ color: 'var(--text)', display: 'block', marginBottom: '6px' }}><Icon name="bolt" size={13} color="var(--warning)" /> How to configure Cloudflare Tunnel:</strong>
                   <ol style={{ margin: '0 0 0 18px', padding: 0 }}>
                     <li>Run Cloudflare Tunnel on your host or in Docker (<code>cloudflared tunnel run &lt;tunnel-name&gt;</code>).</li>
@@ -1345,7 +1367,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                     <div style={{ position: 'relative' }}>
                       <pre
                         style={{
-                          background: '#090B10',
+                          background: 'var(--surface-code)',
                           border: '1px solid rgba(255,255,255,0.08)',
                           borderRadius: '8px',
                           padding: '16px',
@@ -1462,7 +1484,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 </div>
 
                 <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                  {['ps aux', 'df -h', 'env', 'netstat -tuln', 'uname -a', 'cat /etc/hosts'].map((preset) => (
+                  {['ps aux', 'df -h', 'free -m', 'uptime', 'netstat -tuln', 'uname -a'].map((preset) => (
                     <button
                       key={preset}
                       type="button"
@@ -1505,7 +1527,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 </form>
 
                 {execRes && (
-                  <div style={{ background: '#080A0E', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '14px' }}>
+                  <div style={{ background: 'var(--surface-terminal)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '11.5px', color: 'var(--muted)' }}>
                       <span>$ {execRes.command}</span>
                       <div style={{ display: 'flex', gap: '10px' }}>
@@ -1604,7 +1626,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                       <div style={{ position: 'relative' }}>
                         <pre
                           style={{
-                            background: '#090B10',
+                            background: 'var(--surface-code)',
                             border: '1px solid rgba(255,255,255,0.08)',
                             borderRadius: '8px',
                             padding: '16px',
@@ -1657,20 +1679,26 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                         fontSize: '12px',
                         fontWeight: 600,
                         cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
                       }}
                     >
-                      {revealingEnv ? 'Revealing…' : '👁️ Reveal Unmasked Values (Admin)'}
+                      <Icon name="eye" size={13} />
+                      <span>{revealingEnv ? 'Revealing…' : 'Reveal Unmasked Values (Admin)'}</span>
                     </button>
                   )}
                 </div>
                 {envEntries.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {envEntries.map((e: string, i: number) => {
-                      const [k, v] = e.split('=', 2);
+                      const eqIdx = e.indexOf('=');
+                      const k = eqIdx >= 0 ? e.slice(0, eqIdx) : e;
+                      const v = eqIdx >= 0 ? e.slice(eqIdx + 1) : '';
                       return (
                         <div key={i} style={{ display: 'flex', padding: '8px 12px', background: 'var(--surface-2)', borderRadius: '6px', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px' }}>
                           <span style={{ color: 'var(--accent)', fontWeight: 600, width: '220px' }}>{k}</span>
-                          <span style={{ color: 'var(--text)', flex: 1, wordBreak: 'break-all' }}>{v || ''}</span>
+                          <span style={{ color: 'var(--text)', flex: 1, wordBreak: 'break-all' }}>{v}</span>
                         </div>
                       );
                     })}
@@ -1718,7 +1746,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                 </div>
 
                 <div style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '8px' }}>Recent Latency & Status</div>
-                <div style={{ display: 'flex', gap: '4px', height: '48px', alignItems: 'flex-end', background: '#080A0E', padding: '8px', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', gap: '4px', height: '48px', alignItems: 'flex-end', background: 'var(--surface-terminal)', padding: '8px', borderRadius: '8px' }}>
                   {healthHistory.map((h, i) => (
                     <div
                       key={i}

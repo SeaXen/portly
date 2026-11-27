@@ -10,11 +10,13 @@ RUN npm run build
 FROM python:3.12-slim
 WORKDIR /app
 
-# Install system dependencies (net-tools, procps, curl)
+# Install system dependencies (net-tools, procps, curl, docker CLI & compose)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     net-tools \
     curl \
+    docker-cli \
+    docker-compose \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
@@ -30,10 +32,11 @@ EXPOSE 5533
 ENV PORTLY_PORT=5533 \
     PORTLY_HOST=0.0.0.0 \
     PORTLY_MODE=server \
+    PORTLY_DATA_DIR=/app/data \
     PYTHONUNBUFFERED=1
 
-# Create non-root user portly and set up data directory permissions
-RUN groupadd -r portly && useradd -r -g portly -d /app -s /sbin/nologin portly && \
+# Create non-root user portly (UID/GID 1000 matching DEPLOYMENT.md) and set up data directory permissions
+RUN groupadd -g 1000 portly && useradd -u 1000 -g portly -d /app -s /sbin/nologin portly && \
     mkdir -p /app/data && chown -R portly:portly /app
 
 VOLUME ["/app/data"]

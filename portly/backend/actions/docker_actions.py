@@ -1185,7 +1185,7 @@ def deploy_container(
     # Validate image and container name formats
     clean_image = image.strip()
     clean_name = name.strip()
-    if not re.match(r'^[a-zA-Z0-9_\.\-\/\:]+$', clean_image):
+    if not re.match(r'^[a-zA-Z0-9_\.\-\/\:@]+$', clean_image):
         raise ValueError(f"Invalid image format '{clean_image}'")
     if not re.match(r'^[a-zA-Z0-9_\.\-]+$', clean_name):
         raise ValueError(f"Invalid container name '{clean_name}'. Only alphanumeric characters, dashes, dots, and underscores are allowed.")
@@ -1197,12 +1197,16 @@ def deploy_container(
         if lower_h in ("/", "/var/run/docker.sock", "/proc", "/sys", "/etc", "c:\\", "c:\\windows"):
             raise PermissionError(f"Binding sensitive host path '{host_path}' is restricted in Portly.")
 
+    allowed_restarts = {"no", "always", "unless-stopped", "on-failure"}
+    if restart_policy and restart_policy not in allowed_restarts:
+        raise ValueError(f"Invalid restart policy '{restart_policy}'. Expected one of: {', '.join(sorted(allowed_restarts))}.")
+
     # Validate ports
     formatted_ports = {}
     for c_port, h_port in (ports or {}).items():
         try:
             hp_int = int(h_port)
-            chk = check_port_availability(hp_int, "0.0.0.0")
+            chk = check_port_availability(hp_int, "0.0.0.0", store=store)
             if not chk["free"]:
                 raise ValueError(f"Port {hp_int} is already in use: {chk.get('used_by')}")
             formatted_ports[c_port] = [{"HostIp": "0.0.0.0", "HostPort": str(hp_int)}]

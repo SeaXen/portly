@@ -20,6 +20,7 @@ services:
       - PORTLY_PORT=5533
       - PORTLY_HOST=0.0.0.0
       - PORTLY_MODE=server
+      - PORTLY_DATA_DIR=/app/data
       # Set together with the /:/hostfs:ro mount above for host disk stats.
       # - PORTLY_HOSTFS=/hostfs
       - PORTLY_ALLOW_INSECURE_BIND=false

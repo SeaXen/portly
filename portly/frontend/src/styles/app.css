@@ -14,12 +14,19 @@
   --surface-1: #FFFFFF;
   --surface-2: #F1F5F9;
   --surface-3: #E2E8F0;
+  --surface-input: #F8FAFC;
+  --surface-terminal: #F8FAFC;
+  --surface-code: #F1F5F9;
   --border: rgba(0, 0, 0, 0.09);
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.16);
   --text: #0F172A;
   --muted: #475569;
   /* !important beats the inline user-accent custom property, which otherwise
      survives system-theme flips and forced data-theme changes. */
   --accent: #4F63D2 !important;
+  --accent-surface: #E0E7FF;
+  --on-accent: #FFFFFF;
   --success: #0F766E;
   --warning: #B45309;
   --danger: #B91C1C;
@@ -76,9 +83,16 @@
   --surface-1: #050505;
   --surface-2: #0A0A0C;
   --surface-3: #141418;
+  --surface-input: #050505;
+  --surface-terminal: #000000;
+  --surface-code: #050505;
   --border: rgba(255, 255, 255, 0.10);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
   --text: #F5F6F8;
   --muted: #949AA8;
+  --accent-surface: #11182B;
+  --on-accent: #050505;
   --accent-deep: #6875DF;
 }
 
@@ -540,8 +554,8 @@ kbd,
   min-width: 232px;
   max-width: 232px;
   min-height: 100vh;
-  background: #0A0D14;
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--bg);
+  border-right: 1px solid var(--border);
   padding: 20px 14px;
   display: flex;
   flex-direction: column;
@@ -578,7 +592,7 @@ kbd,
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #0A0D14;
+  color: var(--on-accent);
   box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
@@ -823,7 +837,7 @@ kbd,
   position: absolute;
   cursor: pointer;
   inset: 0;
-  background-color: #242C37;
+  background-color: var(--border-strong);
   transition: background-color 0.2s ease, border-color 0.2s ease;
   border-radius: 20px;
 }
@@ -841,12 +855,12 @@ kbd,
 }
 
 .portly-toggle input:checked + .toggle-slider {
-  background-color: #5EEAD4;
+  background-color: var(--success);
 }
 
 .portly-toggle input:checked + .toggle-slider:before {
   transform: translateX(16px);
-  background-color: #0A0D14;
+  background-color: var(--on-accent);
 }
 
 /* ==========================================================================
@@ -1284,15 +1298,7 @@ button.c088 {
   color: #475569 !important;
 }
 
-/* shortcut: these neutralise hard-coded colours in TSX inline styles, which the
-   cascade cannot reach; only selectors for colours still set inline are kept. */
-[data-theme="light"] [style*="rgb(14, 17, 22)"],
-[data-theme="light"] [style*="#0E1116"],
-[data-theme="light"] [style*="rgb(8, 10, 14)"],
-[data-theme="light"] [style*="#080A0E"] {
-  background: #FFFFFF !important;
-  border-color: rgba(0, 0, 0, 0.09) !important;
-}
+/* shortcut: these neutralise category/badge accent colours set inline in TSX. */
 [data-theme="light"] [style*="rgba(255, 255, 255, 0.07)"],
 [data-theme="light"] [style*="rgba(255,255,255,0.07)"],
 [data-theme="light"] [style*="rgba(255, 255, 255, 0.08)"],
@@ -1303,33 +1309,10 @@ button.c088 {
 [data-theme="light"] [style*="#8C9EFF"] { color: var(--accent) !important; }
 [data-theme="light"] [style*="#C4B5FD"],
 [data-theme="light"] [style*="rgb(196, 181, 253)"] { color: #6D28D9 !important; }
-[data-theme="light"] [style*="#64748B"],
-[data-theme="light"] [style*="rgb(100, 116, 139)"] { color: #475569 !important; }
 [data-theme="light"] [style*="#F5A3D0"],
 [data-theme="light"] [style*="rgb(245, 163, 208)"] { color: #BE185D !important; }
 [data-theme="light"] [style*="#B6E36B"],
 [data-theme="light"] [style*="rgb(182, 227, 107)"] { color: #4D7C0F !important; }
-/* Dark text reserved for accent-filled buttons; white keeps >=4.5:1 in light */
-[data-theme="light"] [style*="#0B1220"],
-[data-theme="light"] [style*="rgb(11, 18, 32)"],
-[data-theme="light"] [style*="#0A0D14"],
-[data-theme="light"] [style*="rgb(10, 13, 20)"] { color: #FFFFFF !important; }
-[data-theme="light"] [style*="rgb(22, 27, 34)"],
-[data-theme="light"] [style*="#161B22"],
-[data-theme="light"] [style*="rgb(9, 11, 16)"],
-[data-theme="light"] [style*="#090B10"],
-[data-theme="light"] [style*="rgb(36, 44, 55)"],
-[data-theme="light"] [style*="#242C37"],
-[data-theme="light"] [style*="rgb(29, 42, 68)"],
-[data-theme="light"] [style*="#1D2A44"],
-[data-theme="light"] [style*="rgb(26, 30, 44)"],
-[data-theme="light"] [style*="#1A1E2C"],
-[data-theme="light"] [style*="rgb(6, 8, 11)"],
-[data-theme="light"] [style*="#06080B"] {
-  background: #F8FAFC !important;
-  border-color: rgba(0, 0, 0, 0.09) !important;
-  color: #0F172A !important;
-}
 /* D-6: fit all six stat tiles on narrow screens (hide secondary context) */
 @media (max-width: 900px) {
   .c082, .c088 { padding: 10px 8px; gap: 4px; }

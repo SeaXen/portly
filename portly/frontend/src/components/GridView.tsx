@@ -84,7 +84,7 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, visibleF
                     }}
                     title={app.url_override || app.open_url}
                   >
-                    <span>☁</span>
+                    <Icon name="cloud" size={11} />
                     <span>Tunnel</span>
                   </span>
                 )}

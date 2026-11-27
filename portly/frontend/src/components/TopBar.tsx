@@ -144,7 +144,15 @@ export const TopBar: React.FC<TopBarProps> = ({
           className="c077"
           aria-label="Toggle theme"
           onClick={onToggleTheme}
-          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+          title={
+            theme === 'dark'
+              ? 'Switch to light theme'
+              : theme === 'light'
+              ? 'Switch to OLED theme'
+              : theme === 'oled'
+              ? 'Switch to system theme'
+              : 'Switch to dark theme'
+          }
           style={{ width: '36px', height: '36px', borderRadius: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           {theme === 'dark' ? (
@@ -450,7 +458,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             borderRadius: '9px',
             background: 'var(--accent)',
             border: 0,
-            color: '#0A0D14',
+            color: 'var(--on-accent)',
             fontSize: '13.5px',
             fontWeight: 600,
             display: 'flex',

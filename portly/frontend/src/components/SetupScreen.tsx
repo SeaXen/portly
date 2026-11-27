@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../api';
+import { Icon } from './Icon';
 
 interface SetupScreenProps {
   onSetupSuccess: (user: any) => void;
@@ -78,7 +79,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
               width: 52,
               height: 52,
               borderRadius: 14,
-              background: '#1D2A44',
+              background: 'var(--accent-surface)',
               color: 'var(--accent)',
               fontSize: 26,
               display: 'flex',
@@ -87,7 +88,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
               boxShadow: '0 8px 16px rgba(140, 158, 255, 0.15)',
             }}
           >
-            ⚓
+            <Icon name="anchor" size={26} />
           </div>
           <h1 style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>Welcome to Portly</h1>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)' }}>Create your primary administrator account</p>
@@ -127,8 +128,8 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
               style={{
                 height: 42,
                 borderRadius: 8,
-                border: '1px solid #242C37',
-                background: '#161B22',
+                border: '1px solid var(--border-strong)',
+                background: 'var(--surface-input)',
                 color: 'var(--text)',
                 padding: '0 14px',
                 fontSize: 14,
@@ -158,8 +159,8 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
               style={{
                 height: 42,
                 borderRadius: 8,
-                border: `1px solid ${password.length > 0 && !isPasswordLongEnough ? 'var(--danger)' : '#242C37'}`,
-                background: '#161B22',
+                border: `1px solid ${password.length > 0 && !isPasswordLongEnough ? 'var(--danger)' : 'var(--border-strong)'}`,
+                background: 'var(--surface-input)',
                 color: 'var(--text)',
                 padding: '0 14px',
                 fontSize: 14,
@@ -184,8 +185,8 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
               style={{
                 height: 42,
                 borderRadius: 8,
-                border: '1px solid #242C37',
-                background: '#161B22',
+                border: '1px solid var(--border-strong)',
+                background: 'var(--surface-input)',
                 color: 'var(--text)',
                 padding: '0 14px',
                 fontSize: 14,
@@ -213,8 +214,8 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
               style={{
                 height: 42,
                 borderRadius: 8,
-                border: '1px solid #242C37',
-                background: '#161B22',
+                border: '1px solid var(--border-strong)',
+                background: 'var(--surface-input)',
                 color: 'var(--text)',
                 padding: '0 14px',
                 fontSize: 14,
@@ -232,7 +233,7 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
               borderRadius: 8,
               border: 0,
               background: 'var(--success)',
-              color: '#0B1220',
+              color: 'var(--on-accent)',
               fontWeight: 600,
               fontSize: 15,
               cursor: loading ? 'not-allowed' : 'pointer',
