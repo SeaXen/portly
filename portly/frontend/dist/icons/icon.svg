@@ -1,13 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <defs>
-    <linearGradient id="portlyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="pBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B0F1A"/>
+      <stop offset="100%" stop-color="#151D33"/>
+    </linearGradient>
+    <radialGradient id="pGlow" cx="30%" cy="22%" r="75%">
+      <stop offset="0%" stop-color="#8C9EFF" stop-opacity="0.22"/>
+      <stop offset="65%" stop-color="#5EEAD4" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#0B0F1A" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pLoop" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#8C9EFF"/>
       <stop offset="100%" stop-color="#5EEAD4"/>
     </linearGradient>
+    <linearGradient id="pStem" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F4F6FF"/>
+      <stop offset="100%" stop-color="#C6D0FF"/>
+    </linearGradient>
   </defs>
-  <rect width="100" height="100" rx="22" fill="#141824"/>
-  <circle cx="50" cy="28" r="9" stroke="url(#portlyGrad)" stroke-width="5" fill="none"/>
-  <line x1="50" y1="37" x2="50" y2="78" stroke="url(#portlyGrad)" stroke-width="6" stroke-linecap="round"/>
-  <line x1="28" y1="48" x2="72" y2="48" stroke="url(#portlyGrad)" stroke-width="6" stroke-linecap="round"/>
-  <path d="M 22 60 C 22 84, 78 84, 78 60" stroke="url(#portlyGrad)" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <!-- Obsidian Harbor squircle tile -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#pBg)"/>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#pGlow)"/>
+  <rect x="4.75" y="4.75" width="118.5" height="118.5" rx="27.25" fill="none" stroke="#FFFFFF" stroke-opacity="0.1" stroke-width="1.5"/>
+
+  <!-- Interlocking Port Loop (P bowl + socket bay) -->
+  <path fill-rule="evenodd" fill="url(#pLoop)" d="
+    M 43.5 28
+    L 69 28
+    A 23 23 0 0 1 92 51
+    A 23 23 0 0 1 69 74
+    L 43.5 74
+    Z
+    M 54 40
+    L 67 40
+    A 11 11 0 0 1 78 51
+    A 11 11 0 0 1 67 62
+    L 54 62
+    Z
+  "/>
+
+  <!-- Live Port Status Node inside socket bay -->
+  <circle cx="67" cy="51" r="6.2" fill="#5EEAD4"/>
+
+  <!-- Architectural Harbor Pillar / Stem -->
+  <rect x="36" y="28" width="15" height="72" rx="7.5" fill="url(#pStem)"/>
 </svg>

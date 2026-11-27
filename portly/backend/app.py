@@ -26,7 +26,14 @@ from starlette.middleware.gzip import GZipMiddleware
 from portly import __version__
 from portly.backend import auth, favicon as favicon_module, proxy_gen, tls_inspector
 from portly.backend.actions import docker_actions, process_actions
-from portly.backend.discovery.docker_src import get_docker_client, is_docker_available, set_on_docker_event
+from portly.backend.discovery.docker_src import (
+    enable_docker_background_workers,
+    get_docker_client,
+    is_docker_available,
+    set_activity_probe,
+    set_on_docker_event,
+    shutdown_docker_background_workers,
+)
 from portly.backend.discovery.host import discover_host_ports
 from portly.backend.discovery.merge import merge_discovered_apps
 from portly.backend.health import check_app_health
@@ -67,6 +74,18 @@ def _get_public_host() -> str:
 def _invalidate_public_host_cache():
     global _public_host_cache
     _public_host_cache = None
+
+
+_last_client_activity: float = time.monotonic()
+
+
+def _mark_client_activity():
+    global _last_client_activity
+    _last_client_activity = time.monotonic()
+
+
+def _is_dashboard_active() -> bool:
+    return bool(_sse_subscribers) or (time.monotonic() - _last_client_activity) < 30.0
 
 
 async def refresh_discovery():
@@ -177,6 +196,8 @@ async def lifespan(app: FastAPI):
         yield
         return
 
+    set_activity_probe(_is_dashboard_active)
+    enable_docker_background_workers()
     # Initial scan
     await refresh_discovery()
 
@@ -198,14 +219,15 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning(f"Failed to auto-start custom app {ca['id']} on boot: {e}")
 
-    # Background refresh loop
+    # Background refresh loop (scales down polling when zero dashboard clients are active)
     async def background_poller():
         while True:
             try:
                 interval = float(store.get_setting("refresh_interval", "3"))
             except ValueError:
                 interval = 3.0
-            await asyncio.sleep(max(1.0, interval))
+            sleep_sec = max(1.0, interval) if _is_dashboard_active() else min(12.0, max(10.0, interval))
+            await asyncio.sleep(sleep_sec)
             if store.get_setting("auto_refresh", "true").lower() == "true":
                 try:
                     await refresh_discovery()
@@ -283,6 +305,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        shutdown_docker_background_workers()
         poller_task.cancel()
         health_task.cancel()
         maint_task.cancel()
@@ -860,6 +883,7 @@ async def get_apps(
     sort_dir: str = "asc",
     user: Dict[str, Any] = Depends(require_auth)
 ):
+    _mark_client_activity()
     apps = list(_cached_apps)
 
     if not include_hidden:
@@ -2577,6 +2601,7 @@ async def get_audit_logs_endpoint(
 # 13. Real-time SSE Stream
 @app.get("/api/stream")
 async def sse_stream(request: Request, user: Dict[str, Any] = Depends(require_auth)):
+    _mark_client_activity()
     if len(_sse_subscribers) >= 64:
         raise HTTPException(status_code=503, detail={"code": "SSE_LIMIT", "message": "Too many live subscribers. Close a tab and retry."})
     q = asyncio.Queue(maxsize=32)
@@ -2642,11 +2667,11 @@ async def get_manifest():
         "description": "Real-time local port, container, and reverse proxy manager",
         "start_url": "/",
         "display": "standalone",
-        "background_color": "#0b0f19",
-        "theme_color": "#0b0f19",
+        "background_color": "#0A0B0F",
+        "theme_color": "#0A0B0F",
         "icons": [
-            {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
-            {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+            {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
             {"src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml"}
         ]
     }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Category } from '../types';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { BrandMark } from './BrandMark';
 
 interface SidebarProps {
   activeNav: string;
@@ -56,11 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           title="Portly Dashboard"
         >
           <div className="sidebar-logo">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="4" y="5" width="16" height="14" rx="3"></rect>
-              <circle cx="9" cy="12" r="1.5" fill="currentColor"></circle>
-              <circle cx="15" cy="12" r="1.5" fill="currentColor"></circle>
-            </svg>
+            <BrandMark size={20} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <div style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>

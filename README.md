@@ -1,205 +1,252 @@
-# Portly ⚓
+<p align="center">
+  <img src="portly/frontend/public/icons/icon.svg" width="84" height="84" alt="Portly Logo">
+</p>
+
+<h1 align="center">Portly</h1>
 
 <p align="center">
-  <strong>A high-performance, self-hosted dashboard that automatically discovers every listening port, host process, and Docker container on your system.</strong><br>
-  Live telemetry with real-time sparklines, 1-click reverse proxy generators, container terminal, Docker Compose management, multi-user RBAC, and unified lifecycle controls.
+  <strong>Lightweight, self-hosted port, host process, and Docker container dashboard.</strong><br>
+  Real-time port &amp; conflict discovery, live container &amp; host telemetry, Compose Stack management, 1-click reverse proxy generators, container terminal, and multi-user RBAC in one fast single-process binary/container.
 </p>
 
 <p align="center">
-  <a href="#-testing"><img src="https://img.shields.io/badge/tests-full%20suite-5EEAD4?style=flat-square&logo=pytest&logoColor=white" alt="Tests"></a>
-  <a href="#-quickstart"><img src="https://img.shields.io/badge/port-5533-8C9EFF?style=flat-square" alt="Default Port"></a>
-  <a href="#-architecture"><img src="https://img.shields.io/badge/backend-FastAPI%20%7C%20SQLite%20WAL-009688?style=flat-square" alt="Backend"></a>
-  <a href="#-architecture"><img src="https://img.shields.io/badge/frontend-React%2019%20%7C%20Vite%20%7C%20CSS%20Tokens-61DAFB?style=flat-square" alt="Frontend"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-B6E36B?style=flat-square" alt="License"></a>
-  <a href="DESIGN.md"><img src="https://img.shields.io/badge/design-Obsidian%20Harbor-151821?style=flat-square" alt="Design System"></a>
+  <a href="#-installation--setup"><img src="https://img.shields.io/badge/port-5533-8C9EFF?style=flat-square" alt="Default Port 5533"></a>
+  <a href="#-architecture--low-resource-design"><img src="https://img.shields.io/badge/backend-FastAPI%20%7C%20SQLite%20WAL-5EEAD4?style=flat-square" alt="FastAPI and SQLite WAL"></a>
+  <a href="#-architecture--low-resource-design"><img src="https://img.shields.io/badge/frontend-React%2019%20%7C%20Vite-61DAFB?style=flat-square" alt="React 19 and Vite"></a>
+  <a href="docs/USER_GUIDE.md"><img src="https://img.shields.io/badge/docs-User%20Guide-FBBF77?style=flat-square" alt="User Guide"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-B6E36B?style=flat-square" alt="MIT License"></a>
 </p>
 
 ---
 
-## ⚡ Quickstart
+## 📋 Table of Contents
 
-### Option 1: Docker Compose (Server / Homelab / NAS)
-
-```bash
-docker compose up -d
-```
-Open **[http://localhost:5533](http://localhost:5533)**.
-
-> **First Run in Server Mode:** On first launch, Portly outputs a single-use admin setup token to `docker compose logs`. Enter the setup token in the web interface to create your administrator account.
-
-```yaml
-services:
-  portly:
-    image: ghcr.io/seaxen/portly:latest
-    build: .   # published image may lag; build locally if pull fails
-    container_name: portly
-    network_mode: host
-    pid: host
-    restart: unless-stopped
-    # Docker socket group for the non-root portly user (match your host's docker GID)
-    group_add:
-      - "${DOCKER_GID:-999}"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - portly-data:/app/data
-      # Opt-in: mounting all of / exposes every host file read-only. Only needed
-      # for host (not container) disk numbers.
-      # - /:/hostfs:ro
-    environment:
-      - PORTLY_PORT=5533
-      - PORTLY_HOST=0.0.0.0
-      - PORTLY_MODE=server
-      # Set together with the /:/hostfs:ro mount above.
-      # - PORTLY_HOSTFS=/hostfs
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5533/api/health', timeout=3)"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-```
-
-> **Accessing Portly by hostname:** set `PORTLY_ALLOWED_HOSTS` to a comma-separated list of hostnames you use (e.g. `portly.example.com,192.168.1.10`). It controls Host-header validation and CORS; IP literals are allowed automatically, but DNS names must be listed. Subdomains are only accepted with an explicit wildcard entry (`*.example.com`). See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+- [Requirements](#-requirements)
+- [Installation & Setup](#-installation--setup)
+  - [Option 1: Docker Compose (Recommended for Servers & Homelabs)](#option-1-docker-compose-recommended-for-servers--homelabs)
+  - [Option 2: Single Docker Container](#option-2-single-docker-container)
+  - [Option 3: Local Python Install (Linux / macOS / Windows)](#option-3-local-python-install-linux--macos--windows)
+  - [Option 4: Developer Mode (Hot Reload)](#option-4-developer-mode-hot-reload)
+- [First-Time Setup & Basic Usage](#-first-time-setup--basic-usage)
+- [CLI Commands](#-cli-commands)
+- [Architecture & Low-Resource Design](#-architecture--low-resource-design)
+- [Documentation Index](#-documentation-index)
+- [Troubleshooting](#-troubleshooting)
+- [Testing](#-testing)
 
 ---
 
-### Option 2: Direct Local Run (Python 3.10+)
+## ✅ Requirements
 
-Portly runs natively on **Linux**, **macOS**, and **Windows**:
+- **Python deployment:** Python **3.10+** (tested on Python 3.12 & 3.13) on Linux, macOS, or Windows.
+- **Docker deployment:** Docker Engine **20.10+** and Docker Compose **v2+**.
+- **Docker monitoring (optional):** Portly works seamlessly even without Docker installed (it will automatically monitor host TCP/UDP sockets and managed Custom Apps).
+
+---
+
+## 🚀 Installation & Setup
+
+### Option 1: Docker Compose (Recommended for Servers & Homelabs)
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/SeaXen/portly.git
+   cd portly
+   ```
+
+2. **Pass your host's `docker` group ID so the non-root container (`portly`, UID/GID `1000:1000`) can read `/var/run/docker.sock`:**
+   ```bash
+   export DOCKER_GID=$(getent group docker | cut -d: -f3)
+   ```
+   *(If you do not use Docker integration or run rootless Docker, check `docker-compose.yml` and remove or adjust `group_add`.)*
+
+3. **Start Portly in detached mode:**
+   ```bash
+   docker compose up -d --build
+   ```
+
+4. **Retrieve your single-use First-Run Setup Token:**
+   ```bash
+   docker compose logs portly
+   ```
+   Look for the banner:
+   ```text
+   PORTLY INITIAL ADMIN SETUP REQUIRED
+   Setup Token: <your-one-time-token>
+   ```
+
+5. **Open Portly in your browser:**  
+   Visit **[http://localhost:5533](http://localhost:5533)** (or `http://<your-server-ip>:5533`).  
+   If you access Portly through a **DNS hostname or reverse proxy** (e.g. `https://portly.example.com`), uncomment and set `PORTLY_ALLOWED_HOSTS` in [`docker-compose.yml`](docker-compose.yml):
+   ```yaml
+   - PORTLY_ALLOWED_HOSTS=portly.example.com,*.example.com
+   ```
+   For production reverse proxies, `docker-socket-proxy`, systemd units, and TLS checklists, see the full [**Deployment Guide**](docs/DEPLOYMENT.md).
+
+---
+
+### Option 2: Single Docker Container
+
+If you prefer a single `docker run` command without editing Compose files:
 
 ```bash
-# 1. Install dependencies
+docker build -t portly:local .
+
+docker run -d \
+  --name portly \
+  --restart unless-stopped \
+  --network host \
+  --pid host \
+  --group-add $(getent group docker | cut -d: -f3) \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v portly-data:/app/data \
+  -e PORTLY_MODE=server \
+  -e PORTLY_HOST=0.0.0.0 \
+  -e PORTLY_PORT=5533 \
+  -e PORTLY_DATA_DIR=/app/data \
+  portly:local
+```
+
+Then inspect the logs to copy your first-run setup token:
+```bash
+docker logs portly
+```
+
+---
+
+### Option 3: Local Python Install (Linux / macOS / Windows)
+
+Run Portly directly on your workstation or laptop without Docker:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/SeaXen/portly.git
+cd portly
+
+# 2. Create & activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate          # Windows PowerShell: .venv\Scripts\Activate.ps1
+
+# 3. Install Portly and its dependencies
 pip install -r requirements.txt
+pip install -e .
 
-# 2. Launch Portly on port 5533
-python -m portly run --port 5533
+# 4. Launch Portly (desktop mode binds to 127.0.0.1:5533)
+portly run --port 5533
 ```
-Open **[http://localhost:5533](http://localhost:5533)** in your browser.
+
+Open **[http://127.0.0.1:5533](http://127.0.0.1:5533)**.
+- In **desktop** mode (default on `127.0.0.1`), create your admin user directly in the welcome screen — no CLI setup token is required.
+- To expose Portly on your LAN (`--host 0.0.0.0`), add `--mode server` so Portly enforces a setup token printed to your terminal.
 
 ---
 
-### Option 3: Full Development Mode (Live Hot-Reload)
+### Option 4: Developer Mode (Hot Reload)
+
+Only Node 20+ and Python 3.10+ are needed to hack on Portly:
 
 ```bash
-# Terminal 1: Backend
-pip install -e .
-python -m portly run --port 5533
+# Terminal 1 — Backend API (runs on :5533)
+.venv/bin/python -m portly run --port 5533
 
-# Terminal 2: Frontend (Vite dev server)
+# Terminal 2 — Frontend Dev Server (runs on :5173 and proxies /api -> :5533)
 cd portly/frontend
 npm install
 npm run dev
 ```
 
+After making frontend edits, rebuild the static bundle served by the backend:
+```bash
+npm --prefix portly/frontend run build
+```
+
 ---
 
-## 💻 CLI Subcommands
+## 🧭 First-Time Setup & Basic Usage
 
-Portly includes a dedicated CLI for terminal automation:
+1. **Create Admin Account:** On first boot, fill out the Welcome screen (username, 10+ char password, and the setup token if running in `server` mode).
+2. **Understand Safe Mode (On by Default):** Portly locks mutating operations (starting/stopping containers, killing processes, editing ports, `compose down`, `exec` writes) until you unlock **Safe Mode** from the bottom-left sidebar. Timed unlocks (5 min default) automatically re-lock.
+3. **Explore Views:** Switch between **Table**, **Grid**, **List**, **Board (Kanban)**, **Overview**, **Stacks**, **Conflicts**, and **History** using the sidebar, toolbar, or `g` chords.
+4. **Inspect Any Service:** Click any row/card to open the Service Detail modal:
+   - Live ANSI-colorized Logs with Regex & level filtering
+   - Port Remapping & Multi-Port Container Recreation (with automatic rollback snapshots)
+   - Cloudflare Tunnel URL overrides & 1-click Reverse Proxy configs (Caddy, Nginx, Traefik, Cloudflared)
+   - Container Diagnostic Terminal (`ps`, `df`, `free`, `uptime`, `netstat`, `uname`) &masked/unmasked Env vars
+5. **Preflight Before Deploying:** Open **Add App → Preflight Collision Check** and paste a `docker run` command, `docker-compose.yml`, or port list to detect conflicts before launching.
+
+Read the complete [**User Guide**](docs/USER_GUIDE.md) for detailed workflows, RBAC user management, backups, and shortcuts.
+
+---
+
+## 💻 CLI Commands
+
+*(Requires `pip install -e .`; otherwise replace `portly` with `python -m portly`.)*
 
 ```bash
-# List all discovered ports (add --json for raw JSON output)
+portly run [--port 5533] [--host 127.0.0.1] [--mode desktop|server]
 portly list [--docker] [--host-only] [--json]
-
-# Open web dashboard in default browser
 portly open <app_id>
-
-# Check port availability and diagnose conflicts
 portly check-port 8080 [--bind 0.0.0.0]
-
-# Suggest free ports for binding
 portly suggest [--count 5] [--start 3000]
-
-# Start / stop a managed app (custom apps and Docker containers)
 portly start <app_id>
 portly stop <app_id>
-
-# View container or custom-app logs (host processes are not supported)
 portly logs <app_id> [--tail 100]
-
-# Recover a lost server-mode setup token
 portly reset-setup-token
 ```
 
-> The `portly` console command requires `pip install -e .`; with a plain
-> `pip install -r requirements.txt` setup, use `python -m portly …` instead.
+---
+
+## ⚡ Architecture & Low-Resource Design
+
+Portly is engineered to run unobtrusively alongside your workloads with minimal CPU, RAM, and disk I/O:
+
+- **Single-process serving:** FastAPI serves both REST/SSE APIs and the pre-built static Vite bundle (`portly/frontend/dist`) on a single port (`5533`) — zero separate Nginx/Node runtime processes needed in production.
+- **SQLite WAL + Targeted Indexes:** All state lives in SQLite (`WAL` mode + `NORMAL` sync) with covering indexes on `events(ts)`, `events(type, id)`, `health_history(app_id, ts)`, `health_history(app_id, id)`, `sessions(expires_at)`, and `port_reservations(port, proto)`. Custom app health snapshots load in a single batch query (`get_all_latest_health()`).
+- **Idle-Aware Background Polling:** When dashboard tabs/SSE streams are connected, discovery refreshes every `3s` (configurable) and container stats every `4s`. When **no UI clients are connected**, background discovery and Docker stats automatically scale down polling frequency to cut idle CPU & Docker daemon load while preserving live freshness.
+- **Shared Bounded Thread Pools, Zero N+1 Docker Calls & `/proc` Caching:** Docker container discovery resolves `Config.Image` inline without firing per-container `/images/{id}/json` HTTP calls (`~10x` faster on multi-container hosts), and only starts background stats/event threads in long-lived server mode so CLI subcommands exit immediately. Host discovery caches static `(name, cmdline, cwd)` metadata per verified `(pid, create_time)`.
+- **Fast Code-Split & Offline-First Frontend:** React components are route/modal code-split via `React.lazy`, fonts (`Inter` & `JetBrains Mono`) are vendored locally (zero external CDN calls), API responses >1 KB are GZip-compressed (excluding unbuffered SSE), and Vite hashed assets are cached immutably (`max-age=31536000`).
 
 ---
 
-## 🌟 Key Capabilities
+## 📚 Documentation Index
 
-### 1. Unified Real-Time Discovery & Intelligent Merge
-- **Host Processes:** Automatically reads listening TCP and UDP sockets using `psutil` (with fallback to `netstat -ano` / `lsof`). Resolves PID, command line, working directory, process CPU %, and RSS memory.
-- **Docker Containers:** Connects directly to the Docker Engine API to extract container names, images, health status, compose projects, published port mappings, CPU %, and memory limits.
-- **Zero-False-Conflict Engine:** Eliminates duplicates between Docker-published ports and raw host `docker-proxy` processes. Only flags true collisions (overlapping interfaces or `0.0.0.0` wildcards) while allowing multi-homed binds (e.g. `127.0.0.1` and `192.168.1.50` on the same port).
-- **Stable IDs:** Assigns persistent IDs (`docker:...`, `host:...`, `custom:...`) so custom names, categories, and tags survive machine reboots.
-
-### 2. Multi-View Interactive Dashboard
-- **Table View:** Sortable columns, checkboxes, density toggle (Compact / Comfy), quick action buttons (Start, Stop, Logs, More). Pinned apps stay on top across all views.
-- **Grid View:** Homarr / Homepage style tiles featuring large accent port typography, status dots, and direct Open links.
-- **List View:** High-density listing for minimalist monitoring.
-- **Board View:** Interactive Kanban columns organized by category with drag-and-drop movement.
-- **Overview View:** Aggregate KPI telemetry cards and category distribution breakdown meters.
-- **Conflicts View:** Real-time port collision detector with side-by-side diagnosis.
-- **History View:** Chronological change log and system event timeline tracking opened/closed ports.
-- **Saved Views:** Instant tabs for `"All ports"`, `"Dev only"`, `"Exposed 0.0.0.0"`, `"Docker"`, and user-defined custom saved views.
-
-### 3. Preflight Port Collision Detection
-- Check port availability before running containers or compose stacks.
-- Paste a `docker run` command or `docker-compose.yml` snippet in the web UI or CLI to diagnose port conflicts in advance.
-
-### 4. Safe Mode with Auto-Relock Timers
-- Enabled by default to prevent accidental mutations.
-- One-click unlock for 5 minutes with live countdown banner and automatic re-locking.
-- Replaced all browser `alert()` and `confirm()` prompts with accessible Focus-trapped Dialogs and Toasts.
-
-### 5. Multi-User RBAC & Audit Logging
-- Role-Based Access Control (`admin` vs `viewer`).
-- Complete audit logging of all mutations (timestamp, actor, target, success).
-- Admin-controlled environment variable revelation for container inspection.
-
-### 6. Reverse Proxy Generation
-- Instant reverse proxy configurations for Caddy, Nginx, Traefik (file & labels), and Cloudflare Tunnels.
-
----
-
-## ⌨️ Keyboard Shortcuts
-
-| Shortcut | Action |
+| Document | Audience & Purpose |
 |---|---|
-| `?` | Open Keyboard Shortcuts modal |
-| `/` | Focus search bar |
-| `Ctrl + K` / `Cmd + K` | Open Command Palette (works anywhere) |
-| `Shift + K` | Toggle Kiosk / Wall Display mode |
-| `g` then `t` | Switch to **Table** view |
-| `g` then `g` | Switch to **Grid** view |
-| `g` then `b` | Switch to **Board** view |
-| `g` then `l` | Switch to **List** view |
-| `Escape` | Close active modal, drawer, or dialog |
+| [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) | Step-by-step usage walkthrough, first-time setup, Safe Mode, Stacks, RBAC, Backups & Shortcuts |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Production Docker Compose, non-root `DOCKER_GID`, `docker-socket-proxy`, `systemd`, Caddy/Nginx/Cloudflared & Env Reference |
+| [`docs/API.md`](docs/API.md) | REST endpoints, SSE `/api/stream` events, Prometheus `/api/metrics`, and authentication payloads |
+| [`SECURITY.md`](SECURITY.md) | Threat model, CSRF/Host header enforcement, Safe Mode boundaries, and socket risk tradeoffs |
+| [`docs/FINAL_DOCKER_REVIEW.md`](docs/FINAL_DOCKER_REVIEW.md) | Pre-Docker audit findings, bug fixes, and verification report |
+
+---
+
+## 🛠 Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| **`400 INVALID_HOST` when opening via domain/LAN DNS** | Add your hostname(s) to `PORTLY_ALLOWED_HOSTS=portly.example.com,*.example.com` and restart. |
+| **Container starts but no Docker containers appear** | Ensure `/var/run/docker.sock` is mounted and `DOCKER_GID` matches `getent group docker \| cut -d: -f3`. |
+| **Lost initial Setup Token in server mode** | Run `portly reset-setup-token` (or `docker exec -it portly python -m portly reset-setup-token`) to generate a fresh one-time token. |
+| **Actions fail with `403 SAFE_MODE`** | Toggle **Safe Mode** off in the bottom-left Sidebar (or via Command Palette `Ctrl/Cmd+K`) to unlock live mutations. |
+| **Host Disk card shows container overlay size inside Docker** | Mount `- /:/hostfs:ro` and set `PORTLY_HOSTFS=/hostfs` in `docker-compose.yml` (opt-in; exposes host files read-only to container). |
 
 ---
 
 ## 🧪 Testing
 
 ```bash
-# Run unit & integration tests
+# Backend unit & integration tests
 python -m pytest tests --ignore=tests/e2e -q
 
-# Run end-to-end Playwright tests (spawns its own server against the built dist)
-pip install pytest-playwright playwright && playwright install chromium
+# Frontend lint, unit tests & production build check
+npm --prefix portly/frontend run lint
+npm --prefix portly/frontend test -- --run
 npm --prefix portly/frontend run build
+
+# End-to-End Playwright tests (launches isolated server against built dist)
+pip install pytest-playwright playwright && playwright install chromium
 python -m pytest -o addopts= tests/e2e -q
 ```
-
-**The full test suite (e2e runs separately)** verifies:
-- Host discovery and stable ID formatting across Linux/macOS/Windows.
-- Docker deduplication & multi-homed port conflict detection.
-- Multi-user RBAC, timing-safe authentication, and rate limiting.
-- Command execution boundaries, shell operator blocking, and output truncation.
-- SQLite WAL mode concurrency stress testing and version pragma tracking.
-- Safe Mode mutation locking and 5-minute auto-relock timers.
-- Reverse proxy configuration generation for Caddy, Nginx, Traefik, and Cloudflare Tunnels.
-- SSL/TLS certificate inspection and expiration calculation.
-- SSRF filtering and image MIME detection.
 
 ---
 

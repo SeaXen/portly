@@ -239,6 +239,13 @@ class Store:
             );
             """)
 
+            # Hot-path indexes for discovery polling, history queries, and session pruning
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts DESC);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_events_type_id ON events(type, id DESC);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_health_app_ts ON health_history(app_id, ts DESC);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_health_app_id ON health_history(app_id, id DESC);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);")
+
             conn.commit()
 
             # Seed defaults only for a freshly created database; re-seeding on
@@ -774,6 +781,27 @@ class Store:
                 "ts": row["ts"],
                 "ok": bool(row["ok"]),
                 "latency_ms": row["latency_ms"],
+            }
+
+    def get_all_latest_health(self) -> Dict[str, Dict[str, Any]]:
+        """Batch-fetch latest health snapshot for every app in a single query."""
+        with self._get_connection() as conn:
+            cur = conn.execute("""
+                SELECT h.app_id, h.ts, h.ok, h.latency_ms
+                FROM health_history h
+                INNER JOIN (
+                    SELECT app_id, MAX(id) AS max_id
+                    FROM health_history
+                    GROUP BY app_id
+                ) latest ON h.id = latest.max_id
+            """)
+            return {
+                row["app_id"]: {
+                    "ts": row["ts"],
+                    "ok": bool(row["ok"]),
+                    "latency_ms": row["latency_ms"],
+                }
+                for row in cur.fetchall()
             }
 
     # Port snapshots for rollback

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../api';
-import { Icon } from './Icon';
+import { BrandMark } from './BrandMark';
 
 interface SetupScreenProps {
   onSetupSuccess: (user: any) => void;
@@ -81,14 +81,13 @@ export function SetupScreen({ onSetupSuccess }: SetupScreenProps) {
               borderRadius: 14,
               background: 'var(--accent-surface)',
               color: 'var(--accent)',
-              fontSize: 26,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               boxShadow: '0 8px 16px rgba(140, 158, 255, 0.15)',
             }}
           >
-            <Icon name="anchor" size={26} />
+            <BrandMark size={30} />
           </div>
           <h1 style={{ margin: '8px 0 0', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>Welcome to Portly</h1>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--muted)' }}>Create your primary administrator account</p>

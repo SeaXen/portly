@@ -13,8 +13,8 @@ import psutil
 
 logger = logging.getLogger("portly.host")
 
-# Cache process objects across scans so cpu_percent(interval=None) returns real delta metrics
-_proc_instances: Dict[int, Tuple[float, psutil.Process]] = {}
+# Cache process objects and static metadata across scans to minimize /proc syscalls
+_proc_instances: Dict[int, Tuple[float, psutil.Process, str, str, str]] = {}
 
 
 def _get_process_info(pid: int) -> Dict[str, Any]:
@@ -30,11 +30,16 @@ def _get_process_info(pid: int) -> Dict[str, Any]:
         return info
 
     proc_obj: Optional[psutil.Process] = None
+    cached_meta: Optional[Tuple[float, str, str, str]] = None
     if pid in _proc_instances:
-        saved_ctime, cached_proc = _proc_instances[pid]
+        entry = _proc_instances[pid]
+        saved_ctime = entry[0]
+        cached_proc = entry[1]
         try:
             if cached_proc.is_running() and cached_proc.create_time() == saved_ctime:
                 proc_obj = cached_proc
+                if len(entry) >= 5:
+                    cached_meta = (saved_ctime, entry[2], entry[3], entry[4])
             else:
                 _proc_instances.pop(pid, None)
         except Exception:
@@ -43,29 +48,47 @@ def _get_process_info(pid: int) -> Dict[str, Any]:
     if proc_obj is None:
         try:
             if len(_proc_instances) > 500:
-                dead_pids = [p_id for p_id, (_, pr) in _proc_instances.items() if not pr.is_running()]
+                dead_pids = [p_id for p_id, item in _proc_instances.items() if not item[1].is_running()]
                 for d in dead_pids:
                     _proc_instances.pop(d, None)
 
             p = psutil.Process(pid)
             ctime = p.create_time()
             p.cpu_percent(interval=None)  # Prime initial sample
-            _proc_instances[pid] = (ctime, p)
+            proc_name = p.name()
+            try:
+                cmd = p.cmdline()
+                proc_cmd = " ".join(cmd) if cmd else proc_name
+            except (psutil.AccessDenied, psutil.ZombieProcess):
+                proc_cmd = proc_name
+            try:
+                proc_cwd = p.cwd()
+            except (psutil.AccessDenied, psutil.ZombieProcess):
+                proc_cwd = ""
+            _proc_instances[pid] = (ctime, p, proc_name, proc_cmd, proc_cwd)
             proc_obj = p
+            cached_meta = (ctime, proc_name, proc_cmd, proc_cwd)
         except Exception:
             return info
 
     try:
-        info["name"] = proc_obj.name()
-        try:
-            cmd = proc_obj.cmdline()
-            info["cmdline"] = " ".join(cmd) if cmd else info["name"]
-        except (psutil.AccessDenied, psutil.ZombieProcess):
-            info["cmdline"] = info["name"]
-        try:
-            info["cwd"] = proc_obj.cwd()
-        except (psutil.AccessDenied, psutil.ZombieProcess):
-            info["cwd"] = ""
+        if cached_meta is not None:
+            info["create_time"], info["name"], info["cmdline"], info["cwd"] = cached_meta
+        else:
+            info["name"] = proc_obj.name()
+            try:
+                cmd = proc_obj.cmdline()
+                info["cmdline"] = " ".join(cmd) if cmd else info["name"]
+            except (psutil.AccessDenied, psutil.ZombieProcess):
+                info["cmdline"] = info["name"]
+            try:
+                info["cwd"] = proc_obj.cwd()
+            except (psutil.AccessDenied, psutil.ZombieProcess):
+                info["cwd"] = ""
+            try:
+                info["create_time"] = proc_obj.create_time()
+            except Exception:
+                info["create_time"] = None
         try:
             info["cpu_percent"] = round(proc_obj.cpu_percent(interval=None), 1)
         except Exception:
@@ -75,10 +98,6 @@ def _get_process_info(pid: int) -> Dict[str, Any]:
             info["ram_mb"] = round(mem.rss / (1024 * 1024), 1)
         except Exception:
             info["ram_mb"] = None
-        try:
-            info["create_time"] = proc_obj.create_time()
-        except Exception:
-            info["create_time"] = None
     except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
         _proc_instances.pop(pid, None)
 

@@ -1,11 +1,14 @@
 // Portly Progressive Web App Service Worker
-const CACHE_NAME = 'portly-v4';
+const CACHE_NAME = 'portly-v5';
 const MAX_ASSET_ENTRIES = 60;
 const PRECACHE_URLS = [
   '/',
   '/index.html',
   '/manifest.webmanifest',
+  '/favicon.ico',
   '/icons/icon.svg',
+  '/icons/icon-32.png',
+  '/icons/apple-touch-icon.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png'
 ];

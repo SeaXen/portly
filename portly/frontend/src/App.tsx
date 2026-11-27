@@ -1,32 +1,33 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './components/Icon';
 import { api, resolveAppUrl } from './api';
-import { AddAppModal } from './components/AddAppModal';
-import { AppDetailModal } from './components/AppDetailModal';
-import { BoardView } from './components/BoardView';
 import { BulkActionBar } from './components/BulkActionBar';
 import { CommandPalette } from './components/CommandPalette';
-import { ConflictsView } from './components/ConflictsView';
-import { CustomizeDrawer } from './components/CustomizeDrawer';
-import { GridView } from './components/GridView';
-import { HistoryView } from './components/HistoryView';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { useFocusTrap } from './hooks/useFocusTrap';
-import { ListView } from './components/ListView';
-import { OverviewView } from './components/OverviewView';
 import { SavedViewTabs } from './components/SavedViewTabs';
 import { Sidebar } from './components/Sidebar';
-import { StacksView } from './components/StacksView';
 import { StatsStrip } from './components/StatsStrip';
-import { SystemDrawer } from './components/SystemDrawer';
 import { TableView } from './components/TableView';
 import { Toolbar } from './components/Toolbar';
 import { TopBar } from './components/TopBar';
-import { UserManagementDrawer } from './components/UserManagementDrawer';
 import { useToast } from './components/Toast';
 import { resolveViewChord } from './utils/shortcuts';
 import { AppItem, Category, ConflictItem, Rule, StatsData, ViewItem } from './types';
+
+const AddAppModal = lazy(() => import('./components/AddAppModal').then((m) => ({ default: m.AddAppModal })));
+const AppDetailModal = lazy(() => import('./components/AppDetailModal').then((m) => ({ default: m.AppDetailModal })));
+const BoardView = lazy(() => import('./components/BoardView').then((m) => ({ default: m.BoardView })));
+const ConflictsView = lazy(() => import('./components/ConflictsView').then((m) => ({ default: m.ConflictsView })));
+const CustomizeDrawer = lazy(() => import('./components/CustomizeDrawer').then((m) => ({ default: m.CustomizeDrawer })));
+const GridView = lazy(() => import('./components/GridView').then((m) => ({ default: m.GridView })));
+const HistoryView = lazy(() => import('./components/HistoryView').then((m) => ({ default: m.HistoryView })));
+const ListView = lazy(() => import('./components/ListView').then((m) => ({ default: m.ListView })));
+const OverviewView = lazy(() => import('./components/OverviewView').then((m) => ({ default: m.OverviewView })));
+const StacksView = lazy(() => import('./components/StacksView').then((m) => ({ default: m.StacksView })));
+const SystemDrawer = lazy(() => import('./components/SystemDrawer').then((m) => ({ default: m.SystemDrawer })));
+const UserManagementDrawer = lazy(() => import('./components/UserManagementDrawer').then((m) => ({ default: m.UserManagementDrawer })));
 
 interface AppProps {
   user?: any;
@@ -945,26 +946,34 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
         {/* Dedicated Views Based on Navigation */}
         {activeNav === 'overview' ? (
-          <OverviewView
-            apps={apps}
-            categories={categories}
-            conflicts={conflicts}
-            stats={stats}
-            events={events}
-            onOpenDetail={(app) => setDetailAppId(app.id)}
-            onSelectNav={handleSelectNav}
-          />
+          <Suspense fallback={null}>
+            <OverviewView
+              apps={apps}
+              categories={categories}
+              conflicts={conflicts}
+              stats={stats}
+              events={events}
+              onOpenDetail={(app) => setDetailAppId(app.id)}
+              onSelectNav={handleSelectNav}
+            />
+          </Suspense>
         ) : activeNav === 'stacks' ? (
-          <StacksView safeMode={safeMode} readOnly={readOnly} />
+          <Suspense fallback={null}>
+            <StacksView safeMode={safeMode} readOnly={readOnly} />
+          </Suspense>
         ) : activeNav === 'history' ? (
-          <HistoryView />
+          <Suspense fallback={null}>
+            <HistoryView />
+          </Suspense>
         ) : activeNav === 'conflicts' ? (
-          <ConflictsView
-            conflicts={conflicts}
-            apps={apps}
-            onOpenDetail={(app) => setDetailAppId(app.id)}
-            onSelectNav={handleSelectNav}
-          />
+          <Suspense fallback={null}>
+            <ConflictsView
+              conflicts={conflicts}
+              apps={apps}
+              onOpenDetail={(app) => setDetailAppId(app.id)}
+              onSelectNav={handleSelectNav}
+            />
+          </Suspense>
         ) : (
           <>
             {/* Single-Line Stats Strip */}
@@ -1046,32 +1055,38 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               )}
 
               {viewType === 'grid' && (
-                <GridView
-                  apps={displayedApps}
-                  onOpenDetail={(app) => setDetailAppId(app.id)}
-                  categories={categories}
-                  visibleFields={visibleFields}
-                  onAdoptApp={handleAdoptApp}
-                />
+                <Suspense fallback={null}>
+                  <GridView
+                    apps={displayedApps}
+                    onOpenDetail={(app) => setDetailAppId(app.id)}
+                    categories={categories}
+                    visibleFields={visibleFields}
+                    onAdoptApp={handleAdoptApp}
+                  />
+                </Suspense>
               )}
 
               {viewType === 'list' && (
-                <ListView
-                  apps={displayedApps}
-                  onOpenDetail={(app) => setDetailAppId(app.id)}
-                  categories={categories}
-                />
+                <Suspense fallback={null}>
+                  <ListView
+                    apps={displayedApps}
+                    onOpenDetail={(app) => setDetailAppId(app.id)}
+                    categories={categories}
+                  />
+                </Suspense>
               )}
 
               {viewType === 'board' && (
-                <BoardView
-                  apps={displayedApps}
-                  categories={categories}
-                  onOpenDetail={(app) => setDetailAppId(app.id)}
-                  onMoveAppCategory={handleMoveCategory}
-                  onNewCategoryClick={() => setShowNewCatModal(true)}
-                  readOnly={readOnly}
-                />
+                <Suspense fallback={null}>
+                  <BoardView
+                    apps={displayedApps}
+                    categories={categories}
+                    onOpenDetail={(app) => setDetailAppId(app.id)}
+                    onMoveAppCategory={handleMoveCategory}
+                    onNewCategoryClick={() => setShowNewCatModal(true)}
+                    readOnly={readOnly}
+                  />
+                </Suspense>
               )}
                 </>
               )}
@@ -1103,81 +1118,93 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
 
       {/* Detail Modal */}
       {detailApp && (
-        <AppDetailModal
-          key={detailApp.id}
-          app={detailApp}
-          onClose={() => setDetailAppId(null)}
-          categories={categories}
-          safeMode={safeMode}
-          readOnly={readOnly}
-          onRefreshApps={fetchAppsAndStats}
-        />
+        <Suspense fallback={null}>
+          <AppDetailModal
+            key={detailApp.id}
+            app={detailApp}
+            onClose={() => setDetailAppId(null)}
+            categories={categories}
+            safeMode={safeMode}
+            readOnly={readOnly}
+            onRefreshApps={fetchAppsAndStats}
+          />
+        </Suspense>
       )}
 
       {/* Add Custom App Modal */}
       {showAddApp && (
-        <AddAppModal
-          onClose={() => {
-            setShowAddApp(false);
-            setAdoptingApp(null);
-          }}
-          categories={categories}
-          availableApps={apps}
-          onAppAdded={fetchAppsAndStats}
-          initialAdoptApp={adoptingApp}
-        />
+        <Suspense fallback={null}>
+          <AddAppModal
+            onClose={() => {
+              setShowAddApp(false);
+              setAdoptingApp(null);
+            }}
+            categories={categories}
+            availableApps={apps}
+            onAppAdded={fetchAppsAndStats}
+            initialAdoptApp={adoptingApp}
+          />
+        </Suspense>
       )}
 
       {/* Customize Drawer */}
       {showCustomize && (
-        <CustomizeDrawer
-          onClose={() => setShowCustomize(false)}
-          viewType={viewType}
-          onChangeViewType={setViewType}
-          theme={theme}
-          onChangeTheme={handleSetTheme}
-          density={density}
-          onChangeDensity={handleSetDensity}
-          groupBy={groupBy}
-          onChangeGroupBy={setGroupBy}
-          sortBy={sortBy}
-          onChangeSortBy={setSortBy}
-          categories={categories}
-          rules={rules}
-          onRulesUpdated={async () => {
-            const r = await api.getRules();
-            setRules(r);
-            await fetchAppsAndStats();
-          }}
-          accent={accent}
-          onChangeAccent={(col) => {
-            setAccent(col);
-            document.documentElement.style.setProperty('--accent', col);
-            document.documentElement.style.setProperty('--app-accent', col);
-            persistSetting({ accent: col });
-          }}
-          visibleFields={visibleFields}
-          onToggleField={(field) =>
-            setVisibleFields((prev) => ({ ...prev, [field]: !prev[field] }))
-          }
-          readOnly={readOnly}
-        />
+        <Suspense fallback={null}>
+          <CustomizeDrawer
+            onClose={() => setShowCustomize(false)}
+            viewType={viewType}
+            onChangeViewType={setViewType}
+            theme={theme}
+            onChangeTheme={handleSetTheme}
+            density={density}
+            onChangeDensity={handleSetDensity}
+            groupBy={groupBy}
+            onChangeGroupBy={setGroupBy}
+            sortBy={sortBy}
+            onChangeSortBy={setSortBy}
+            categories={categories}
+            rules={rules}
+            onRulesUpdated={async () => {
+              const r = await api.getRules();
+              setRules(r);
+              await fetchAppsAndStats();
+            }}
+            accent={accent}
+            onChangeAccent={(col) => {
+              setAccent(col);
+              document.documentElement.style.setProperty('--accent', col);
+              document.documentElement.style.setProperty('--app-accent', col);
+              persistSetting({ accent: col });
+            }}
+            visibleFields={visibleFields}
+            onToggleField={(field) =>
+              setVisibleFields((prev) => ({ ...prev, [field]: !prev[field] }))
+            }
+            readOnly={readOnly}
+          />
+        </Suspense>
       )}
 
       {/* System Stats Drawer */}
       {showSystemDrawer && (
-        <SystemDrawer
-          defaultSection={systemDrawerSection ?? undefined}
-          onClose={() => setShowSystemDrawer(false)}
-        />
+        <Suspense fallback={null}>
+          <SystemDrawer
+            defaultSection={systemDrawerSection ?? undefined}
+            onClose={() => setShowSystemDrawer(false)}
+          />
+        </Suspense>
       )}
 
       {/* User Management & Audit Logs Drawer */}
-      <UserManagementDrawer
-        isOpen={showUserManagement}
-        onClose={() => setShowUserManagement(false)}
-        currentUser={user}
-      />
+      {showUserManagement && (
+        <Suspense fallback={null}>
+          <UserManagementDrawer
+            isOpen={showUserManagement}
+            onClose={() => setShowUserManagement(false)}
+            currentUser={user}
+          />
+        </Suspense>
+      )}
 
       {/* Command Palette */}
       <CommandPalette

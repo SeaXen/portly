@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { api } from '../api';
-import { Icon } from './Icon';
+import { BrandMark } from './BrandMark';
 import { LoginScreen } from './LoginScreen';
 import { SetupScreen } from './SetupScreen';
 
@@ -80,7 +80,7 @@ export function AuthGate({ children }: { children: (auth: AuthContextType) => Re
         }}
       >
         <div style={{ color: 'var(--accent)', animation: 'spin 1.5s linear infinite', display: 'inline-flex' }}>
-          <Icon name="anchor" size={32} />
+          <BrandMark size={36} />
         </div>
         <div style={{ fontSize: 14 }}>Connecting to Portly…</div>
       </div>

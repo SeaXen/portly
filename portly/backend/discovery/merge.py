@@ -32,6 +32,11 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
         filtered_host.append(h)
 
     # 2. Add custom apps
+    latest_health_map = (
+        store.get_all_latest_health()
+        if store and hasattr(store, "get_all_latest_health")
+        else None
+    )
     custom_apps: List[Dict[str, Any]] = []
     for ca in custom_apps_raw:
         app_id = ca["id"]
@@ -43,11 +48,14 @@ def merge_discovered_apps(store: Store, public_host: str = "") -> Tuple[List[Dic
         # with no snapshot the state is genuinely unknown, not healthy.
         custom_status = "unknown"
         latency_ms = 0.0
-        if store and hasattr(store, "get_latest_health"):
+        latest = None
+        if latest_health_map is not None:
+            latest = latest_health_map.get(app_id)
+        elif store and hasattr(store, "get_latest_health"):
             latest = store.get_latest_health(app_id)
-            if latest:
-                custom_status = "up" if latest.get("ok") else "down"
-                latency_ms = float(latest.get("latency_ms", 0.0))
+        if latest:
+            custom_status = "up" if latest.get("ok") else "down"
+            latency_ms = float(latest.get("latency_ms", 0.0))
 
         custom_apps.append({
             "id": app_id,

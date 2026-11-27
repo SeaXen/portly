@@ -33,6 +33,32 @@ _debounce_timer: Optional[threading.Timer] = None
 _debounce_lock = threading.Lock()
 _last_good_containers: List[Dict[str, Any]] = []
 _last_good_ts: float = 0.0
+_stats_executor: Optional[ThreadPoolExecutor] = None
+_stats_executor_lock = threading.Lock()
+_activity_probe: Optional[Callable[[], bool]] = None
+_background_workers_enabled = False
+_stats_stop_event = threading.Event()
+
+
+def enable_docker_background_workers():
+    """Enable long-lived background Docker event/stats threads (server mode only)."""
+    global _background_workers_enabled
+    _background_workers_enabled = True
+    _stats_stop_event.clear()
+    if _docker_available and _client is not None:
+        _start_event_listener()
+        _start_stats_collector()
+
+
+def shutdown_docker_background_workers():
+    """Signal background Docker workers to stop and release the thread pool quickly."""
+    global _background_workers_enabled, _stats_executor
+    _background_workers_enabled = False
+    _stats_stop_event.set()
+    with _stats_executor_lock:
+        if _stats_executor is not None:
+            _stats_executor.shutdown(wait=False, cancel_futures=True)
+            _stats_executor = None
 
 
 def get_docker_client(force_retry: bool = False) -> Optional[Any]:
@@ -60,8 +86,9 @@ def get_docker_client(force_retry: bool = False) -> Optional[Any]:
             _client.ping()
             _docker_available = True
             _docker_error_msg = ""
-            _start_event_listener()
-            _start_stats_collector()
+            if _background_workers_enabled:
+                _start_event_listener()
+                _start_stats_collector()
             return _client
         except Exception as e:
             _docker_available = False
@@ -147,7 +174,24 @@ def _calculate_cpu_percent(d: Dict[str, Any]) -> float:
     return 0.0
 
 
-_STATS_MAX_WORKERS = 8
+_STATS_MAX_WORKERS = min(4, max(2, os.cpu_count() or 2))
+
+
+def set_activity_probe(callback: Optional[Callable[[], bool]]):
+    """Register an optional callback indicating whether dashboard clients are active."""
+    global _activity_probe
+    _activity_probe = callback
+
+
+def _get_stats_executor() -> ThreadPoolExecutor:
+    global _stats_executor
+    with _stats_executor_lock:
+        if _stats_executor is None:
+            _stats_executor = ThreadPoolExecutor(
+                max_workers=_STATS_MAX_WORKERS,
+                thread_name_prefix="portly-docker-stat",
+            )
+        return _stats_executor
 
 
 def _refresh_container_stats(c: Any) -> str:
@@ -200,10 +244,12 @@ def _refresh_container_stats(c: Any) -> str:
 
 
 def _collect_running_container_stats(containers: List[Any]) -> Set[str]:
-    """Fetch stats for all containers in a bounded thread pool; returns the ids that were seen."""
+    """Fetch stats for all containers using a shared bounded thread pool; returns seen ids."""
+    if not containers:
+        return set()
     active_ids: Set[str] = set()
-    with ThreadPoolExecutor(max_workers=_STATS_MAX_WORKERS) as executor:
-        for c_id in executor.map(_refresh_container_stats, containers):
+    for c_id in _get_stats_executor().map(_refresh_container_stats, containers):
+        if c_id:
             active_ids.add(c_id)
     return active_ids
 
@@ -218,9 +264,9 @@ def _start_stats_collector():
 
     def stats_worker():
         global _client, _docker_available
-        while True:
+        while _background_workers_enabled and not _stats_stop_event.is_set():
             if not _docker_available or not _client:
-                time.sleep(5)
+                _stats_stop_event.wait(5)
                 continue
             try:
                 running_containers = _client.containers.list(filters={"status": "running"})
@@ -231,7 +277,8 @@ def _start_stats_collector():
                         clear_container_stats_cache(cid)
             except Exception:
                 pass
-            time.sleep(4)
+            active = _activity_probe() if _activity_probe else True
+            _stats_stop_event.wait(4 if active else 10)
 
     _stats_thread = threading.Thread(target=stats_worker, daemon=True, name="portly-docker-stats")
     _stats_thread.start()
@@ -286,7 +333,11 @@ def discover_docker_containers() -> List[Dict[str, Any]]:
                 c_id = c.id[:12]
                 name = c.name.lstrip("/")
                 status = c.status.lower()  # running, exited, paused, restarting
-                image_tag = (c.image.tags[0] if c.image and c.image.tags else c.attrs.get("Config", {}).get("Image", "unknown"))
+                cfg_image = (c.attrs.get("Config") or {}).get("Image", "")
+                if cfg_image and not str(cfg_image).startswith("sha256:"):
+                    image_tag = cfg_image
+                else:
+                    image_tag = (c.image.tags[0] if c.image and c.image.tags else cfg_image or "unknown")
                 labels = c.labels or {}
 
                 label_name = labels.get("portly.name")

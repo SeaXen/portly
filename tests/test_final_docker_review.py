@@ -139,3 +139,133 @@ def test_list_compose_stacks_tolerates_malformed_host_port():
             assert stacks["stack_malformed"]["ports"] == [8088]
     finally:
         store.delete_compose_stack("stack_malformed")
+
+
+def test_brand_favicons_and_icons_exist_and_nonempty():
+    public_dir = Path(__file__).resolve().parent.parent / "portly" / "frontend" / "public"
+    for rel in (
+        "favicon.ico",
+        "icons/icon.svg",
+        "icons/icon-32.png",
+        "icons/apple-touch-icon.png",
+        "icons/icon-192.png",
+        "icons/icon-512.png",
+    ):
+        asset = public_dir / rel
+        assert asset.is_file(), f"Missing asset: {rel}"
+        assert asset.stat().st_size > 0, f"Empty asset: {rel}"
+
+
+def test_store_batch_health_lookup_used_by_merge(tmp_path, monkeypatch):
+    from portly.backend.discovery import merge
+    from portly.backend.store import Store
+
+    local_store = Store(str(tmp_path / "perf.db"))
+    local_store.upsert_custom_app("c1", "Svc One", "localhost", 19101)
+    local_store.upsert_custom_app("c2", "Svc Two", "localhost", 19102)
+    local_store.record_health("custom:c1", True, 3.2)
+    local_store.record_health("custom:c2", False, 12.5)
+
+    batch = local_store.get_all_latest_health()
+    assert batch["custom:c1"]["ok"] is True
+    assert batch["custom:c2"]["ok"] is False
+
+    # Confirm merge uses batched lookup without falling back to per-app get_latest_health
+    def fail_per_app(_app_id):
+        raise AssertionError("Per-app N+1 query should not be called when get_all_latest_health exists")
+
+    monkeypatch.setattr(local_store, "get_latest_health", fail_per_app)
+    monkeypatch.setattr(merge, "discover_host_ports", lambda: [])
+    monkeypatch.setattr(merge, "discover_docker_containers", lambda: [])
+
+    apps, _ = merge.merge_discovered_apps(local_store)
+    by_id = {a["id"]: a for a in apps}
+    assert by_id["custom:c1"]["status"] == "up"
+    assert by_id["custom:c2"]["status"] == "down"
+
+
+def test_docker_stats_collector_reuses_executor_and_skips_empty():
+    from portly.backend.discovery import docker_src
+
+    assert docker_src._collect_running_container_stats([]) == set()
+    ex1 = docker_src._get_stats_executor()
+    ex2 = docker_src._get_stats_executor()
+    assert ex1 is ex2
+
+
+def test_host_process_metadata_cached_across_samples(monkeypatch):
+    import psutil
+    from portly.backend.discovery import host
+
+    calls = {"cmdline": 0, "cwd": 0, "name": 0}
+
+    class CachedProc:
+        def __init__(self, _pid):
+            pass
+
+        def is_running(self):
+            return True
+
+        def create_time(self):
+            return 1000.0
+
+        def name(self):
+            calls["name"] += 1
+            return "worker"
+
+        def cmdline(self):
+            calls["cmdline"] += 1
+            return ["python", "-m", "worker"]
+
+        def cwd(self):
+            calls["cwd"] += 1
+            return "/opt/worker"
+
+        def cpu_percent(self, interval=None):
+            return 1.5
+
+        def memory_info(self):
+            return type("Mem", (), {"rss": 16 * 1024 * 1024})()
+
+    host._proc_instances.clear()
+    try:
+        monkeypatch.setattr(psutil, "Process", CachedProc)
+        first = host._get_process_info(424242)
+        second = host._get_process_info(424242)
+        assert first["name"] == "worker"
+        assert second["cmdline"] == "python -m worker"
+        assert second["cwd"] == "/opt/worker"
+        assert calls == {"cmdline": 1, "cwd": 1, "name": 1}
+    finally:
+        host._proc_instances.clear()
+
+
+def test_discover_docker_avoids_lazy_image_inspect_for_tagged_containers(monkeypatch):
+    from portly.backend.discovery import docker_src
+
+    class NoLazyImageContainer:
+        id = "cont1234567890"
+        name = "web"
+        status = "running"
+        labels = {}
+        attrs = {
+            "Config": {"Image": "nginx:1.27-alpine"},
+            "NetworkSettings": {"Ports": {"80/tcp": [{"HostIp": "0.0.0.0", "HostPort": "8099"}]}},
+            "State": {"Status": "running"},
+        }
+
+        @property
+        def image(self):
+            raise AssertionError("c.image should not be queried when Config.Image has a tag")
+
+    fake_client = MagicMock()
+    fake_client.containers.list.return_value = [NoLazyImageContainer()]
+    monkeypatch.setattr(docker_src, "get_docker_client", lambda force_retry=False: fake_client)
+    monkeypatch.setattr(docker_src, "_docker_available", True)
+
+    apps = docker_src.discover_docker_containers()
+    assert len(apps) == 1
+    assert apps[0]["image"] == "nginx:1.27-alpine"
+    assert docker_src._background_workers_enabled is False
+
+
