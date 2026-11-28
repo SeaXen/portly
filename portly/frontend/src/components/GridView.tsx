@@ -12,7 +12,7 @@ interface GridViewProps {
   onAdoptApp?: (app: AppItem) => void;
 }
 
-export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, visibleFields = {}, onAdoptApp }) => {
+export const GridView: React.FC<GridViewProps> = React.memo(({ apps, onOpenDetail, visibleFields = {}, onAdoptApp }) => {
   if (apps.length === 0) return <EmptyState />;
 
   return (
@@ -23,7 +23,7 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, visibleF
         return (
           <div
             key={app.id}
-            className="c026"
+            className="c026 portly-grid-card"
             tabIndex={0}
             style={{
               cursor: 'pointer',
@@ -169,4 +169,4 @@ export const GridView: React.FC<GridViewProps> = ({ apps, onOpenDetail, visibleF
       })}
     </div>
   );
-};
+});

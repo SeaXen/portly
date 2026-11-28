@@ -584,7 +584,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 required
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div className="portly-form-grid-2">
               <div>
                 <label htmlFor="ext-category" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Category</label>
                 <select
@@ -627,7 +627,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
         {activeTab === 'custom' && (
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Name & Icon */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: '14px' }}>
+            <div className="portly-form-grid-name">
               <div>
                 <label htmlFor="custom-name" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Name</label>
                 <input
@@ -668,7 +668,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
 
             {/* Network: Host & Port */}
             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginTop: '6px' }}>Network</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div className="portly-form-grid-2">
               <div>
                 <label htmlFor="custom-host" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Host</label>
                 <input
@@ -713,7 +713,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
 
             {/* Organize: Category & Tags */}
             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginTop: '6px' }}>Organize</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div className="portly-form-grid-2">
               <div>
                 <label htmlFor="custom-category" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Category</label>
                 <select
@@ -747,7 +747,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
 
             {/* Health Probing Settings */}
             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginTop: '6px' }}>Health Checks & Probing</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '14px' }}>
+            <div className="portly-form-grid-health">
               <div>
                 <label htmlFor="custom-health-path" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Health check path</label>
                 <input
@@ -778,7 +778,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
                 />
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div className="portly-form-grid-2">
               <div>
                 <label htmlFor="custom-expected-status" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Expected status codes (comma-separated)</label>
                 <input
@@ -811,7 +811,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
 
             {/* Run Controls */}
             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginTop: '6px' }}>Run Controls</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div className="portly-form-grid-2">
               <div>
                 <label htmlFor="custom-start-cmd" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Start command</label>
                 <input
@@ -842,7 +842,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div className="portly-form-grid-2">
               <div>
                 <label htmlFor="custom-workdir" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>Working directory</label>
                 <input
@@ -937,7 +937,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div className="portly-form-grid-2">
               <div>
                 <label htmlFor="deploy-image" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>
                   Image Tag (e.g. redis:7-alpine, postgres:16)
@@ -975,7 +975,7 @@ export const AddAppModal: React.FC<AddAppModalProps> = ({
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div className="portly-form-grid-2">
               <div>
                 <label htmlFor="deploy-host-port" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>
                   Host Port

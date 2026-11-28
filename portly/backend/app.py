@@ -54,6 +54,7 @@ _cached_apps: List[Dict[str, Any]] = []
 _cached_conflicts: List[Dict[str, Any]] = []
 _last_scan_time: float = 0.0
 _sse_subscribers: List[asyncio.Queue] = []
+_last_sse_snapshot_key: Optional[str] = None
 _scan_lock = asyncio.Lock()
 _refresh_seq = 0
 _refresh_done_seq = 0
@@ -88,8 +89,33 @@ def _is_dashboard_active() -> bool:
     return bool(_sse_subscribers) or (time.monotonic() - _last_client_activity) < 30.0
 
 
+def _sse_snapshot_fingerprint(
+    safe_apps: List[Dict[str, Any]],
+    conflicts: List[Dict[str, Any]],
+    docker_avail: bool,
+    docker_err: str,
+) -> str:
+    """Build a stable digest of app/conflict state, bucketing volatile stats_age_sec to staleness."""
+    normalized_apps = []
+    for a in safe_apps:
+        age = a.get("stats_age_sec")
+        entry = dict(a)
+        entry["stats_age_sec"] = (age is None or age > 15)
+        normalized_apps.append(entry)
+    return json.dumps(
+        {
+            "apps": normalized_apps,
+            "conflicts": conflicts,
+            "docker_available": docker_avail,
+            "docker_message": docker_err,
+        },
+        sort_keys=True,
+        default=str,
+    )
+
+
 async def refresh_discovery():
-    global _cached_apps, _cached_conflicts, _last_scan_time, _refresh_seq, _refresh_done_seq
+    global _cached_apps, _cached_conflicts, _last_scan_time, _refresh_seq, _refresh_done_seq, _last_sse_snapshot_key
     # Coalesce trigger bursts: waiters whose trigger is already covered by a
     # completed rebuild skip their own full merge (no sequential stampede).
     _refresh_seq += 1
@@ -111,25 +137,31 @@ async def refresh_discovery():
         docker_running = sum(1 for a in apps if a.get("source") == "docker" and a.get("status") == "up")
         collect_snapshot(containers_running=docker_running, listening_count=len(apps), conflict_count=len(conflicts))
 
-        # Push to SSE subscribers with bounded queues
+        # Push to SSE subscribers with bounded queues; omit unchanged apps/conflicts
+        # arrays so idle hosts only send lightweight telemetry ticks.
         if _sse_subscribers:
             stats = get_current_stats(containers_running=docker_running, listening_count=len(apps), conflict_count=len(conflicts))
             docker_avail, docker_err = is_docker_available()
-            
-            # Redact apps for general broadcast
+
             safe_apps = [redact_app_for_summary(a) for a in _cached_apps]
-            msg = {
+            snapshot_key = _sse_snapshot_fingerprint(safe_apps, _cached_conflicts, docker_avail, docker_err)
+            apps_changed = bool(events) or snapshot_key != _last_sse_snapshot_key
+            _last_sse_snapshot_key = snapshot_key
+
+            msg: Dict[str, Any] = {
                 "type": "update",
-                "apps": safe_apps,
-                "conflicts": _cached_conflicts,
                 "stats": stats,
                 "docker_status": {
                     "available": docker_avail,
                     "message": docker_err,
                 },
-                "events": events,
                 "last_scan": _last_scan_time,
             }
+            if apps_changed:
+                msg["apps"] = safe_apps
+                msg["conflicts"] = _cached_conflicts
+            if events:
+                msg["events"] = events
             msg_str = json.dumps(msg)
             for q in list(_sse_subscribers):
                 try:

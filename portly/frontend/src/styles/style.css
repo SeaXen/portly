@@ -4,7 +4,7 @@
 body{margin:0;background:var(--bg)}
 a:hover{text-decoration:underline}
 button,input,select{font-family:inherit}
-button{background:transparent;border:0;outline:none;cursor:pointer}
+button{background:transparent;border:0;cursor:pointer}
 .c013{font-size:13px;color:var(--muted)}
 .c025{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px}
 .c026{background:var(--surface-1);border:1px solid var(--surface-3);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px}
@@ -80,7 +80,7 @@ button{background:transparent;border:0;outline:none;cursor:pointer}
 .c163{flex:0 0 48px;border:1px dashed rgba(255,255,255,.07);border-radius:14px;background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:flex-start;justify-content:center;padding-top:18px}
 .c168{display:flex;flex-direction:column;gap:10px;padding:16px 0;border-top:1px solid rgba(255,255,255,.07)}
 .c169{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
-.c173{accent-color:var(--accent);width:16px;height:16px}
+.c173{accent-color:var(--accent);width:18px;height:18px}
 .c183{color:var(--muted)}
 .c187{display:flex;align-items:center;gap:14px;flex:none}
 .c188{width:44px;height:44px;border-radius:9px;background:color-mix(in srgb, var(--success) 12%, transparent);border:1px solid color-mix(in srgb, var(--success) 25%, transparent);color:var(--success);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:21px;flex:none}
@@ -89,8 +89,8 @@ button{background:transparent;border:0;outline:none;cursor:pointer}
 .c191{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
 .c192{display:flex;flex-wrap:nowrap;gap:8px}
 .c194{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:12px}
-.c195{flex:none;padding:10px 0;font-size:14px;color:var(--text);text-decoration:none;border-bottom:2px solid var(--accent);margin-bottom:-1px}
-.c196{flex:none;padding:10px 0;font-size:14px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px}
+.c195{flex:none;display:inline-flex;align-items:center;min-height:36px;padding:8px 2px;font-size:14px;color:var(--text);text-decoration:none;border-bottom:2px solid var(--accent);margin-bottom:-1px}
+.c196{flex:none;display:inline-flex;align-items:center;min-height:36px;padding:8px 2px;font-size:14px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px}
 .c197{display:flex;flex:none;align-items:center;gap:8px;height:34px;box-sizing:border-box;padding:0 12px;background:var(--surface-2);border:1px solid rgba(255,255,255,.07);border-radius:9px;color:var(--muted)}
 .c198{background:transparent;border:0;outline:0;color:var(--text);font:inherit;font-size:13px;width:150px}
 .c199{display:flex;align-items:center;gap:8px;font-size:13px;white-space:nowrap;flex:none}

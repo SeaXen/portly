@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { AppItem, Category } from '../types';
 import { EmptyState } from './EmptyState';
 
@@ -11,7 +11,7 @@ interface BoardViewProps {
   readOnly?: boolean;
 }
 
-export const BoardView: React.FC<BoardViewProps> = ({
+export const BoardView: React.FC<BoardViewProps> = React.memo(({
   apps,
   categories,
   onOpenDetail,
@@ -21,6 +21,16 @@ export const BoardView: React.FC<BoardViewProps> = ({
 }) => {
   const [draggedAppId, setDraggedAppId] = useState<string | null>(null);
   const [activeDropCategory, setActiveDropCategory] = useState<string | null>(null);
+
+  const appsByCategory = useMemo(() => {
+    const map = new Map<string, AppItem[]>();
+    for (const app of apps) {
+      const list = map.get(app.category_id);
+      if (list) list.push(app);
+      else map.set(app.category_id, [app]);
+    }
+    return map;
+  }, [apps]);
 
   const handleDragStart = (e: React.DragEvent, appId: string) => {
     if (readOnly) { e.preventDefault(); return; }
@@ -53,9 +63,9 @@ export const BoardView: React.FC<BoardViewProps> = ({
     <div className="c147" style={{ width: '100%', overflowX: 'auto', paddingBottom: '16px' }}>
       <div className="c148" style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
         {categories
-          .filter((cat) => draggedAppId || apps.some((a) => a.category_id === cat.id))
+          .filter((cat) => draggedAppId || (appsByCategory.get(cat.id)?.length ?? 0) > 0)
           .map((cat) => {
-          const categoryApps = apps.filter((a) => a.category_id === cat.id);
+          const categoryApps = appsByCategory.get(cat.id) ?? [];
           const isTarget = activeDropCategory === cat.id;
 
           return (
@@ -209,4 +219,4 @@ export const BoardView: React.FC<BoardViewProps> = ({
       </div>
     </div>
   );
-};
+});

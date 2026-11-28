@@ -553,7 +553,7 @@ kbd,
   width: 232px;
   min-width: 232px;
   max-width: 232px;
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
   border-right: 1px solid var(--border);
   padding: 20px 14px;
@@ -672,8 +672,8 @@ kbd,
 }
 
 .sidebar-add-cat-icon {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -869,7 +869,7 @@ kbd,
 
 .portly-table-wrap {
   width: 100%;
-  max-height: calc(100vh - 320px);
+  max-height: calc(100dvh - 320px);
   overflow: auto;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.07);
@@ -933,6 +933,18 @@ kbd,
   background: transparent;
   transition: background 0.12s;
   cursor: pointer;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 48px;
+}
+
+.portly-grid-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 190px;
+}
+
+.portly-list-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 40px;
 }
 
 .portly-table-row:hover {
@@ -1049,6 +1061,8 @@ kbd,
   cursor: pointer;
   display: block;
   min-width: 0;
+  min-height: 24px;
+  line-height: 24px;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1115,7 +1129,7 @@ button.c088 {
   .modal-content {
     width: 96vw !important;
     max-width: 96vw !important;
-    max-height: 94vh !important;
+    max-height: calc(94dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
     padding: 16px !important;
   }
 
@@ -1140,6 +1154,21 @@ button.c088 {
 @media (pointer: coarse) {
   .row-action-btn {
     min-width: 44px;
+    min-height: 44px;
+  }
+
+  .sidebar-add-cat-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .c173 {
+    width: 24px;
+    height: 24px;
+  }
+
+  .c195,
+  .c196 {
     min-height: 44px;
   }
   
@@ -1356,4 +1385,72 @@ button.c088 {
 }
 .portly-empty-state-hint {
   font-size: 13px;
+}
+
+/* Responsive layout helpers for Stacks, Detail split, and Modal/Form grids */
+.portly-stacks-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 20px;
+  height: calc(100dvh - 180px);
+  min-height: 600px;
+}
+
+.portly-detail-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+}
+
+.portly-form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.portly-form-grid-name {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 14px;
+}
+
+.portly-form-grid-health {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: 14px;
+}
+
+.portly-form-grid-3 {
+  display: grid;
+  grid-template-columns: 120px 100px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.portly-multiport-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 140px;
+  gap: 12px;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .portly-stacks-layout,
+  .portly-detail-split {
+    grid-template-columns: minmax(0, 1fr) !important;
+    height: auto;
+    min-height: 0;
+  }
+  .portly-list-secondary {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .portly-form-grid-2,
+  .portly-form-grid-name,
+  .portly-form-grid-health,
+  .portly-form-grid-3,
+  .portly-multiport-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
 }

@@ -112,7 +112,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               return (
                 <div key={app.id} style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '4px' }}>
-                    <button type="button" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text)', fontSize: '13px', textAlign: 'left' }} onClick={() => onOpenDetail(app)}>
+                    <button type="button" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text)', fontSize: '13px', textAlign: 'left', minHeight: '24px', display: 'inline-flex', alignItems: 'center' }} onClick={() => onOpenDetail(app)}>
                       {app.name}
                     </button>
                     <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: statsStale ? 'var(--muted)' : 'var(--accent)' }} title={statsStale ? 'Stale or unavailable stats' : undefined}>{app.ram_mb == null ? '—' : `${app.ram_mb} MB`}</span>

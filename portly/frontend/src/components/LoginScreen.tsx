@@ -33,7 +33,7 @@ export function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   return (
     <div
       style={{
-        minHeight: '100vh',
+        minHeight: '100dvh',
         background: 'var(--bg)',
         display: 'flex',
         alignItems: 'center',

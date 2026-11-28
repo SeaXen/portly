@@ -66,6 +66,7 @@ export const AppIcon: React.FC<AppIconProps> = ({
         width={size}
         height={size}
         loading="lazy"
+        decoding="async"
         style={{
           width: '100%',
           height: '100%',

@@ -177,7 +177,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode, readOnly = fal
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '20px', height: 'calc(100vh - 180px)', minHeight: '600px' }}>
+    <div className="portly-stacks-layout">
       {/* Left: Stacks Directory Panel */}
       <div
         style={{
@@ -280,8 +280,8 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode, readOnly = fal
         {selectedStack || isEditing ? (
           <>
             {/* Header / Actions toolbar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.07)', paddingBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '10px', borderBottom: '1px solid rgba(255,255,255,0.07)', paddingBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: '1 1 180px' }}>
                 {isEditing ? (
                   <input
                     type="text"
@@ -291,7 +291,7 @@ export const StacksView: React.FC<StacksViewProps> = ({ safeMode, readOnly = fal
                     onChange={(e) => setStackName(e.target.value)}
                     placeholder="Stack Name"
                     className="c220"
-                    style={{ fontSize: '16px', fontWeight: 600, width: '220px' }}
+                    style={{ fontSize: '16px', fontWeight: 600, width: '100%', maxWidth: '220px' }}
                   />
                 ) : (
                   <div>

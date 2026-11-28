@@ -202,7 +202,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
             }}
           >
             <div style={{ fontWeight: 600, color: 'var(--accent)', fontSize: '14px' }}>Create Port Reservation</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '120px 100px 1fr', gap: '12px' }}>
+            <div className="portly-form-grid-3">
               <div>
                 <label htmlFor="res-port" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Port</label>
                 <input
@@ -247,7 +247,7 @@ export const ConflictsView: React.FC<ConflictsViewProps> = ({
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="portly-form-grid-2" style={{ gap: '12px' }}>
               <div>
                 <label htmlFor="res-service" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '4px' }}>Target Service (optional)</label>
                 <input

@@ -521,11 +521,11 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   };
 
   // Selection
-  const handleToggleSelect = (id: string) => {
+  const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
-  };
+  }, []);
 
   const handleSelectAll = () => {
     if (displayedIds.length > 0 && selectedDisplayedIds.length === displayedIds.length) {
@@ -600,18 +600,22 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     }
   };
 
-  const handleQuickLogs = (app: AppItem, e: React.MouseEvent) => {
+  const handleOpenDetail = useCallback((app: AppItem) => {
+    setDetailAppId(app.id);
+  }, []);
+
+  const handleQuickLogs = useCallback((app: AppItem, e: React.MouseEvent) => {
     e.stopPropagation();
     setDetailAppId(app.id);
-  };
+  }, []);
 
-  const handleAdoptApp = (app: AppItem) => {
+  const handleAdoptApp = useCallback((app: AppItem) => {
     setAdoptingApp(app);
     setShowAddApp(true);
-  };
+  }, []);
 
   // Drag and Drop move category
-  const handleMoveCategory = async (appId: string, newCatId: string) => {
+  const handleMoveCategory = useCallback(async (appId: string, newCatId: string) => {
     if (readOnly) {
       warning('Viewer access is read-only.');
       return;
@@ -622,7 +626,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
     } catch (e: any) {
       error(`Failed to move app: ${e.message}`);
     }
-  };
+  }, [error, readOnly, warning]);
 
   // Create new category
   const handleCreateCategory = async (e: React.FormEvent) => {
@@ -651,19 +655,30 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   };
 
   // Handle navigation
-  const handleSelectNav = (nav: string) => {
+  const handleSelectNav = useCallback((nav: string) => {
     if (nav === 'system') {
       setSystemDrawerSection(null);
       setShowSystemDrawer(true);
       return;
     }
     setActiveNav(nav);
-  };
+  }, []);
 
   // Sidebar/view counts ignore hidden ports; the table can include them on demand.
   const visibleApps = useMemo(() => apps.filter((a) => !a.hidden), [apps]);
   const hiddenCount = apps.length - visibleApps.length;
   const allTags = useMemo(() => [...new Set(visibleApps.flatMap((a) => a.tags || []))].sort(), [visibleApps]);
+  const viewCounts = useMemo(() => {
+    let dev = 0;
+    let exposed = 0;
+    let docker = 0;
+    for (const a of visibleApps) {
+      if (a.category_id === 'development') dev++;
+      if (a.bind === '0.0.0.0') exposed++;
+      if (a.source === 'docker') docker++;
+    }
+    return { dev, exposed, docker };
+  }, [visibleApps]);
 
   // Filter & Sort Pipeline (D-4, P1-20: Pinned apps stay on top in all views)
   const displayedApps = useMemo(() => {
@@ -766,7 +781,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
   }, [displayedIds]);
 
   return (
-    <div id="portly-app-root" className="c042" style={{ display: 'flex', width: '100%', minHeight: '100vh', background: 'var(--bg)' }}>
+    <div id="portly-app-root" className="c042" style={{ display: 'flex', width: '100%', minHeight: '100dvh', background: 'var(--bg)' }}>
       {/* Sidebar - hidden in kiosk mode */}
       {!kioskMode && (
         <Sidebar
@@ -992,9 +1007,9 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
               onSelectView={handleSelectView}
               onSaveCurrentView={handleSaveCurrentView}
               appsCount={visibleApps.length}
-              devCount={visibleApps.filter((a) => a.category_id === 'development').length}
-              exposedCount={visibleApps.filter((a) => a.bind === '0.0.0.0').length}
-              dockerCount={visibleApps.filter((a) => a.source === 'docker').length}
+              devCount={viewCounts.dev}
+              exposedCount={viewCounts.exposed}
+              dockerCount={viewCounts.docker}
             />
 
             {/* Single-Line Toolbar */}
@@ -1042,7 +1057,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                   onSelectAll={handleSelectAll}
                   categories={categories}
                   density={density}
-                  onOpenDetail={(app) => setDetailAppId(app.id)}
+                  onOpenDetail={handleOpenDetail}
                   onQuickStart={handleQuickStart}
                   onQuickStop={handleQuickStop}
                   onQuickLogs={handleQuickLogs}
@@ -1058,7 +1073,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                 <Suspense fallback={null}>
                   <GridView
                     apps={displayedApps}
-                    onOpenDetail={(app) => setDetailAppId(app.id)}
+                    onOpenDetail={handleOpenDetail}
                     categories={categories}
                     visibleFields={visibleFields}
                     onAdoptApp={handleAdoptApp}
@@ -1070,7 +1085,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                 <Suspense fallback={null}>
                   <ListView
                     apps={displayedApps}
-                    onOpenDetail={(app) => setDetailAppId(app.id)}
+                    onOpenDetail={handleOpenDetail}
                     categories={categories}
                   />
                 </Suspense>
@@ -1081,7 +1096,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                   <BoardView
                     apps={displayedApps}
                     categories={categories}
-                    onOpenDetail={(app) => setDetailAppId(app.id)}
+                    onOpenDetail={handleOpenDetail}
                     onMoveAppCategory={handleMoveCategory}
                     onNewCategoryClick={() => setShowNewCatModal(true)}
                     readOnly={readOnly}
@@ -1252,7 +1267,7 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
                   autoComplete="off"
-                  autoFocus
+                  autoFocus={typeof window === 'undefined' || typeof window.matchMedia !== 'function' || !window.matchMedia('(pointer: coarse)').matches}
                   className="c220"
                   style={{ width: '100%', boxSizing: 'border-box' }}
                   required
@@ -1295,8 +1310,8 @@ export const App: React.FC<AppProps> = ({ user, onLogout }) => {
         <div
           style={{
             position: 'fixed',
-            bottom: '24px',
-            right: '24px',
+            bottom: 'calc(24px + env(safe-area-inset-bottom))',
+            right: 'calc(24px + env(safe-area-inset-right))',
             zIndex: 9999,
             display: 'flex',
             alignItems: 'center',

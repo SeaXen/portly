@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { AppItem, Category } from '../types';
 import { AppIcon } from './AppIcon';
 import { Icon } from './Icon';
@@ -22,7 +22,7 @@ interface TableViewProps {
   groupBy?: string;
 }
 
-export const TableView: React.FC<TableViewProps> = ({
+export const TableView: React.FC<TableViewProps> = React.memo(({
   apps,
   selectedIds,
   onToggleSelect,
@@ -39,17 +39,15 @@ export const TableView: React.FC<TableViewProps> = ({
   visibleFields = {},
   groupBy = 'none',
 }) => {
-  const allSelected = apps.length > 0 && apps.every((a) => selectedIds.includes(a.id));
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const allSelected = apps.length > 0 && apps.every((a) => selectedSet.has(a.id));
 
-  const getCategoryColor = (catId: string) => {
-    const c = categories.find((x) => x.id === catId);
-    return c?.color || 'var(--accent)';
-  };
-
-  const getCategoryName = (catId: string) => {
-    const c = categories.find((x) => x.id === catId);
-    return c?.name || catId;
-  };
+  const categoryMap = useMemo(
+    () => new Map(categories.map((c) => [c.id, c])),
+    [categories],
+  );
+  const getCategoryColor = (catId: string) => categoryMap.get(catId)?.color || 'var(--accent)';
+  const getCategoryName = (catId: string) => categoryMap.get(catId)?.name || catId;
 
   const padStyle = density === 'compact' ? { padding: '0 16px', height: '48px' } : { padding: '0 18px', height: '58px' };
 
@@ -75,27 +73,40 @@ export const TableView: React.FC<TableViewProps> = ({
   ].filter(Boolean).join(' ');
 
   // Grouping logic
-  const groups: Array<{ name: string; items: AppItem[] }> = [];
-  if (groupBy === 'category') {
-    categories.forEach((c) => {
-      const items = apps.filter((a) => a.category_id === c.id);
-      if (items.length > 0) groups.push({ name: c.name, items });
-    });
-    const remaining = apps.filter((a) => !categories.some((c) => c.id === a.category_id));
-    if (remaining.length > 0) groups.push({ name: 'Other', items: remaining });
-  } else if (groupBy === 'source') {
-    ['host', 'docker', 'custom'].forEach((src) => {
-      const items = apps.filter((a) => a.source.toLowerCase() === src);
-      if (items.length > 0) groups.push({ name: src.toUpperCase(), items });
-    });
-  } else if (groupBy === 'status') {
-    ['up', 'down', 'conflict'].forEach((st) => {
-      const items = apps.filter((a) => a.status.toLowerCase() === st);
-      if (items.length > 0) groups.push({ name: st.toUpperCase(), items });
-    });
-  } else {
-    groups.push({ name: '', items: apps });
-  }
+  const groups = useMemo(() => {
+    const out: Array<{ name: string; items: AppItem[] }> = [];
+    if (groupBy === 'category') {
+      const byCat = new Map<string, AppItem[]>();
+      const remaining: AppItem[] = [];
+      for (const app of apps) {
+        if (categoryMap.has(app.category_id)) {
+          const list = byCat.get(app.category_id);
+          if (list) list.push(app);
+          else byCat.set(app.category_id, [app]);
+        } else {
+          remaining.push(app);
+        }
+      }
+      categories.forEach((c) => {
+        const items = byCat.get(c.id);
+        if (items && items.length > 0) out.push({ name: c.name, items });
+      });
+      if (remaining.length > 0) out.push({ name: 'Other', items: remaining });
+    } else if (groupBy === 'source') {
+      ['host', 'docker', 'custom'].forEach((src) => {
+        const items = apps.filter((a) => a.source.toLowerCase() === src);
+        if (items.length > 0) out.push({ name: src.toUpperCase(), items });
+      });
+    } else if (groupBy === 'status') {
+      ['up', 'down', 'conflict'].forEach((st) => {
+        const items = apps.filter((a) => a.status.toLowerCase() === st);
+        if (items.length > 0) out.push({ name: st.toUpperCase(), items });
+      });
+    } else {
+      out.push({ name: '', items: apps });
+    }
+    return out;
+  }, [apps, categories, categoryMap, groupBy]);
 
   return (
     <div className="portly-table-wrap">
@@ -153,7 +164,7 @@ export const TableView: React.FC<TableViewProps> = ({
               )}
 
               {grp.items.map((app) => {
-                const isSelected = selectedIds.includes(app.id);
+                const isSelected = selectedSet.has(app.id);
                 const catColor = getCategoryColor(app.category_id);
                 const catName = getCategoryName(app.category_id);
                 const cpuVal = app.cpu_percent == null ? null : Math.min(100, Math.max(0, app.cpu_percent));
@@ -459,4 +470,4 @@ export const TableView: React.FC<TableViewProps> = ({
       </div>
     </div>
   );
-};
+});

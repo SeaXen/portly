@@ -68,7 +68,7 @@ export function AuthGate({ children }: { children: (auth: AuthContextType) => Re
     return (
       <div
         style={{
-          minHeight: '100vh',
+          minHeight: '100dvh',
           background: 'var(--bg)',
           display: 'flex',
           flexDirection: 'column',

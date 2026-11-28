@@ -875,7 +875,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
         </div>
 
         {/* Tab Contents + Right Side Cards */}
-        <div className="c147" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '20px' }}>
+        <div className="c147 portly-detail-split">
           {/* Main Column */}
           <div className="c194" style={{ minWidth: 0 }}>
             {activeTab === 'logs' && (
@@ -1094,7 +1094,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                   Change the host port this service binds to. For Docker containers, this safely inspects, recreates the container, and verifies health with automatic rollback support.
                 </p>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div className="portly-form-grid-2" style={{ gap: '16px', marginBottom: '16px' }}>
                   <div>
                     <label htmlFor="edit-host-port" style={{ display: 'block', fontSize: '12px', color: 'var(--muted)', marginBottom: '6px' }}>New Host Port</label>
                     <input
@@ -1206,7 +1206,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
                       {multiPorts.map((mp, idx) => (
-                        <div key={idx} style={{ display: 'grid', gridTemplateColumns: '120px 1fr 140px', gap: '12px', alignItems: 'center', background: 'var(--surface-code)', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div key={idx} className="portly-multiport-row" style={{ background: 'var(--surface-code)', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
                           <div>
                             <span style={{ fontSize: '11px', color: 'var(--muted)', display: 'block' }}>Container Port</span>
                             <code style={{ color: 'var(--success)', fontFamily: 'JetBrains Mono, monospace', fontSize: '13px' }}>{mp.container_port}</code>
@@ -1417,7 +1417,7 @@ export const AppDetailModal: React.FC<AppDetailModalProps> = ({
                   <p style={{ color: 'var(--muted)', fontSize: '13px' }}>Probing TLS handshake on {app.port}…</p>
                 ) : tlsData?.is_tls ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="portly-form-grid-2" style={{ gap: '12px' }}>
                       <div style={{ padding: '14px', background: 'var(--surface-2)', borderRadius: '8px' }}>
                         <div style={{ fontSize: '11px', color: 'var(--muted)', textTransform: 'uppercase' }}>Certificate Status</div>
                         <div style={{ fontSize: '18px', fontWeight: 700, color: tlsData.expired ? 'var(--danger)' : 'var(--success)', marginTop: '4px' }}>

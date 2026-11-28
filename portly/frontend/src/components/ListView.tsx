@@ -8,7 +8,7 @@ interface ListViewProps {
   categories: Category[];
 }
 
-export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail }) => {
+export const ListView: React.FC<ListViewProps> = React.memo(({ apps, onOpenDetail }) => {
   if (apps.length === 0) return <EmptyState />;
 
   return (
@@ -16,7 +16,7 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail }) => {
       {apps.map((app) => (
         <div
           key={app.id}
-          className="c053"
+          className="c053 portly-list-row"
           tabIndex={0}
           style={{
             height: '40px',
@@ -27,6 +27,9 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail }) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: '12px',
+            minWidth: 0,
+            overflow: 'hidden',
             cursor: 'pointer',
           }}
           onClick={() => onOpenDetail(app)}
@@ -38,29 +41,30 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail }) => {
             }
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 0', minWidth: 0, overflow: 'hidden' }}>
             <span
               style={{
                 width: '7px',
                 height: '7px',
                 borderRadius: '50%',
+                flexShrink: 0,
                 backgroundColor: app.status === 'unknown' ? 'var(--muted)' : (app.status === 'up' ? 'var(--success)' : 'var(--danger)'),
               }}
             />
-            <button type="button" className="app-name-btn" style={{ fontWeight: 600, color: 'var(--text)', fontSize: '14px' }}>{app.name}</button>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)', fontWeight: 600 }}>
+            <button type="button" className="app-name-btn" style={{ fontWeight: 600, color: 'var(--text)', fontSize: '14px', flex: '0 1 auto', minWidth: 0 }}>{app.name}</button>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--accent)', fontWeight: 600, flexShrink: 0 }}>
               {app.port || '—'}
             </span>
-            <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
+            <span className="portly-list-sub" style={{ fontSize: '12px', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
               {app.source === 'docker' ? app.image : app.process_name}
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--muted)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+            <span className="portly-list-secondary" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', color: 'var(--muted)' }}>
               {app.bind}
             </span>
-            <span style={{ fontSize: '12px', color: app.stats_age_sec == null || app.stats_age_sec > 15 ? 'var(--muted)' : 'var(--text)' }} title={app.stats_age_sec == null || app.stats_age_sec > 15 ? 'Stale or unavailable stats' : undefined}>
+            <span className="portly-list-secondary" style={{ fontSize: '12px', color: app.stats_age_sec == null || app.stats_age_sec > 15 ? 'var(--muted)' : 'var(--text)' }} title={app.stats_age_sec == null || app.stats_age_sec > 15 ? 'Stale or unavailable stats' : undefined}>
               CPU {app.cpu_percent == null ? '—' : `${app.cpu_percent}%`} · {app.ram_mb == null ? '—' : `${app.ram_mb} MB`}{app.stats_age_sec == null || app.stats_age_sec > 15 ? ' (stale)' : ''}
             </span>
             <span className="c109" style={{ textTransform: 'capitalize' }}>
@@ -71,4 +75,4 @@ export const ListView: React.FC<ListViewProps> = ({ apps, onOpenDetail }) => {
       ))}
     </div>
   );
-};
+});
